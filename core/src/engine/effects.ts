@@ -47,9 +47,31 @@ const MULTI_TARGET_TARGETS: ReadonlySet<EffectTarget> = new Set([
  * and no explicit ref resolve via resolveTargets and pick [0] (legal-intent
  * enumeration always supplies explicit refs for single-target effects);
  * multi-target kinds resolve internally. Drains the resolver queue before
- * returning so mana/gameOver events land.
+ * returning so mana events land.
+ *
+ * Session policy (Task 11): when called OUTSIDE a resolution session (direct
+ * effects-library calls, e.g. unit tests), the call runs as a mini-session so
+ * the deferred win check still fires. When called inside a submit/applyEvent
+ * session the outer session owns the check — a per-effect check would break
+ * simultaneous-death draws (the first death would end the game early).
  */
 export function applyEffect(game: Resolver, ctx: EffectCtx, spec: EffectSpec, explicitRef?: TargetRef): void {
+  if (!game.draining) {
+    game.applied = [];
+    game.draining = true;
+    try {
+      applyEffectInner(game, ctx, spec, explicitRef);
+      game.checkWin();
+      runQueue(game);
+    } finally {
+      game.draining = false;
+    }
+    return;
+  }
+  applyEffectInner(game, ctx, spec, explicitRef);
+}
+
+function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, explicitRef?: TargetRef): void {
   const refs = resolveRefs(game, ctx.player, spec, explicitRef);
   switch (spec.kind) {
     case 'dealDamage': {
@@ -196,8 +218,10 @@ export function resolveTargets(game: Resolver, player: PlayerIndex, target: Effe
 /**
  * Apply `amount` damage to one resolved target (used by dealDamage and the
  * Task 7 attack path). Shield absorbs first (shields > 0 → decrement, no
- * damage). Pushes damageDealt; lethal damage pushes creatureDied / gameOver
- * (death processing + removal land in Task 8's dispatch handlers).
+ * damage). Pushes damageDealt; lethal creature damage pushes creatureDied.
+ * Hero death is NOT decided here — the win check is deferred to the end of
+ * the resolution session (Game.checkWin) so simultaneous deaths produce a
+ * draw instead of a first-death-wins race (Task 11).
  * Returns the actual damage dealt (post-shield).
  */
 export function damageTarget(game: Resolver, ctx: EffectCtx, ref: TargetRef, amount: number): number {
@@ -219,9 +243,6 @@ export function damageTarget(game: Resolver, ctx: EffectCtx, ref: TargetRef, amo
   if (hero.shields > 0) { hero.shields -= 1; dmg = 0; }
   hero.hp -= dmg;
   push(game, { type: 'damageDealt', target: ref, amount: dmg, sourceCardId: ctx.cardId });
-  if (hero.hp <= 0) {
-    push(game, { type: 'gameOver', winner: (1 - ref.player) as PlayerIndex, reason: 'hero destroyed' });
-  }
   return dmg;
 }
 

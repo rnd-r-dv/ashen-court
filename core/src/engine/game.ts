@@ -102,15 +102,22 @@ export class Game implements Resolver {
     if (!this.draining) {
       // Controlled top-level session: initialize the collector so EVERY event
       // applied during resolution (incl. applyEffect's internal nested drains)
-      // is collected; the final runQueue in resolveIntent then runs as a NESTED
-      // drain and returns the shared collector (full resolution tree).
+      // is collected; the final runQueue runs as a NESTED drain and returns
+      // the shared collector (full resolution tree).
       this.applied = [];
       this.draining = true;
-      try { return this.resolveIntent(intent, me); }
+      try {
+        this.resolveIntent(intent, me);
+        // Deferred win check (Task 11): decide gameOver AFTER the whole
+        // resolution so simultaneous hero deaths produce a draw. The final
+        // runQueue drains the emitted gameOver into the shared collector.
+        this.checkWin();
+        return runQueue(this);
+      }
       finally { this.draining = false; }
     }
     // Re-entrant submit (no external callers today): don't re-initialize the
-    // collector — the outer session owns it.
+    // collector — the outer session owns the check and final drain.
     return this.resolveIntent(intent, me);
   }
 
@@ -139,9 +146,11 @@ export class Game implements Resolver {
       return runQueue(this);
     }
     if (intent.kind === 'endTurn') {
+      if (this.state.phase !== 'main') throw new Error('Not in main phase');
       return this.endTurn(me);
     }
     if (intent.kind === 'attack') {
+      if (this.state.phase !== 'main') throw new Error('Not in main phase');
       const target = intent.target;   // local alias: discriminant narrowing propagates into find() callbacks
       const attacker = this.state.players[me].board.find(c => c.id === intent.attackerId);
       if (!attacker) throw new Error('Attacker not found');
@@ -243,10 +252,45 @@ export class Game implements Resolver {
    * Public event entry point: enqueue one event and drain the resolution
    * queue. Returns every event applied, including follow-ups. Used by LAN
    * rendering / replay (Task 12+) and the test surface.
+   *
+   * Same session pattern as submit: the deferred win check (Task 11) runs at
+   * the end of the session and the final nested runQueue drains the emitted
+   * gameOver into the shared collector.
    */
   applyEvent(evt: GameEvent): GameEvent[] {
+    if (!this.draining) {
+      this.applied = [];
+      this.draining = true;
+      try {
+        this.emit(evt);
+        runQueue(this);
+        this.checkWin();
+        return runQueue(this);
+      } finally { this.draining = false; }
+    }
+    // Re-entrant applyEvent: the outer session owns the check + final drain.
     this.emit(evt);
     return runQueue(this);
+  }
+
+  /**
+   * Deferred win check (Task 11): after a resolution session, if exactly one
+   * hero is at 0 hp the survivor wins; if both are at 0 it is a draw. The
+   * gameOver event is emitted (log + queue) and dispatched by the caller's
+   * final runQueue, which sets phase via the existing dispatch handler.
+   * No-op while a gameOver is already in effect.
+   */
+  checkWin(): void {
+    if (this.state.phase === 'gameOver') return;
+    const h0 = this.state.players[0].hero.hp;
+    const h1 = this.state.players[1].hero.hp;
+    if (h0 <= 0 && h1 <= 0) {
+      this.emit({ type: 'gameOver', winner: 'draw', reason: 'both heroes destroyed' });
+    } else if (h0 <= 0) {
+      this.emit({ type: 'gameOver', winner: 1, reason: 'hero destroyed' });
+    } else if (h1 <= 0) {
+      this.emit({ type: 'gameOver', winner: 0, reason: 'hero destroyed' });
+    }
   }
 
   /**

@@ -22,6 +22,10 @@ export interface Resolver {
   applied: GameEvent[];
   /** True while a drain is active on this resolver (nested-drain detection). */
   draining: boolean;
+  /** Deferred win check (Task 11): called at the END of a resolution session
+   *  so simultaneous hero deaths produce a draw. Emits gameOver via dispatch.
+   *  No-op when a gameOver is already pending/applied. */
+  checkWin(): void;
 }
 
 /**

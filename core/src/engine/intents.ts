@@ -61,22 +61,23 @@ export function validatePlayCard(
   // Single-target effects require a valid target ref; every single-target
   // effect must accept the supplied ref (multi-target / no-target effects
   // resolve internally and need no target). hero/self effects auto-resolve to
-  // the caster's own hero (Task 10: legalIntents emits them without a target).
+  // the caster's own hero — skipped unconditionally (Task 10 precedent,
+  // Task 14 mixed-card ruling: a choice ref may ride along).
   return validateEffectTargets(game, me, card.effects, intent.target);
 }
 
 /**
  * Validate an intent.target against every single-target effect in `effects`
  * (shared by playCard validation and hero power resolution so both paths
- * agree). hero/self auto-resolve to the caster's own hero — no target needed;
- * when one IS supplied it must be the own hero. Other single-target kinds
- * require a legal ref per validateTarget. AoE/random/no-target effects are
- * skipped (they resolve internally).
+ * agree). hero/self AUTO-RESOLVE to the caster's own hero — they are skipped
+ * unconditionally (a supplied ref is ignored for them; the mixed-card ruling
+ * in Task 14 makes `dmg3(any)+heal3(h)` legal with a creature ref). Other
+ * single-target kinds require a legal ref per validateTarget. AoE/random/
+ * no-target effects are skipped (they resolve internally).
  */
 export function validateEffectTargets(game: Game, me: PlayerIndex, effects: readonly EffectSpec[], target: TargetRef | undefined): string | null {
   for (const spec of effects) {
-    if (spec.target === undefined || !SINGLE_TARGET_TARGETS.has(spec.target)) continue;
-    if ((spec.target === 'hero' || spec.target === 'self') && target === undefined) continue;
+    if (spec.target === undefined || !SINGLE_TARGET_TARGETS.has(spec.target) || spec.target === 'hero' || spec.target === 'self') continue;
     const err = validateTarget(game, me, spec.target, target);
     if (err) return err;
   }

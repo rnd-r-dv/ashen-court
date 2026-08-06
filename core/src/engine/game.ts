@@ -202,9 +202,10 @@ export class Game implements Resolver {
         case 'spell': {
           this.emit({ type: 'cardPlayed', player: me, cardId: card.id });
           // Apply each effect in order. Single-target effects pass the resolved
-          // intent.target as the explicit ref; AoE/random kinds resolve internally.
+          // intent.target as the explicit ref; hero/self (own-hero auto-resolve,
+          // Task 14 mixed-card ruling) and AoE/random kinds resolve internally.
           for (const spec of card.effects) {
-            const ref = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) ? intent.target : undefined;
+            const ref = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) && spec.target !== 'hero' && spec.target !== 'self' ? intent.target : undefined;
             // Ward: a single-target creature ref on a warded creature consumes
             // the ward, fizzles the whole spell (effects skipped) — but the
             // spell is still paid and already removed from hand above.
@@ -237,9 +238,10 @@ export class Game implements Resolver {
       if (err) throw new Error(err);
       p.mana -= p.hero.power.cost;   // inline payment (Task 9 playCard pattern)
       for (const spec of p.hero.power.effects) {
-        // single-target kinds take the chosen ref; hero/self and AoE/random
-        // kinds resolve internally (own hero / all legal refs)
-        const ref = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) ? intent.target : undefined;
+        // single-target kinds take the chosen ref; hero/self (own-hero
+        // auto-resolve) and AoE/random kinds resolve internally (Task 14
+        // mixed-card ruling — a supplied ref is ignored for hero/self).
+        const ref = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) && spec.target !== 'hero' && spec.target !== 'self' ? intent.target : undefined;
         applyEffect(this, { player: me, cardId: 'hero-power' }, spec, ref);
       }
       p.hero.usedPower = true;

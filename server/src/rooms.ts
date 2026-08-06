@@ -1,11 +1,15 @@
-// Room registry for the LAN server (Task 33). One Room per 4-letter code:
-// host state (name, deck, custom cards, seed) plus the authoritative Game.
-// The server is authoritative: intents are validated by game.submit (throw →
-// error reply to the sender only), and the returned resolution tree is
-// broadcast to both sockets. Reconnect keeps the room alive for a grace
-// window (5 minutes); a joinRoom on the same code re-attaches the socket and
-// re-sends joined + gameStart (v1 re-sync — clients replay intents locally
-// per the LAN-mirroring design; no deep state transfer).
+// Room registry for the LAN server (Task 33 + Task 34 fix round). One Room
+// per 4-letter code: host state (name, deck, custom cards, seed) plus the
+// authoritative Game. The server is authoritative: intents are validated by
+// game.submit (throw → error reply to the sender only). Every ACCEPTED intent
+// is pushed to the room's append-only log and broadcast to both sockets as
+// {type:'intent'} alongside the {type:'events'} resolution tree (events drive
+// animation; intents drive the clients' deterministic shadow replay).
+// Reconnect keeps the room alive for a grace window (5 minutes); a joinRoom
+// on the same code re-attaches the socket and re-sends joined + the full
+// intent log (each logged intent as {type:'intent'}) + gameStart, so the
+// reconnecting client rebuilds its shadow from seed and replays the log to
+// reach the live state (no deep state transfer).
 import { CardRegistry, Game, HEROES, buildPool } from '@ashen/core';
 import type { Card, GameEvent, Intent, PlayerIndex } from '@ashen/core';
 import { WebSocket } from 'ws';
@@ -30,6 +34,9 @@ export interface Room {
   game: Game | null;              // built on first join; persists across reconnect
   registry: CardRegistry;         // merged pool: buildPool() + customCards
   rematchPending: Set<PlayerIndex>;
+  /** Append-only log of every accepted intent, in submission order. Replayed
+   *  to a reconnecting socket so its fresh shadow catches up (Fix round). */
+  intents: Intent[];
   expiry: NodeJS.Timeout | null;
 }
 
@@ -85,6 +92,7 @@ export class RoomRegistry {
       game: null,
       registry: new CardRegistry([...buildPool(), ...msg.customCards]),
       rematchPending: new Set(),
+      intents: [],
       expiry: null,
     };
     this.rooms.set(code, room);
@@ -134,11 +142,15 @@ export class RoomRegistry {
       if (player === 1) send(room.hostSocket, { type: 'opponentJoined', opponentName: 'You' });  // joiner has no name in v1
       broadcast(room, { type: 'gameStart' });
     } else {
-      // Reconnect within the grace window: re-sync the reattached socket
-      // (joined + gameStart). The client replays its intents locally against a
-      // fresh Game(seed, deck, cards); no deep state transfer in v1.
+      // Reconnect within the grace window: re-sync the reattached socket with
+      // joined + the full intent log + gameStart. The client rebuilds its
+      // shadow fresh from the seed/deck/registry in 'joined', then replays
+      // each logged intent on the deterministic engine to catch up to the
+      // live state. Order matters: joined (builds the shadow) → intents
+      // (replay) → gameStart (the UI can start rendering).
       const opponentName = player === 0 ? 'You' : room.hostName;
       send(socket, { type: 'joined', player, seed: room.seed, opponentName, deckIds: room.deckIds, cards });
+      for (const intent of room.intents) send(socket, { type: 'intent', intent });
       send(socket, { type: 'gameStart' });
     }
   }
@@ -150,7 +162,12 @@ export class RoomRegistry {
     }
     try {
       const events: GameEvent[] = room.game.submit(intent);
+      room.intents.push(intent);
+      // Two broadcasts: the resolution tree (animation) and the accepted
+      // intent itself (shadow replay — the mirroring contract). Both sockets
+      // receive both; own echoes included, so clients apply exactly once.
       broadcast(room, { type: 'events', events });
+      broadcast(room, { type: 'intent', intent });
     } catch (err) {
       // Illegal intent: reply to the sender only; the game keeps running.
       send(socket, { type: 'error', message: err instanceof Error ? err.message : String(err) });
@@ -165,6 +182,7 @@ export class RoomRegistry {
     room.rematchPending.clear();
     room.seed += 1;                             // deterministic new seed (old + 1)
     room.game = this.makeGame(room);            // same decks/hero, fresh game
+    room.intents = [];                          // the old game's log must not replay onto the new one
     broadcast(room, { type: 'rematchStart' });
   }
 

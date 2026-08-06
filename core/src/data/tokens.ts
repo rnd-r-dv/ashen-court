@@ -22,10 +22,13 @@ export function arcaneArt(id: string): ArtRecipe {
   return { preset: 'arcane', palette: ARCANE_PALETTE, seed: hashId(id) };
 }
 
-const base = (id: string, name: string, type: Card['type'], cost: number, rarity: Card['rarity']): Card => ({
+const base = (
+  id: string, name: string, type: Card['type'], cost: number,
+  rarity: Card['rarity'], flavor?: string,
+): Card => ({
   id, name, type, cost,
   keywords: [], effects: [], rarity, archetype: 'token',
-  art: arcaneArt(id), author: 'curated', version: 1,
+  art: arcaneArt(id), author: 'curated', version: 1, flavor,
 });
 
 /**
@@ -34,16 +37,23 @@ const base = (id: string, name: string, type: Card['type'], cost: number, rarity
  * would trip validateDeck edge cases and confuse the Forge's token picker.
  */
 export const TOKEN_CARDS: Card[] = [
-  { ...base('token-rat', 'Giant Rat', 'creature', 0, 'common'), attack: 1, health: 1 },
-  { ...base('token-skeleton', 'Skeleton', 'creature', 0, 'common'), attack: 1, health: 1 },
-  { ...base('token-wisp', 'Choir Spirit', 'creature', 0, 'common'), attack: 1, health: 1 },
-  { ...base('token-dragon-whelp', 'Dragon Whelp', 'creature', 0, 'common'), attack: 1, health: 1 },
-  { ...base('token-treant', 'Root Treant', 'creature', 0, 'common'), attack: 1, health: 1, keywords: ['taunt'] },
-  { ...base('token-phoenixash', 'Phoenix Ash', 'creature', 0, 'common'), attack: 2, health: 2 },
+  { ...base('token-rat', 'Giant Rat', 'creature', 0, 'common',
+      'A rat grown fat on the leavings of war — and bold with it.'), attack: 1, health: 1 },
+  { ...base('token-skeleton', 'Skeleton', 'creature', 0, 'common',
+      'The Court’s dead do not rest; they rise, reassemble, and march.'), attack: 1, health: 1 },
+  { ...base('token-wisp', 'Choir Spirit', 'creature', 0, 'common',
+      'A voice that lingered after the song ended, singing still.'), attack: 1, health: 1 },
+  { ...base('token-dragon-whelp', 'Dragon Whelp', 'creature', 0, 'common',
+      'Small yet, but the fire in its throat is patient.'), attack: 1, health: 1 },
+  { ...base('token-treant', 'Root Treant', 'creature', 0, 'common',
+      'The deep roots answer the elder forest’s call.'), attack: 1, health: 1, keywords: ['taunt'] },
+  { ...base('token-phoenixash', 'Phoenix Ash', 'creature', 0, 'common',
+      'From the embers of the fallen, a spark remembers the sky.'), attack: 2, health: 2 },
 ];
 
 /** Player 2's setup head-start spell (surge already granted; see Game constructor). */
 export const MANA_SURGE_CARD: Card = {
-  ...base('mana-surge', 'Mana Surge', 'spell', 0, 'common'),
+  ...base('mana-surge', 'Mana Surge', 'spell', 0, 'common',
+    'A surge of raw mana floods the arena.'),
   effects: [{ kind: 'refillMana', value: 1 }],
 };

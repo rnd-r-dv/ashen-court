@@ -10,6 +10,7 @@ import DeckPick from './screens/DeckPick.js';
 import type { DeckPickResult } from './screens/DeckPick.js';
 import Forge from './screens/Forge.js';
 import DeckBuilder from './screens/DeckBuilder.js';
+import Background from './components/Background.js';
 
 // ---- navigation context ----
 
@@ -68,6 +69,8 @@ export default function App() {
 
   return (
     <NavContext.Provider value={nav}>
+      {/* Ambient layer: fixed, z-index -1, pointer-events none — shows on every screen. */}
+      <Background />
       {screen.name === 'menu' && <Menu />}
       {screen.name === 'modeSelect' && <ModeSelect mode={modeIntent} />}
       {screen.name === 'deckPick' && (

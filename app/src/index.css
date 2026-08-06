@@ -1,5 +1,10 @@
-/* Global shell styles (Task 28). Deliberately minimal — the design-token theme
- * system (colors, gothic frames, ambient background) lands in Task 36. */
+/* Global styles (Task 28) upgraded to the Task 36 theme system. The design
+ * tokens in theme.css drive the page background, typography, selection and
+ * focus states, and the gothic-framed buttons below. Screen stylesheets
+ * (shell.css etc.) load before this file, so these rules win ties and can
+ * override the old hardcoded palette where the theme needs to. */
+@import './theme.css';
+
 :root {
   color-scheme: dark;
 }
@@ -13,12 +18,96 @@ body,
 }
 
 body {
-  background: #14131a;
-  color: #e8e4da;
-  font-family: Georgia, 'Palatino Linotype', Palatino, 'Book Antiqua', 'Times New Roman', serif;
+  /* Fallback gradient — the fixed ambient Background layer paints over this. */
+  background: linear-gradient(180deg, var(--bg-0) 0%, var(--bg-2) 100%);
+  color: var(--text);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Georgia serif for display/headings; body text uses the system sans stack. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.shell-title {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
 }
 
 button {
   font-family: inherit;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg-2);
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ---- gothic-framed buttons (Task 36) ----
+ * The .gothic-frame recipe from theme.css applied to every shell button:
+ * double border, gold corner brackets, warm hover glow. */
+
+.shell-btn {
+  position: relative;
+  border: 2px double var(--gold-dim);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  color: var(--text);
+  padding: 0.7rem 1.6rem;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.shell-btn::before,
+.shell-btn::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+
+.shell-btn::before {
+  top: -2px;
+  left: -2px;
+  border-top: 2px solid var(--gold);
+  border-left: 2px solid var(--gold);
+}
+
+.shell-btn::after {
+  bottom: -2px;
+  right: -2px;
+  border-bottom: 2px solid var(--gold);
+  border-right: 2px solid var(--gold);
+}
+
+.shell-btn:hover {
+  border-color: var(--gold);
+  color: #f5edda;
+  background: linear-gradient(180deg, #221a33 0%, #140d20 100%);
+  box-shadow: var(--glow-gold);
+}
+
+/* Primary actions burn ember instead of gold. */
+.shell-btn-primary {
+  border-color: var(--ember-dim);
+}
+
+.shell-btn-primary::before,
+.shell-btn-primary::after {
+  border-color: var(--ember);
+}
+
+.shell-btn-primary:hover {
+  border-color: var(--ember);
+  box-shadow: var(--glow-ember);
 }

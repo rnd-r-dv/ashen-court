@@ -1,5 +1,7 @@
 // @ashen/core public surface — matches package.json "main": "src/index.ts".
-// Storage/forge-facing exports; bot internals intentionally not re-exported.
+// Storage/forge-facing exports plus the bot surface (Task 30: the app's match
+// flow needs createBot/mulliganPolicy to auto-play bot opponents). Engine
+// internals (effects/events/intents/keywords) stay module-private.
 
 export type * from './types.js';
 
@@ -17,6 +19,7 @@ export {
 } from './data/index.js';
 
 export { CardRegistry } from './cards.js';
+export { createBot, mulliganPolicy, type BotPolicy, type BotLevel } from './bot/index.js';
 export { Game, type MatchSetup } from './engine/game.js';
 export { summarize } from './engine/stats.js';
 export { serializeState, deserializeState } from './engine/serialize.js';

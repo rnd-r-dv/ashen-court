@@ -23,23 +23,23 @@ const art = (id: string): Card['art'] => ({ preset: 'shadow', palette: DANCE_PAL
 
 const creature = (
   id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [],
+  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [], flavor?: string,
 ): Card => ({
   id, name, type: 'creature', cost, attack, health,
   keywords, triggers, effects: [], rarity, archetype: 'dance',
-  art: art(id), author: 'curated', version: 1,
+  art: art(id), flavor, author: 'curated', version: 1,
 });
 
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[]): Card => ({
+const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
   id, name, type: 'spell', cost,
   keywords: [], effects, rarity, archetype: 'dance',
-  art: art(id), author: 'curated', version: 1,
+  art: art(id), flavor, author: 'curated', version: 1,
 });
 
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[]): Card => ({
+const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
   id, name, type: 'artifact', cost,
   keywords: [], effects: [], triggers, rarity, archetype: 'dance',
-  art: art(id), author: 'curated', version: 1,
+  art: art(id), flavor, author: 'curated', version: 1,
 });
 
 const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
@@ -52,30 +52,30 @@ export const HERO: HeroSpec = {
 
 export const CARDS: Card[] = [
   // Commons (11)
-  spell('dance-dagger', 'Dagger Throw', 1, 'common', [dmg(2, 'anyCreature')]),
-  spell('dance-step', 'Shadow Step', 1, 'common', [draw(1)]),
-  spell('dance-twirl', 'Twirl', 1, 'common', [dmg(1, 'any')]),
-  creature('dance-acrobat', 'Acrobat', 2, 2, 2, 'common'),
-  spell('dance-slash', 'Slash', 2, 'common', [dmg(3, 'enemyCreature')]),
-  creature('dance-dervish', 'Dervish', 2, 3, 1, 'common', ['rush']),
-  spell('dance-vanish', 'Vanish', 3, 'common', [dmg(3, 'anyCreature')]),
-  spell('dance-echo', 'Echo', 3, 'common', [draw(2)]),
-  spell('dance-spin', 'Spinning Blade', 3, 'common', [dmg(2, 'allEnemies')]),
-  creature('dance-bladeweaver', 'Bladeweaver', 4, 3, 4, 'common'),
-  spell('dance-veil', 'Veil Dance', 4, 'common', [draw(2)]),
+  spell('dance-dagger', 'Dagger Throw', 1, 'common', [dmg(2, 'anyCreature')], 'The dagger leaves her hand before the eye can follow; the shadow of its flight arrives a heartbeat late.'),
+  spell('dance-step', 'Shadow Step', 1, 'common', [draw(1)], 'Step into shadow, step out of reach — and let the dark carry away what was never yours.'),
+  spell('dance-twirl', 'Twirl', 1, 'common', [dmg(1, 'any')], 'She twirls, and the crowd applauds. Only the wounded notice the blade that was there a moment ago.'),
+  creature('dance-acrobat', 'Acrobat', 2, 2, 2, 'common', [], [], 'Gravity is a suggestion the Acrobat politely declines.'),
+  spell('dance-slash', 'Slash', 2, 'common', [dmg(3, 'enemyCreature')], 'Quick, clean, and done before the scream finds its voice.'),
+  creature('dance-dervish', 'Dervish', 2, 3, 1, 'common', ['rush'], [], 'A whirlwind of blade and shadow — everywhere at once, and gone the moment the eye blinks.'),
+  spell('dance-vanish', 'Vanish', 3, 'common', [dmg(3, 'anyCreature')], 'Those who see the vanish are already bleeding; those who do not are still counting their coin.'),
+  spell('dance-echo', 'Echo', 3, 'common', [draw(2)], 'Every performance echoes twice — once in the hall, and once in the shadows that remember it.'),
+  spell('dance-spin', 'Spinning Blade', 3, 'common', [dmg(2, 'allEnemies')], 'A single blade spun into a ring of steel. Step inside the circle, and pray the music ends first.'),
+  creature('dance-bladeweaver', 'Bladeweaver', 4, 3, 4, 'common', [], [], 'Threads of shadow, needles of steel — the battlefield is the loom, and blades are the thread.'),
+  spell('dance-veil', 'Veil Dance', 4, 'common', [draw(2)], 'The veils rise and fall; what they conceal is never what the crowd believes it saw.'),
   // Rares (5)
-  spell('dance-flurry', 'Flurry', 4, 'rare', [dmg(4, 'randomEnemyCreature')]),
-  creature('dance-trickster', 'Trickster', 5, 4, 4, 'rare', [], [{ when: 'battlecry', effects: [draw(1)] }]),
-  spell('dance-finale', 'Grand Finale', 7, 'rare', [dmg(6, 'randomEnemy')]),
-  spell('dance-mirage', 'Mirage', 5, 'rare', [draw(3)]),
-  creature('dance-illusionist', 'Illusionist', 6, 5, 5, 'rare'),
+  spell('dance-flurry', 'Flurry', 4, 'rare', [dmg(4, 'randomEnemyCreature')], 'Every dagger bets on a different mark. The flurry cares only that one of them lands.'),
+  creature('dance-trickster', 'Trickster', 5, 4, 4, 'rare', [], [{ when: 'battlecry', effects: [draw(1)] }], 'Watch the hands, not the eyes. Even the watchful leave poorer, unsure of what they lost.'),
+  spell('dance-finale', 'Grand Finale', 7, 'rare', [dmg(6, 'randomEnemy')], 'The last bow, the last blade, the last secret — the audience will never forget a single step.'),
+  spell('dance-mirage', 'Mirage', 5, 'rare', [draw(3)], 'The mirage shows you what you most desire, and charges you dearly for the glimpse.'),
+  creature('dance-illusionist', 'Illusionist', 6, 5, 5, 'rare', [], [], 'No light bends that the Illusionist cannot command, and no shadow that will not answer her call.'),
   // Epics (3)
-  creature('dance-puppet', 'Puppet Master', 7, 6, 6, 'epic', [], [{ when: 'battlecry', effects: [draw(2)] }]),
-  spell('dance-trick', 'The Ultimate Trick', 8, 'epic', [dmg(8, 'any')]),
-  creature('dance-shadow', 'Shadow Dancer', 7, 5, 5, 'epic', [], [{ when: 'deathrattle', effects: [draw(2)] }]),
+  creature('dance-puppet', 'Puppet Master', 7, 6, 6, 'epic', [], [{ when: 'battlecry', effects: [draw(2)] }], 'Strings unseen, audience unknowing — everyone dances to a tune only one can hear.'),
+  spell('dance-trick', 'The Ultimate Trick', 8, 'epic', [dmg(8, 'any')], 'For the final trick, the stage itself disappears — and takes one poor soul with it.'),
+  creature('dance-shadow', 'Shadow Dancer', 7, 5, 5, 'epic', [], [{ when: 'deathrattle', effects: [draw(2)] }], 'The dance does not end when the dancer falls; the shadows finish the steps.'),
   // Legendaries (2)
-  creature('dance-nyx', 'Nyx, the Last Dance', 9, 7, 7, 'legendary', ['windfury']),
-  artifact('dance-infinite', 'Infinite Shadows', 6, 'legendary', [{ when: 'endOfTurn', effects: [draw(1)] }]),
+  creature('dance-nyx', 'Nyx, the Last Dance', 9, 7, 7, 'legendary', ['windfury'], [], 'When Nyx Nightshade takes the floor, even fate holds its breath until she bows.'),
+  artifact('dance-infinite', 'Infinite Shadows', 6, 'legendary', [{ when: 'endOfTurn', effects: [draw(1)] }], 'The shadows multiply with every passing hour — patient, endless, and always watching.'),
 ];
 
 // sig: 3x each common (11), 2x each rare (5), 1x each epic (3), 1x each legendary (2)

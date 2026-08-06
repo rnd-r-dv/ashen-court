@@ -10,6 +10,9 @@ import { HERO as SHADOW_DANCERS_HERO, CARDS as SHADOW_DANCERS_CARDS, DECK as SHA
 import { HERO as BONE_HORDE_HERO, CARDS as BONE_HORDE_CARDS, DECK as BONE_HORDE_DECK } from './bone-horde.js';
 import { HERO as GRAVE_PACT_HERO, CARDS as GRAVE_PACT_CARDS, DECK as GRAVE_PACT_DECK } from './grave-pact.js';
 import { HERO as NIGHT_COVEN_HERO, CARDS as NIGHT_COVEN_CARDS, DECK as NIGHT_COVEN_DECK } from './night-coven.js';
+import { HERO as STARFORGED_HERO, CARDS as STARFORGED_CARDS, DECK as STARFORGED_DECK } from './starforged.js';
+import { HERO as ETERNAL_VIGIL_HERO, CARDS as ETERNAL_VIGIL_CARDS, DECK as ETERNAL_VIGIL_DECK } from './eternal-vigil.js';
+import { HERO as STORMWROUGHT_HERO, CARDS as STORMWROUGHT_CARDS, DECK as STORMWROUGHT_DECK } from './stormwrought.js';
 
 export type ArchetypeId = 'ember' | 'choir' | 'vermin' | 'dragon' | 'roots' | 'dance' | 'bone' | 'pact' | 'coven' | 'star' | 'vigil' | 'storm';
 
@@ -25,18 +28,22 @@ export { HERO as SHADOW_DANCERS_HERO, CARDS as SHADOW_DANCERS_CARDS, DECK as SHA
 export { HERO as BONE_HORDE_HERO, CARDS as BONE_HORDE_CARDS, DECK as BONE_HORDE_DECK } from './bone-horde.js';
 export { HERO as GRAVE_PACT_HERO, CARDS as GRAVE_PACT_CARDS, DECK as GRAVE_PACT_DECK } from './grave-pact.js';
 export { HERO as NIGHT_COVEN_HERO, CARDS as NIGHT_COVEN_CARDS, DECK as NIGHT_COVEN_DECK } from './night-coven.js';
+export { HERO as STARFORGED_HERO, CARDS as STARFORGED_CARDS, DECK as STARFORGED_DECK } from './starforged.js';
+export { HERO as ETERNAL_VIGIL_HERO, CARDS as ETERNAL_VIGIL_CARDS, DECK as ETERNAL_VIGIL_DECK } from './eternal-vigil.js';
+export { HERO as STORMWROUGHT_HERO, CARDS as STORMWROUGHT_CARDS, DECK as STORMWROUGHT_DECK } from './stormwrought.js';
 
 /** All curated heroes, in archetype order (Forge hero picker). */
 export const HEROES: HeroSpec[] = [
   EMBER_COURT_HERO, HOLLOW_CHOIR_HERO, VERMIN_SWARM_HERO,
   DRAGONFLIGHT_HERO, ELDER_ROOTS_HERO, SHADOW_DANCERS_HERO,
   BONE_HORDE_HERO, GRAVE_PACT_HERO, NIGHT_COVEN_HERO,
+  STARFORGED_HERO, ETERNAL_VIGIL_HERO, STORMWROUGHT_HERO,
 ];
 
 /**
- * Production card pool: neutrals + curated archetype cards (Tasks 14-17 fill
- * the rest as they land) + tokens + mana-surge. Kept as a function so the
- * Forge always builds a fresh, deduped collection.
+ * Production card pool: neutrals + curated archetype cards (Tasks 14-17) +
+ * tokens + mana-surge. Kept as a function so the Forge always builds a fresh,
+ * deduped collection.
  */
 export function buildPool(): Card[] {
   return [
@@ -44,14 +51,15 @@ export function buildPool(): Card[] {
     ...EMBER_COURT_CARDS, ...HOLLOW_CHOIR_CARDS, ...VERMIN_SWARM_CARDS,
     ...DRAGONFLIGHT_CARDS, ...ELDER_ROOTS_CARDS, ...SHADOW_DANCERS_CARDS,
     ...BONE_HORDE_CARDS, ...GRAVE_PACT_CARDS, ...NIGHT_COVEN_CARDS,
+    ...STARFORGED_CARDS, ...ETERNAL_VIGIL_CARDS, ...STORMWROUGHT_CARDS,
     ...TOKEN_CARDS, MANA_SURGE_CARD,
   ];
 }
 
 /**
- * Deck definitions per archetype. Ember/choir/vermin landed in Task 14; the
- * remaining 9 keys fill in Tasks 15-17. The Record<ArchetypeId, DeckDef> type
- * requires all 12 keys, so the partial object compiles via the cast.
+ * Deck definitions per archetype. All 12 keys landed in Tasks 14-17. The
+ * Record<ArchetypeId, DeckDef> type requires all 12 keys, so the object
+ * compiles via the cast.
  */
 export const DECK_DEFS = {
   ember: EMBER_COURT_DECK,
@@ -63,7 +71,9 @@ export const DECK_DEFS = {
   bone: BONE_HORDE_DECK,
   pact: GRAVE_PACT_DECK,
   coven: NIGHT_COVEN_DECK,
-} as Record<ArchetypeId, DeckDef>;
+  star: STARFORGED_DECK,
+  vigil: ETERNAL_VIGIL_DECK,
+  storm: STORMWROUGHT_DECK,
 } as Record<ArchetypeId, DeckDef>;
 
 /** Expand a DeckDef into a flat ordered card list: sig copies then neutrals. */

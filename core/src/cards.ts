@@ -19,6 +19,11 @@ export class CardRegistry {
     return this.poolMap.has(id);
   }
 
+  /** Register or replace a card definition (test helpers pin synthetic creature defs). */
+  register(card: Card): void {
+    this.poolMap.set(card.id, card);
+  }
+
   pool(): Map<string, Card> {
     return this.poolMap;
   }

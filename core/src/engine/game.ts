@@ -2,10 +2,13 @@ import { CardRegistry } from '../cards.js';
 import { createTestPool } from '../data/test-pool.js';
 import { createRng, shuffle } from '../rng.js';
 import type { Rng } from '../rng.js';
-import type { GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState } from '../types.js';
+import type { CreatureState, GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState } from '../types.js';
 import { validateDeck } from '../validate.js';
+import { applyEffect } from './effects.js';
+import type { EffectCtx } from './effects.js';
 import { runQueue } from './events.js';
 import type { Resolver } from './events.js';
+import { canAttack, effectiveKeywords, tauntPresent } from './keywords.js';
 import { deserializeState, serializeState } from './serialize.js';
 
 export interface MatchSetup {
@@ -116,6 +119,32 @@ export class Game implements Resolver {
     }
     if (intent.kind === 'endTurn') {
       return this.endTurn(me);
+    }
+    if (intent.kind === 'attack') {
+      const target = intent.target;   // local alias: discriminant narrowing propagates into find() callbacks
+      const attacker = this.state.players[me].board.find(c => c.id === intent.attackerId);
+      if (!attacker) throw new Error('Attacker not found');
+      if (!canAttack(attacker, this)) throw new Error('Cannot attack with that creature');
+      // taunt check: while the defender has a taunt, hero AND non-taunt-creature targets are illegal
+      const enemy = (1 - me) as PlayerIndex;
+      const enemyBoard = this.state.players[enemy].board;
+      if (tauntPresent(enemyBoard)) {
+        if (target.type === 'hero' || target.type !== 'creature' ||
+            !effectiveKeywords(enemyBoard.find(c => c.id === target.id)!).has('taunt')) {
+          throw new Error('Taunt creature in the way');
+        }
+      }
+      // resolve
+      attacker.exhausted = true; attacker.attacksLeft -= 1;
+      if (target.type === 'creature') {
+        const defender = enemyBoard.find(c => c.id === target.id);
+        if (!defender) throw new Error('Defender not found');
+        this.dealDamage(attacker, defender, attacker.attack);       // uses effects internals
+        if (defender.health > 0) this.dealDamage(defender, attacker, defender.attack);  // retaliation (source = defender)
+      } else {
+        this.dealDamageToHero(attacker, enemy, attacker.attack);
+      }
+      return runQueue(this);
     }
     throw new Error('Intent not implemented yet');   // replaced in Tasks 9-11
   }
@@ -263,6 +292,22 @@ export class Game implements Resolver {
       const cardId = p.deck[p.deck.length - 1]!;   // pre-view; dispatch pops
       this.emit({ type: 'cardDrawn', player: me, cardId });
     }
+  }
+
+  /**
+   * Attack damage routed through the effects library: builds an EffectCtx from
+   * the SOURCE creature (controller = source.owner, so retaliation lifesteal
+   * heals the defender's controller) and applies dealDamage to the target.
+   */
+  private dealDamage(source: CreatureState, target: CreatureState, amount: number): void {
+    const ctx: EffectCtx = { player: source.owner, cardId: source.cardId, creatureId: source.id };
+    applyEffect(this, ctx, { kind: 'dealDamage', value: amount, target: 'anyCreature' }, { type: 'creature', id: target.id });
+  }
+
+  /** Hero-target attack damage; same source-derived controller ruling as dealDamage. */
+  private dealDamageToHero(source: CreatureState, targetPlayer: PlayerIndex, amount: number): void {
+    const ctx: EffectCtx = { player: source.owner, cardId: source.cardId, creatureId: source.id };
+    applyEffect(this, ctx, { kind: 'dealDamage', value: amount, target: 'hero' }, { type: 'hero', player: targetPlayer });
   }
 
   private endTurn(me: PlayerIndex): GameEvent[] {

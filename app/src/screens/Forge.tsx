@@ -14,6 +14,7 @@ import type { ForgeDraft } from '../forge/formState.js';
 import { createDraft, draftIssues, draftToCard, EFFECT_PRESETS } from '../forge/formState.js';
 import { saveCustomCard } from '../storage.js';
 import Card from '../components/Card.js';
+import ImportExport from '../components/ImportExport.js';
 import './forge.css';
 
 /**
@@ -171,6 +172,7 @@ export default function Forge() {
       <header className="forge-header">
         <h1>The Forge</h1>
         <p className="forge-subtitle">Forge a custom card — it is saved locally and joins the card pool.</p>
+        <ImportExport mode="cards" />
       </header>
 
       <div className="forge-layout">

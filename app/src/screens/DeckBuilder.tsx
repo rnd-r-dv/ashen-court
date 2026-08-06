@@ -4,6 +4,7 @@ import { buildPool, DECK_DEFS } from '@ashen/core';
 import { loadCustomCards, saveDeck, deleteDeck } from '../storage.js';
 import { addCard, deckStatus, filterPool, removeCard } from '../deckBuild.js';
 import Card from '../components/Card.js';
+import ImportExport from '../components/ImportExport.js';
 import './forge.css';          // .card-preview styling for the Card stub (Task 25)
 import './deckbuilder.css';
 
@@ -118,11 +119,19 @@ export default function DeckBuilder() {
     showToast(`Deleted deck "${activeDeckId}"`);
   }
 
+  /** ImportExport deck mode: load a validated imported deck into the builder. */
+  function onImportedDeck(ids: string[], name: string) {
+    setDeck(ids);
+    setDeckName(name);
+    setActiveDeckId(null);   // a fresh import is not the saved overlay
+  }
+
   return (
     <div className="deckbuilder">
       <header className="deckbuilder-header">
         <h1>Deck Builder</h1>
         <p className="deckbuilder-subtitle">Assemble a 60-card deck from the curated pool and your custom cards.</p>
+        <ImportExport mode="deck" deckIds={deck} onImportedDeck={onImportedDeck} />
       </header>
 
       <div className="deckbuilder-layout">

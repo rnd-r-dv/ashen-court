@@ -325,6 +325,55 @@ describe('LAN rooms', () => {
     }
   });
 
+  it('invalid host deck errors to the joiner instead of crashing', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    let host2: TestClient | undefined;
+    let guest2: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      // Host creates with a deck that fails Game-constructor validation
+      // (3 cards instead of 60): the room is created but no Game is built yet.
+      const BAD_DECK = DECK.slice(0, 3);
+      host.send({ type: 'createRoom', name: 'BadHost', deckIds: BAD_DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      // Joining must NOT crash the server: the joiner gets an error reply ONLY
+      // (nothing is broadcast to the host).
+      const errP = guest.waitFor(m => m.type === 'error');
+      const hostSilenceP = host.expectNoMessage();
+      guest.send({ type: 'joinRoom', code: created.code });
+      const err = await errP;
+      if (err.type !== 'error') throw new Error('error never arrived');
+      expect(err.message).toMatch(/Deck 0 invalid/i);
+      await hostSilenceP;
+      // The room was left joinable (no half-installed seat): a retry gets the
+      // same deck error, NOT "Room is full".
+      const retryP = guest.waitFor(m => m.type === 'error');
+      guest.send({ type: 'joinRoom', code: created.code });
+      const retry = await retryP;
+      if (retry.type !== 'error') throw new Error('error never arrived');
+      expect(retry.message).toMatch(/Deck 0 invalid/i);
+      // The server process is still alive: a follow-up create + join works.
+      ({ host: host2, guest: guest2 } = await makeClients(srv));
+      host2.send({ type: 'createRoom', name: 'GoodHost', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created2 = await host2.waitFor(m => m.type === 'roomCreated');
+      if (created2.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      const joinedP = guest2.waitFor(m => m.type === 'joined');
+      guest2.send({ type: 'joinRoom', code: created2.code });
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      expect(joined.player).toBe(1);
+    } finally {
+      host?.close();
+      guest?.close();
+      host2?.close();
+      guest2?.close();
+      await srv.close();
+    }
+  });
+
   it('disconnect notifies the other player', async () => {
     const srv = await makeServer();
     let host: TestClient | undefined;

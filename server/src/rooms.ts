@@ -106,6 +106,19 @@ export class RoomRegistry {
     // when both players are away the first rejoin reclaims the host slot.
     const slot: 'host' | 'guest' = room.hostSocket ? 'guest' : 'host';
     const player: PlayerIndex = slot === 'host' ? 0 : 1;
+    const firstJoin = room.game === null;
+    if (firstJoin) {
+      // First join: build the Game BEFORE seating. A client-provided deck that
+      // fails validation throws from the Game constructor (bad ids / wrong
+      // size); reply to the joiner ONLY and leave the room untouched — a
+      // half-installed seat would make a corrected retry hit "Room is full".
+      try {
+        room.game = this.makeGame(room);
+      } catch (err) {
+        send(socket, { type: 'error', message: err instanceof Error ? err.message : String(err) });
+        return;
+      }
+    }
     if (slot === 'host') room.hostSocket = socket;
     else room.guestSocket = socket;
     if (room.expiry) {
@@ -113,14 +126,12 @@ export class RoomRegistry {
       room.expiry = null;
     }
     const cards: Card[] = [...room.registry.pool().values()];
-    if (room.game === null) {
-      // First join: build the merged registry + Game and tell both sides.
-      room.game = this.makeGame(room);
-      send(room.guestSocket, {
-        type: 'joined', player: 1, seed: room.seed,
-        opponentName: room.hostName, deckIds: room.deckIds, cards,
-      });
-      send(room.hostSocket, { type: 'opponentJoined', opponentName: 'You' });  // joiner has no name in v1
+    if (firstJoin) {
+      // First join: joined to whichever socket took the slot, opponentJoined
+      // only when a player 1 arrived, then gameStart to both sides.
+      const opponentName = player === 0 ? 'You' : room.hostName;
+      send(socket, { type: 'joined', player, seed: room.seed, opponentName, deckIds: room.deckIds, cards });
+      if (player === 1) send(room.hostSocket, { type: 'opponentJoined', opponentName: 'You' });  // joiner has no name in v1
       broadcast(room, { type: 'gameStart' });
     } else {
       // Reconnect within the grace window: re-sync the reattached socket

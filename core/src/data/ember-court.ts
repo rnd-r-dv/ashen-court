@@ -23,23 +23,23 @@ const art = (id: string): Card['art'] => ({ preset: 'ember', palette: EMBER_PALE
 
 const creature = (
   id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [],
+  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [], flavor?: string,
 ): Card => ({
   id, name, type: 'creature', cost, attack, health,
   keywords, triggers, effects: [], rarity, archetype: 'ember',
-  art: art(id), author: 'curated', version: 1,
+  art: art(id), author: 'curated', version: 1, flavor,
 });
 
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[]): Card => ({
+const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
   id, name, type: 'spell', cost,
   keywords: [], effects, rarity, archetype: 'ember',
-  art: art(id), author: 'curated', version: 1,
+  art: art(id), author: 'curated', version: 1, flavor,
 });
 
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[]): Card => ({
+const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
   id, name, type: 'artifact', cost,
   keywords: [], effects: [], triggers, rarity, archetype: 'ember',
-  art: art(id), author: 'curated', version: 1,
+  art: art(id), author: 'curated', version: 1, flavor,
 });
 
 const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
@@ -53,33 +53,33 @@ export const HERO: HeroSpec = {
 
 export const CARDS: Card[] = [
   // Commons (11)
-  creature('ember-cinderling', 'Cinderling', 1, 2, 1, 'common'),
-  creature('ember-sparkmage', 'Sparkmage', 1, 1, 1, 'common', [], [{ when: 'battlecry', effects: [dmg(1, 'any')] }]),
-  spell('ember-bolt', 'Ember Bolt', 1, 'common', [dmg(2, 'any')]),
-  creature('ember-ashhunter', 'Ash Hunter', 2, 2, 2, 'common'),
-  spell('ember-searing', 'Searing Wave', 2, 'common', [dmg(1, 'allEnemies')]),
-  creature('ember-flamewhelp', 'Flamewhelp', 2, 2, 1, 'common', ['rush']),
-  spell('ember-blast', 'Blast', 3, 'common', [dmg(4, 'any')]),
-  creature('ember-firebrand', 'Firebrand', 3, 3, 3, 'common'),
-  creature('ember-igniter', 'Igniter', 3, 2, 3, 'common', [], [{ when: 'battlecry', effects: [dmg(1, 'any')] }]),
-  spell('ember-cauterize', 'Cauterize', 4, 'common', [dmg(3, 'any'), heal(3)]),
-  creature('ember-hellhound', 'Hellhound', 4, 4, 3, 'common', ['charge']),
+  creature('ember-cinderling', 'Cinderling', 1, 2, 1, 'common', [], [], 'A coal given breath and malice. The court breeds its smallest cruelties first.'),
+  creature('ember-sparkmage', 'Sparkmage', 1, 1, 1, 'common', [], [{ when: 'battlecry', effects: [dmg(1, 'any')] }], 'Every sparkmage learns the court\'s first lesson: one flame, well-placed, ends a kingdom.'),
+  spell('ember-bolt', 'Ember Bolt', 1, 'common', [dmg(2, 'any')], 'Pyra\'s answer to doubt — short, hot, and final.'),
+  creature('ember-ashhunter', 'Ash Hunter', 2, 2, 2, 'common', [], [], 'It stalks the cooled fields where the fires have passed, harvesting whatever survived the burning.'),
+  spell('ember-searing', 'Searing Wave', 2, 'common', [dmg(1, 'allEnemies')], 'The court\'s opening argument: heat enough to crack shields and curl banners before the first blade is drawn.'),
+  creature('ember-flamewhelp', 'Flamewhelp', 2, 2, 1, 'common', ['rush'], [], 'Born hungry and taught to charge, the whelps throw themselves at whatever stands — the court calls it eagerness.'),
+  spell('ember-blast', 'Blast', 3, 'common', [dmg(4, 'any')], 'A fist of fire hurled from the high galleries. There is no diplomacy in it.'),
+  creature('ember-firebrand', 'Firebrand', 3, 3, 3, 'common', [], [], 'Snatched burning from a dying pyre and given a sword, the firebrand carries the court\'s anger into the line.'),
+  creature('ember-igniter', 'Igniter', 3, 2, 3, 'common', [], [{ when: 'battlecry', effects: [dmg(1, 'any')] }], 'Every siege begins with one small flame where no flame should be.'),
+  spell('ember-cauterize', 'Cauterize', 4, 'common', [dmg(3, 'any'), heal(3)], 'The court\'s surgeons know a seared wound cannot bleed again — and they let the enemy pay for the flame.'),
+  creature('ember-hellhound', 'Hellhound', 4, 4, 3, 'common', ['charge'], [], 'Bred in the kennels beneath the Throne of Ash, the hounds answer only to the scent of fear.'),
   // Rares (5)
-  spell('ember-firestorm', 'Firestorm', 5, 'rare', [dmg(4, 'allEnemies')]),
-  creature('ember-phoenixwhelp', 'Phoenix Whelp', 5, 4, 3, 'rare', ['lifesteal']),
-  spell('ember-pyroblast', 'Pyroblast', 5, 'rare', [dmg(7, 'any')]),
-  creature('ember-flamebringer', 'Flamebringer', 6, 5, 5, 'rare', [], [{ when: 'battlecry', effects: [dmg(2, 'any')] }]),
-  artifact('ember-emberforged', 'Emberforged Blade', 4, 'rare', [{ when: 'startOfTurn', effects: [dmg(1, 'randomEnemy')] }]),
+  spell('ember-firestorm', 'Firestorm', 5, 'rare', [dmg(4, 'allEnemies')], 'When the court tires of words, it lets the sky speak.'),
+  creature('ember-phoenixwhelp', 'Phoenix Whelp', 5, 4, 3, 'rare', ['lifesteal'], [], 'A fledgling of the Sovereign\'s brood, learning that every dying ember is a debt owed to fire.'),
+  spell('ember-pyroblast', 'Pyroblast', 5, 'rare', [dmg(7, 'any')], 'The last word in the court\'s vocabulary of fire. There are no appeals.'),
+  creature('ember-flamebringer', 'Flamebringer', 6, 5, 5, 'rare', [], [{ when: 'battlecry', effects: [dmg(2, 'any')] }], 'He does not announce the burning. He is the announcement.'),
+  artifact('ember-emberforged', 'Emberforged Blade', 4, 'rare', [{ when: 'startOfTurn', effects: [dmg(1, 'randomEnemy')] }], 'Forged in the heart of the Sovereign\'s pyre, the blade remembers every fire it has known — and hungers for the next.'),
   // Epics (3)
-  spell('ember-conflagration', 'Conflagration', 7, 'epic', [dmg(2, 'allEnemies')]),
-  creature('ember-ashwing', 'Ashwing', 7, 6, 5, 'epic', ['charge']),
-  creature('ember-magmasoul', 'Magmasoul', 8, 7, 7, 'epic', ['windfury']),
+  spell('ember-conflagration', 'Conflagration', 7, 'epic', [dmg(2, 'allEnemies')], 'The Ember Court does not wage war; it sets the world alight and calls the settling ash peace.'),
+  creature('ember-ashwing', 'Ashwing', 7, 6, 5, 'epic', ['charge'], [], 'It does not descend to fight. It arrives, and the field remembers it should already be ash.'),
+  creature('ember-magmasoul', 'Magmasoul', 8, 7, 7, 'epic', ['windfury'], [], 'A heart of molten stone, struck twice with the same fury — the first blow is the warning, the second is the verdict.'),
   // Legendaries (2)
   creature('ember-phoenix', 'The Phoenix Sovereign', 9, 8, 8, 'legendary', [], [
     { when: 'battlecry', effects: [dmg(3, 'allEnemies')] },
     { when: 'deathrattle', effects: [summon('token-phoenixash')] },
-  ]),
-  creature('ember-emberlord', 'Emberlord Vharn', 6, 5, 5, 'legendary', [], [{ when: 'battlecry', effects: [dmg(2, 'randomEnemy')] }]),
+  ], 'The first and final fire of the Ember Court. When the Sovereign falls, the burning is only beginning.'),
+  creature('ember-emberlord', 'Emberlord Vharn', 6, 5, 5, 'legendary', [], [{ when: 'battlecry', effects: [dmg(2, 'randomEnemy')] }], 'First to kneel at the Sovereign\'s pyre, last to stop smoldering — Vharn is the court\'s burning right hand.'),
 ];
 
 // sig: 3x each common (11), 2x each rare (5), 1x each epic (3), 1x each legendary (2)

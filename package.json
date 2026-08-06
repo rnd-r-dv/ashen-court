@@ -1,0 +1,16 @@
+{
+  "name": "ashen-court",
+  "private": true,
+  "workspaces": ["core", "server", "app"],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "npm run dev -w app",
+    "build": "npm run build -w core && npm run build -w app",
+    "server": "npm run start -w server"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

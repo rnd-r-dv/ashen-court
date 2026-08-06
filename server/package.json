@@ -1,0 +1,1 @@
+{ "name": "@ashen/server", "private": true, "type": "module", "dependencies": { "ws": "^8.18.0", "@ashen/core": "*" }, "scripts": { "start": "tsx src/index.ts", "test": "vitest run" } }

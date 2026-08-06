@@ -124,6 +124,22 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // damageDealt events precede its effectResolved, so the resolution knows
   // where to aim).
   const dmgTargetsRef = useRef<Record<string, TargetRef[]>>({});
+  // Creature → owner snapshot for popup sides. The state mirror refreshes at
+  // batch arrival, so a creature killed in this resolution is already gone
+  // from state.players[*].board when the queue processes its damageDealt —
+  // creatureSideOf would fall back to 'top' even for a friendly kill. Record
+  // owners from the raw event payloads as each batch arrives (before the
+  // queue drains them), so popups land on the right half for dead creatures.
+  const creatureOwnerRef = useRef<Map<string, PlayerIndex>>(new Map());
+  useEffect(() => {
+    for (const e of events) {
+      if (e.type === 'cardPlayed' && e.creatureId !== undefined) {
+        creatureOwnerRef.current.set(e.creatureId, e.player);
+      } else if (e.type === 'creatureSummoned' || e.type === 'tokenSummoned') {
+        creatureOwnerRef.current.set(e.creatureId, e.player);
+      }
+    }
+  }, [events]);
   // Delayed popup/shake timers for spell damage (land on projectile impact);
   // cleared by skip() and on unmount.
   const pendingFxRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
@@ -172,6 +188,11 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
 
   /** Board side for a creature target (owner may already have left the board). */
   function creatureSideOf(id: string): 'top' | 'bottom' {
+    // Prefer the ingest-time owner snapshot: a creature killed this
+    // resolution is already gone from the mirror, but its cardPlayed/
+    // creatureSummoned/tokenSummoned payload still names its player.
+    const recorded = creatureOwnerRef.current.get(id);
+    if (recorded !== undefined) return sideOf(recorded);
     const owner = state.players[0].board.some((c) => c.id === id)
       ? 0
       : state.players[1].board.some((c) => c.id === id)

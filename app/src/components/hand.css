@@ -10,6 +10,12 @@
   pointer-events: none; /* slots re-enable it so empty gaps don't eat clicks */
 }
 
+/* framer animation wrapper (Task 39): fade-and-lift on mount; pointer events
+   stay off here — the slot inside re-enables them so gaps don't eat clicks. */
+.hand-slot-anim {
+  pointer-events: none;
+}
+
 .hand-slot {
   pointer-events: auto;
   position: relative;

@@ -52,6 +52,11 @@
   padding: 0 var(--space-4);
 }
 
+/* per-creature animation slot (Task 39): framer drives slam-in / death exit */
+.board-slot {
+  position: relative;
+}
+
 .board-row--top {
   min-height: 152px;
 }

@@ -1,0 +1,30 @@
+/* DamagePopup (Task 39) — floating damage/heal numbers. The popup element is
+   positioned by framer (transform), so horizontal centering lives in the
+   animated `x: '-50%'`; left comes inline from the entry's drift. Theme
+   tokens. */
+
+.damagepopup {
+  position: absolute;
+  top: 30%;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+  z-index: 30;
+  pointer-events: none;
+}
+
+.damagepopup--damage {
+  color: #ff6a55;
+}
+
+.damagepopup--heal {
+  color: #8fe3a0;
+}
+
+.damagepopup--bottom {
+  top: auto;
+  bottom: 30%;
+}

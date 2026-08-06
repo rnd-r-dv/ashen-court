@@ -45,6 +45,21 @@
   color: var(--text-faint);
 }
 
+/* ---- damage flash / heal glow overlay (Task 39) ---- */
+.heroportrait-fx {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 96, 74, 0.3), transparent 65%);
+  box-shadow: inset 0 0 26px rgba(255, 96, 74, 0.95), 0 0 20px rgba(255, 96, 74, 0.75);
+}
+
+.heroportrait-fx--heal {
+  background: radial-gradient(circle, rgba(126, 224, 148, 0.3), transparent 65%);
+  box-shadow: inset 0 0 26px rgba(126, 224, 148, 0.95), 0 0 20px rgba(126, 224, 148, 0.8);
+}
+
 /* ---- name ---- */
 .heroportrait-name {
   font-family: var(--font-display);

@@ -91,7 +91,16 @@ export function importCardsJson(text: string): Card[] {
   const cards: Card[] = [];
   for (const raw of parsed) {
     const candidate = raw as Card;
-    const firstError = validateCard(candidate).find((i) => i.severity === 'error');
+    // validateCard assumes full Card shape (keywords, effects, …); a
+    // structurally-broken object would crash it with a raw TypeError.
+    // Convert any crash into the standard per-card error message so the
+    // import UI always shows a clean "Invalid card <id>" toast (Task 29).
+    let firstError: { message: string } | undefined;
+    try {
+      firstError = validateCard(candidate).find((i) => i.severity === 'error');
+    } catch {
+      firstError = { message: 'malformed card data' };
+    }
     if (firstError) throw new Error(`Invalid card ${candidate.id ?? '?'}: ${firstError.message}`);
     cards.push(candidate);
   }

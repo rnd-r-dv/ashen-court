@@ -1,0 +1,199 @@
+/* Shared shell-screen styles (Task 28): menu, mode select, deck pick, and the
+ * router placeholder screens. Deliberately minimal — the design-token theme
+ * system (colors, gothic frames, ambient background) lands in Task 36. */
+
+.shell {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 3rem 1.5rem;
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.shell-title {
+  margin: 0;
+  font-size: 2.4rem;
+  letter-spacing: 0.04em;
+}
+
+.shell-menu-title {
+  margin-top: 2rem;
+}
+
+.shell-subtitle {
+  margin: 0;
+  color: #b9b3a6;
+  font-size: 1.05rem;
+}
+
+.shell-note {
+  margin: 0;
+  color: #8a857a;
+  font-style: italic;
+}
+
+.shell-muted {
+  color: #8a857a;
+  font-size: 0.85rem;
+}
+
+.shell-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ---- buttons ---- */
+
+.shell-btn {
+  background: #23212c;
+  color: #e8e4da;
+  border: 1px solid #3a3746;
+  border-radius: 8px;
+  padding: 0.7rem 1.6rem;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.shell-btn:hover {
+  background: #2e2b3a;
+  border-color: #555063;
+}
+
+.shell-btn-primary {
+  background: #4a2f2f;
+  border-color: #7a4a4a;
+}
+
+.shell-btn-primary:hover {
+  background: #5c3b3b;
+}
+
+.shell-menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin: 1.5rem 0;
+  min-width: 260px;
+}
+
+.shell-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #b9b3a6;
+  cursor: pointer;
+}
+
+/* ---- cards (difficulty pick + deck grid) ---- */
+
+.shell-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.shell-card {
+  background: #1d1b26;
+  color: #e8e4da;
+  border: 1px solid #3a3746;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.shell-card:hover {
+  background: #262330;
+  border-color: #555063;
+}
+
+.shell-card-title {
+  font-size: 1.15rem;
+  font-weight: bold;
+}
+
+.shell-card-flavor {
+  color: #b9b3a6;
+  font-size: 0.9rem;
+  max-width: 260px;
+}
+
+/* ---- deck pick ---- */
+
+.shell-section {
+  width: 100%;
+}
+
+.shell-section-title {
+  font-size: 1.1rem;
+  color: #b9b3a6;
+  border-bottom: 1px solid #3a3746;
+  padding-bottom: 0.4rem;
+  margin: 1.5rem 0 0.8rem;
+  text-align: left;
+}
+
+.shell-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.deck-card {
+  width: 100%;
+  min-height: 110px;
+  box-sizing: border-box;
+}
+
+.deck-card.selected {
+  border-color: #c9a86a;
+  background: #2a2430;
+}
+
+.deck-card-name {
+  font-size: 1.05rem;
+  font-weight: bold;
+}
+
+.deck-card-hero {
+  color: #c9a86a;
+  font-size: 0.9rem;
+}
+
+.deck-card-tag {
+  color: #b9b3a6;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.deck-card-badge {
+  align-self: flex-start;
+  font-size: 0.78rem;
+  color: #8a857a;
+  border: 1px solid #3a3746;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.shell-empty {
+  color: #8a857a;
+  font-style: italic;
+  text-align: left;
+  margin: 0;
+}

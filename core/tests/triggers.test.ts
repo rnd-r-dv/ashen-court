@@ -78,4 +78,19 @@ describe('start/end of turn', () => {
     game.submit({ kind: 'endTurn' });            // p0's end of turn → endOfTurn fires
     expect(game.state.players[1].hero.hp).toBe(29);
   });
+  it('returns every follow-up event across multiple triggers (runQueue collector contract)', () => {
+    const game = Game.create(makeTestSetup());
+    game.submit({ kind: 'mulligan', keep: [] }); game.submit({ kind: 'mulligan', keep: [] });
+    // TWO startOfTurn heal artifacts: the endTurn that returns to p0 fires two
+    // nested drains inside one top-level dispatch — both heroHealed follow-ups
+    // must be present in the returned events (applyEvent/submit contract).
+    game.state.players[0].artifacts.push({ id: 'a1', cardId: 'art-heal', owner: 0 });
+    game.state.players[0].artifacts.push({ id: 'a2', cardId: 'art-heal', owner: 0 });
+    game.state.players[0].hero.hp = 25;
+    game.submit({ kind: 'endTurn' });            // p1 turn
+    game.state.players[1].hero.hp = 25;
+    const evts = game.submit({ kind: 'endTurn' });   // back to p0 → both artifacts heal
+    expect(game.state.players[0].hero.hp).toBe(29);  // 25 + 2 + 2 (state is correct either way)
+    expect(evts.filter(e => e.type === 'heroHealed' && e.player === 0)).toHaveLength(2);
+  });
 });

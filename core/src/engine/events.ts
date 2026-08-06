@@ -50,6 +50,10 @@ export function runQueue(resolver: Resolver): GameEvent[] {
     }
     return resolver.applied;
   } finally {
-    resolver.draining = false;
+    // Only the top-level drain owns the flag: nested drains (applyEffect's
+    // internal runQueue) must leave `draining` true so a SECOND nested drain
+    // inside the same dispatch is not misdetected as top-level (which would
+    // re-initialize `applied` and drop the events collected so far).
+    if (top) resolver.draining = false;
   }
 }

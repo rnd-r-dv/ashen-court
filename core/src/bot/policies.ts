@@ -1,3 +1,4 @@
+import { evaluate } from './heuristic.js';
 import type { Game } from '../engine/game.js';
 import type { Intent, PlayerIndex } from '../types.js';
 
@@ -35,5 +36,39 @@ export function mulliganPolicy(game: Game, me: PlayerIndex): Intent {
 export const Recruit: BotPolicy = {
   chooseIntent(game, me) {
     return game.pickRandom(game.legalIntents(me));
+  },
+};
+
+/**
+ * Veteran difficulty: greedy heuristic. For each legal intent, clone the
+ * game, apply the intent, and score the resulting position with evaluate();
+ * the argmax wins (a tiny deterministic index-based tiebreak keeps picks
+ * stable under the same seed). Intents that throw on submit are skipped
+ * defensively (log-free); an empty legal-intent set degrades to endTurn.
+ * Mulligan is delegated to mulliganPolicy (legalIntents returns [] there).
+ */
+export const Veteran: BotPolicy = {
+  chooseIntent(game, me) {
+    if (game.state.phase === 'mulligan') return mulliganPolicy(game, me);
+    const legal = game.legalIntents(me);
+    if (legal.length === 0) return { kind: 'endTurn' };
+    let best = legal[0]!;
+    let bestScore = -Infinity;
+    for (let i = 0; i < legal.length; i++) {
+      const intent = legal[i]!;
+      let score: number;
+      try {
+        const g = game.clone();
+        g.submit(intent);
+        score = evaluate(g, me) + i * 1e-9;
+      } catch {
+        continue; // intent that submit rejects: skip, never crash the bot
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = intent;
+      }
+    }
+    return best;
   },
 };

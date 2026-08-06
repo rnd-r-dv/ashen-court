@@ -10,6 +10,8 @@ import DeckPick from './screens/DeckPick.js';
 import type { DeckPickResult } from './screens/DeckPick.js';
 import Forge from './screens/Forge.js';
 import DeckBuilder from './screens/DeckBuilder.js';
+import LanHost from './screens/LanHost.js';
+import LanJoin from './screens/LanJoin.js';
 import Background from './components/Background.js';
 
 // ---- navigation context ----
@@ -80,8 +82,8 @@ export default function App() {
       {screen.name === 'forge' && <Forge />}
       {screen.name === 'match' && <MatchPlaceholder pending={pending} />}
       {screen.name === 'victory' && <VictoryPlaceholder result={screen.result} />}
-      {screen.name === 'lanHost' && <LanPlaceholder kind="host" />}
-      {screen.name === 'lanJoin' && <LanPlaceholder kind="join" />}
+      {screen.name === 'lanHost' && <LanHost />}
+      {screen.name === 'lanJoin' && <LanJoin />}
     </NavContext.Provider>
   );
 }
@@ -152,18 +154,6 @@ function VictoryPlaceholder({ result }: { result: MatchResult }) {
       <h1 className="shell-title">Victory</h1>
       <p className="shell-subtitle">Winner: <strong>{String(result.winner)}</strong></p>
       <p className="shell-note">The victory/defeat screen with match stats lands in Task 35.</p>
-      <BackToMenuButton />
-    </div>
-  );
-}
-
-/** LAN host/join ship in Tasks 33/34 — the menu buttons route here until then. */
-function LanPlaceholder({ kind }: { kind: 'host' | 'join' }) {
-  const task = kind === 'host' ? 33 : 34;
-  return (
-    <div className="shell">
-      <h1 className="shell-title">LAN {kind === 'host' ? 'Host' : 'Join'}</h1>
-      <p className="shell-note">LAN play comes in Task {task} — router wiring only.</p>
       <BackToMenuButton />
     </div>
   );

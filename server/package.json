@@ -1,1 +1,20 @@
-{"name":"@ashen/server","private":true,"type":"module","dependencies":{"@ashen/core":"*","ws":"^8.18.0"},"scripts":{"start":"tsx src/index.ts","test":"vitest run"},"devDependencies":{"@types/ws":"^8.18.1","tsx":"^4.23.9"}}
+{
+  "name": "@ashen/server",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./protocol": "./src/protocol.ts"
+  },
+  "dependencies": {
+    "@ashen/core": "*",
+    "ws": "^8.18.0"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.9"
+  }
+}

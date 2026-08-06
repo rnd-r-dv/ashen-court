@@ -1,0 +1,89 @@
+/* LAN host/join screen styles (Task 34). Composes with shell.css and the
+ * Task 36 theme tokens (--bg-*, --gold, --accent, --border, --font-display). */
+
+/* Big shareable room code. */
+.lan-room-code {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 3rem;
+  letter-spacing: 0.35em;
+  padding: var(--space-3) var(--space-5);
+  color: var(--gold);
+  background: var(--bg-2);
+  text-shadow: var(--glow-gold);
+  margin: var(--space-3) 0;
+}
+
+.lan-label {
+  display: block;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+/* 4-char code input (join screen). */
+.lan-code-input {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  letter-spacing: 0.6em;
+  text-align: center;
+  text-transform: uppercase;
+  width: 12rem;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text);
+  background: var(--bg-2);
+  border: 2px double var(--gold-dim);
+  border-radius: var(--radius-md);
+}
+
+.lan-code-input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-color: var(--gold);
+}
+
+.lan-row {
+  margin: var(--space-3) 0;
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* Waiting spinner: a spinning gold ring. */
+.lan-waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.lan-spinner {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  animation: lan-spin 0.9s linear infinite;
+}
+
+@keyframes lan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lan-note {
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.lan-error {
+  color: var(--ember);
+  background: rgba(255, 180, 84, 0.08);
+  border: 1px solid var(--ember-dim);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0;
+}

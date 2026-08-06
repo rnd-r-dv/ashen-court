@@ -1,0 +1,63 @@
+/* CardView (Task 31) — interaction wrapper around Card.tsx (Task 37).
+ * Scoped to `.cardview*`; consumes the theme tokens (Task 36). The wrapper
+ * is purely visual (pointer events reach the Card inside). */
+
+.cardview {
+  position: relative;
+  cursor: pointer;
+}
+
+/* ---- muting: unplayable / not your turn / waiting during targeting ---- */
+.cardview--muted {
+  opacity: 0.5;
+  filter: saturate(0.6);
+}
+
+/* ---- exhausted board creatures (already acted / summoning sickness) ---- */
+.cardview--exhausted {
+  opacity: 0.72;
+}
+.cardview--exhausted .card {
+  filter: grayscale(0.55);
+}
+
+/* ---- frozen: cold tint over the frame ---- */
+.cardview--frozen .card {
+  filter: hue-rotate(170deg) saturate(0.75) brightness(1.05);
+}
+
+/* ---- targeting highlight: ember ring + pulse glow ---- */
+.cardview--target {
+  cursor: crosshair;
+  animation: cardview-target-glow 1.3s ease-in-out infinite;
+}
+.cardview--target .card {
+  outline: 3px solid var(--ember);
+  outline-offset: 2px;
+  border-radius: 14px;
+}
+@keyframes cardview-target-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 180, 84, 0.55)); }
+  50% { filter: drop-shadow(0 0 12px rgba(255, 180, 84, 0.95)); }
+}
+
+/* ---- status badges (shields / frozen chips, top-right corner) ---- */
+.cardview-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}

@@ -35,4 +35,6 @@ export interface MatchDriver {
 export interface MatchScreenSetup {
   driver: MatchDriver;
   myPlayer: PlayerIndex;
+  /** Bot auto-play for the opponent (bot mode). Omitted for hotseat/LAN. */
+  bot?: { level: BotLevel };
 }

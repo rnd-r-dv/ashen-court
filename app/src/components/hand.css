@@ -1,0 +1,24 @@
+/* Hand (Task 31) — fanned hand. Slots overlap via inline negative margins;
+ * the hover lift lives on Card's `card--hand` state (card.css, Task 37). */
+
+.hand {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  min-height: 300px;
+  padding: 0 48px;
+  pointer-events: none; /* slots re-enable it so empty gaps don't eat clicks */
+}
+
+.hand-slot {
+  pointer-events: auto;
+  position: relative;
+  transform-origin: 50% 110%;
+  transition: transform 160ms ease;
+}
+
+.hand-empty {
+  color: var(--text-faint);
+  font-family: var(--font-body);
+  font-size: 13px;
+}

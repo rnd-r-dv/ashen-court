@@ -62,8 +62,15 @@ export function validatePlayCard(
   // effect must accept the supplied ref (multi-target / no-target effects
   // resolve internally and need no target). hero/self effects auto-resolve to
   // the caster's own hero — skipped unconditionally (Task 10 precedent,
-  // Task 14 mixed-card ruling: a choice ref may ride along).
-  return validateEffectTargets(game, me, card.effects, intent.target);
+  // Task 14 mixed-card ruling: a choice ref may ride along). For creatures the
+  // target feeds the battlecry (Task 15 ruling: cardPlayed.target passes
+  // through to fireTriggers).
+  return validateEffectTargets(game, me, [...card.effects, ...battlecryEffects(card)], intent.target);
+}
+
+/** Effect specs of a creature card's battlecry trigger group(s), if any. */
+function battlecryEffects(card: Card): EffectSpec[] {
+  return (card.triggers ?? []).filter(g => g.when === 'battlecry').flatMap(g => g.effects);
 }
 
 /**
@@ -145,7 +152,7 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
     // enumerate an intent submit would reject.
     if (card.id === MANA_SURGE && p.surged) continue;
     if (p.mana < playEffectiveCost(game, card, player)) continue;
-    const variants = targetVariants(game, player, card.effects);
+    const variants = targetVariants(game, player, card.type === 'creature' ? battlecryEffects(card) : card.effects);
     if (!variants) continue;   // single-target effect with no legal ref → unplayable
     for (const t of variants) out.push({ kind: 'playCard', handIndex: i, target: t });
   }

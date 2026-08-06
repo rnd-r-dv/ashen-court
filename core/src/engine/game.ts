@@ -2,7 +2,7 @@ import { CardRegistry } from '../cards.js';
 import { createTestPool } from '../data/test-pool.js';
 import { createRng, shuffle } from '../rng.js';
 import type { Rng } from '../rng.js';
-import type { Card, CreatureState, GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState, Trigger, TriggerSpec } from '../types.js';
+import type { Card, CreatureState, GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState, TargetRef, Trigger, TriggerSpec } from '../types.js';
 import { MANA_SURGE } from '../types.js';
 import { validateDeck } from '../validate.js';
 import { applyEffect, findCreature, makeCreature, removeCreature, SINGLE_TARGET_TARGETS } from './effects.js';
@@ -195,7 +195,7 @@ export class Game implements Resolver {
           // battlecries (fired by dispatch(cardPlayed)) can see the creature.
           const creature = makeCreature(this, card, me);
           p.board.push(creature);
-          this.emit({ type: 'cardPlayed', player: me, cardId: card.id, creatureId: creature.id });
+          this.emit({ type: 'cardPlayed', player: me, cardId: card.id, creatureId: creature.id, target: intent.target });
           this.emit({ type: 'creatureSummoned', player: me, creatureId: creature.id, cardId: card.id });
           break;
         }
@@ -340,7 +340,7 @@ export class Game implements Resolver {
         // the played creature's id rides in the event so self-targeting
         // battlecries resolve against the summoned creature (Task 9).
         const card = this.safeCard(evt.cardId);
-        if (card && card.type === 'creature') this.fireTriggers('battlecry', evt.player, evt.cardId, evt.creatureId);
+        if (card && card.type === 'creature') this.fireTriggers('battlecry', evt.player, evt.cardId, evt.creatureId, evt.target);
         break;
       }
       case 'damageDealt': {
@@ -393,10 +393,10 @@ export class Game implements Resolver {
    * then effect order, with the trigger context (player = owner/player, and
    * creatureId = the dying/damaged/played creature's id where available).
    */
-  private fireTriggers(when: Trigger, player: PlayerIndex, cardId: string, creatureId?: string): void {
+  private fireTriggers(when: Trigger, player: PlayerIndex, cardId: string, creatureId?: string, explicitRef?: TargetRef): void {
     for (const group of this.triggerGroups(cardId, when)) {
       for (const spec of group.effects) {
-        applyEffect(this, { player, cardId, creatureId }, spec);
+        applyEffect(this, { player, cardId, creatureId }, spec, explicitRef);
       }
     }
   }

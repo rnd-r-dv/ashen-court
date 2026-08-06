@@ -2,6 +2,14 @@ export type PlayerIndex = 0 | 1;
 
 /** Player 1's setup head-start spell (surge already granted; see Game constructor). */
 export const MANA_SURGE = 'mana-surge';
+
+/** Hard turn limit (Task 22, Phase 3 amendment): a match still running at
+ *  MAX_TURNS ends in a gameOver draw ('turn limit'). checkWin (engine/game.ts)
+ *  emits the draw once state.turn reaches this bound, so every submission
+ *  path (submit/applyEvent) is covered and bot mirrors can never stall.
+ *  Placed here (types.ts) alongside the other game-rule constants so tests
+ *  and the app import it without engine internals. */
+export const MAX_TURNS = 200;
 export type CardType = 'creature' | 'spell' | 'artifact';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Keyword = 'taunt' | 'rush' | 'charge' | 'windfury' | 'lifesteal' | 'ward' | 'shield';

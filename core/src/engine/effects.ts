@@ -364,11 +364,21 @@ export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): Cr
 
 /** Deterministic per-cardId counter across both boards — two identical states produce identical ids. */
 function nextCreatureId(game: Resolver, cardId: string): string {
-  let n = 0;
+  // MAX-based, not count-based: a count-based scheme releases a number when a
+  // creature dies, so a later summon can reuse it and collide with a still-
+  // live creature on the other board (findCreature then resolves intents to
+  // the wrong owner). max + 1 is monotonic per cardId, so ids are unique
+  // among live creatures, and it is derived purely from board state (two
+  // identical states produce identical ids; survives serialize/deserialize).
+  let max = 0;
   for (const p of game.state.players) {
-    for (const c of p.board) if (c.cardId === cardId) n++;
+    for (const c of p.board) {
+      if (c.cardId !== cardId) continue;
+      const n = Number(c.id.slice(cardId.length + 1));
+      if (Number.isFinite(n) && n > max) max = n;
+    }
   }
-  return `${cardId}-${n + 1}`;
+  return `${cardId}-${max + 1}`;
 }
 
 function randomEnemyCreatureCardId(game: Resolver, player: PlayerIndex): string | undefined {

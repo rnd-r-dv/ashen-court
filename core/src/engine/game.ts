@@ -3,7 +3,7 @@ import { createTestPool } from '../data/test-pool.js';
 import { createRng, shuffle } from '../rng.js';
 import type { Rng } from '../rng.js';
 import type { Card, CreatureState, GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState, TargetRef, Trigger, TriggerSpec } from '../types.js';
-import { MANA_SURGE } from '../types.js';
+import { MANA_SURGE, MAX_TURNS } from '../types.js';
 import { validateDeck } from '../validate.js';
 import { applyEffect, findCreature, makeCreature, removeCreature, SINGLE_TARGET_TARGETS } from './effects.js';
 import type { EffectCtx } from './effects.js';
@@ -285,6 +285,16 @@ export class Game implements Resolver {
    */
   checkWin(): void {
     if (this.state.phase === 'gameOver') return;
+    // Turn-limit draw (Task 22, Phase 3 amendment): a match that reaches
+    // MAX_TURNS ends deterministically. Placed at the top of checkWin (after
+    // the phase guard) rather than in beginTurn so the rule rides the single
+    // end-of-session hook shared by every submit and applyEvent path — no
+    // beginTurn early-return needed, and the gameOver event appears in the
+    // resolution tree and log exactly like the hero-death draws below.
+    if (this.state.turn >= MAX_TURNS) {
+      this.emit({ type: 'gameOver', winner: 'draw', reason: 'turn limit' });
+      return;
+    }
     const h0 = this.state.players[0].hero.hp;
     const h1 = this.state.players[1].hero.hp;
     if (h0 <= 0 && h1 <= 0) {
@@ -475,10 +485,14 @@ export class Game implements Resolver {
     p.hero.usedPower = false;
     p.hero.discountCheapest = 0;
     p.hero.discountNextSpell = 0;
-    // thaw frozen creatures, restore attacks (keep `exhausted` for creatures
-    // that can't attack yet; rush/charge clear exhausted on summon)
+    // thaw frozen creatures, ready the active player's creatures (summoning
+    // sickness ends at the start of the owner's next turn; rush/charge
+    // creatures are already un-exhausted from summon), restore attacks
+    // (attacksLeft = windfury ? 2 : 1). Exhausted creatures stay exhausted
+    // only within the turn they were summoned.
     for (const c of p.board) {
       if (c.frozen) c.frozen = false;
+      c.exhausted = false;
       c.attacksLeft = c.keywords.includes('windfury') ? 2 : 1;
     }
     this.emit({ type: 'turnStart', player: me, mana: maxMana });

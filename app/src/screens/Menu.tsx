@@ -48,6 +48,10 @@ export default function Menu() {
         <input type="checkbox" checked={fastMode} onChange={toggleFastMode} />
         Fast mode <span className="shell-muted">(skip animations)</span>
       </label>
+
+      <p className="shell-note">
+        Match shortcuts: E end turn · M confirm mulligan · Space skip animations · F toggle fast mode
+      </p>
     </div>
   );
 }

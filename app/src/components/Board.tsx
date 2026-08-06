@@ -235,6 +235,7 @@ export default function Board({
           <button
             type="button"
             className="shell-btn board-endturn"
+            aria-keyshortcuts="e"
             onClick={onEndTurn}
             disabled={!myTurn || inTargeting}
           >

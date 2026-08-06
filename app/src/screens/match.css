@@ -6,7 +6,7 @@
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  padding: var(--space-3) var(--space-5) 0;
+  padding: var(--space-3) clamp(0.75rem, 4vw, var(--space-5)) 0;
   gap: var(--space-2);
   overflow: hidden;
 }
@@ -48,10 +48,26 @@
 
 .match-handwrap {
   position: relative;
-  min-height: 300px;
+  /* Task 41: board + hand scale with the window (clamp) instead of fixed
+     heights; the bottom padding keeps rotated fan corners on-screen (they
+     dip ~20-30px below the card baseline at full fan angles). */
+  min-height: clamp(190px, 27vh, 300px);
   margin: 0 calc(var(--space-5) * -1);
   padding-top: var(--space-2);
+  padding-bottom: clamp(24px, 4vh, 40px);
   background: linear-gradient(180deg, transparent 0%, rgba(13, 10, 22, 0.55) 40%, var(--bg-1) 100%);
+  /* Task 41: the container never eats clicks — only the hand cards
+     themselves are interactive (.hand-slot re-enables pointer events), so
+     board controls (End Turn, mana tray) stay clickable even when the board
+     briefly underlaps the hand area on short viewports. */
+  pointer-events: none;
+}
+
+/* Short windows: shrink the hand area so the board keeps room. */
+@media (max-height: 760px) {
+  .match-handwrap {
+    min-height: clamp(150px, 24vh, 190px);
+  }
 }
 
 /* ---- pass point (hotseat, Task 32): the incoming player's hand, face-down ----
@@ -60,8 +76,8 @@
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  min-height: 300px;
-  padding: 0 48px;
+  min-height: clamp(190px, 27vh, 300px);
+  padding: 0 clamp(24px, 5vw, 48px);
 }
 
 .match-hand-hidden .cardview {

@@ -5,7 +5,8 @@ import type { Card as CardSpec, GameEvent, Intent, PlayerIndex, TargetRef } from
 import { useMatch } from '../game/useMatch.js';
 import { useNav } from '../App.js';
 import type { MatchScreenSetup } from '../types.js';
-import { loadSettings } from '../storage.js';
+import { loadSettings, saveSettings } from '../storage.js';
+import { useHotkeys } from '../hooks/useHotkeys.js';
 import Board from '../components/Board.js';
 import type { BoardTargeting } from '../components/Board.js';
 import CardView, { FACE_DOWN_CARD } from '../components/CardView.js';
@@ -65,8 +66,11 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const { navigate } = useNav();
   // Fast mode (Task 39): every duration halves; Task 40's win cinematic
   // (slow-mo, bloom, embers, navigation delay) is skipped entirely.
-  const [animScale] = useState(() => (loadSettings().fastMode ? 0.5 : 1));
-  const fastMode = animScale < 1;
+  // Task 41: `fastMode` is live state — the F hotkey flips it mid-match
+  // (persisted via storage.ts, mirroring Menu's toggle), so animScale
+  // rescales every animation on the spot.
+  const [fastMode, setFastMode] = useState(() => loadSettings().fastMode);
+  const animScale = fastMode ? 0.5 : 1;
   const { state, events, submit, legal: hookLegal, drainEvents } = useMatch({
     driver: setup.driver,
     myPlayer: setup.myPlayer,
@@ -599,6 +603,29 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     <PassDevice player={actor} onConfirm={() => setViewer(actor)} />
   ) : null;
 
+  function toggleFastMode() {
+    setFastMode((prev) => {
+      const next = !prev;
+      saveSettings({ fastMode: next });
+      return next;
+    });
+  }
+
+  // ---- Task 41: keyboard shortcuts ----
+  // E/M/Space/F, wired to the same actions as the on-screen controls
+  // (useHotkeys ignores events while typing in inputs and drops modifier
+  // chords). E respects the End Turn button's disabled gate; Space only
+  // skips while the animation queue is playing.
+  useHotkeys({
+    e: () => {
+      if (myTurn && !inTargeting) submitOnce({ kind: 'endTurn' });
+    },
+    f: toggleFastMode,
+    ' ': () => {
+      if (playing) skipAnimations();
+    },
+  });
+
   // ---- mulligan phase ----
   if (state.phase === 'mulligan') {
     // The engine's mulligan actor (fixed order: player 0, then player 1,
@@ -770,6 +797,13 @@ function MulliganHand({
 }) {
   const [keep, setKeep] = useState<Set<number>>(() => new Set(hand.map((_, i) => i)));
 
+  // Task 41: M confirms the mulligan with the current keep/redraw selection
+  // (the component only mounts while the viewer is the mulligan actor, so the
+  // hotkey is gated to exactly that window).
+  useHotkeys({
+    m: () => onConfirm([...keep].sort((a, b) => a - b)),
+  });
+
   function toggle(i: number) {
     setKeep((prev) => {
       const next = new Set(prev);
@@ -803,6 +837,7 @@ function MulliganHand({
       <button
         type="button"
         className="shell-btn shell-btn-primary"
+        aria-keyshortcuts="m"
         onClick={() => onConfirm([...keep].sort((a, b) => a - b))}
       >
         Confirm — keep {keep.size}, redraw {hand.length - keep.size}

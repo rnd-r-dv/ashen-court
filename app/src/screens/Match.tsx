@@ -13,12 +13,24 @@ import DamagePopup from '../components/DamagePopup.js';
 import type { DamageEntry } from '../components/DamagePopup.js';
 import Hand from '../components/Hand.js';
 import PassDevice from '../components/PassDevice.js';
+import Projectile from '../components/Projectile.js';
+import type { ProjectileEntry, ProjectileKind } from '../components/Projectile.js';
+import TurnBanner from '../components/TurnBanner.js';
+import type { TurnBannerEntry } from '../components/TurnBanner.js';
 import { useAnimationQueue } from '../components/animations.js';
 import { HERO_FX_ZERO } from '../components/animations.js';
 import type { HeroFX } from '../components/animations.js';
 import { playerVisibility } from '../game/playerVisibility.js';
 import './animations.css';
 import './match.css';
+
+/** Deterministic ember-burst seeds for the win cinematic (no RNG — identical
+ *  positions every replay; delays stagger the rise). */
+const EMBER_SEEDS = Array.from({ length: 14 }, (_, i) => ({
+  left: 6 + ((i * 37) % 86),
+  drift: (i % 2 === 0 ? 1 : -1) * (16 + ((i * 13) % 42)),
+  delay: (i % 5) * 0.055,
+}));
 
 /**
  * Match (Task 31, hotseat flow Task 32): the board screen. Wires useMatch
@@ -40,15 +52,33 @@ import './match.css';
  * damage popup + board shake, death dissolve, hero flash/HP tick, heal glow,
  * mana pop); the first enemy play/summon reveals the enemy row. Clicking
  * anywhere during the queue (or the Skip button) drains the rest instantly.
+ *
+ * Task 40 extends the map with spell/turn/win FX: effectResolved+dealDamage
+ * fires a kind-themed projectile from the caster's hand/hero to the target
+ * (or an AoE ring + tint from the zone center), tokenSummoned pops a golden
+ * burst, heroPowerUsed flashes the portrait glyph, turnStart sweeps a
+ * TurnBanner + pulses the board, turnEnd dims, and gameOver runs a slow-mo
+ * bloom + ember burst before the existing onGameOver navigation fires.
  */
 
 export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const { navigate } = useNav();
+  // Fast mode (Task 39): every duration halves; Task 40's win cinematic
+  // (slow-mo, bloom, embers, navigation delay) is skipped entirely.
+  const [animScale] = useState(() => (loadSettings().fastMode ? 0.5 : 1));
+  const fastMode = animScale < 1;
   const { state, events, submit, legal: hookLegal, drainEvents } = useMatch({
     driver: setup.driver,
     myPlayer: setup.myPlayer,
     bot: setup.bot,
-    onGameOver: (result) => navigate({ name: 'victory', result }),
+    // Task 40: the win cinematic plays over the frozen board (~1.5s), then
+    // the existing victory navigation fires. Fast mode skips the delay.
+    onGameOver: (result) => {
+      navTimerRef.current = setTimeout(
+        () => navigate({ name: 'victory', result }),
+        fastMode ? 0 : 1500,
+      );
+    },
   });
 
   const [targeting, setTargeting] = useState<BoardTargeting | null>(null);
@@ -66,7 +96,6 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // the scale directly, CSS animations read the --anim-scale property set on
   // the .match root. Transient FX below are keyed/self-removing, so skip()
   // simply drops the events that have not played yet.
-  const [animScale] = useState(() => (loadSettings().fastMode ? 0.5 : 1));
   // Enemy row reveal (Task 39): bot mode hides the enemy's creatures behind
   // the Task 37 grayscale until their first play/summon; hotseat is
   // pass-and-play with a public board, so it starts revealed.
@@ -77,6 +106,24 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const [heroFx, setHeroFx] = useState<[HeroFX, HeroFX]>([HERO_FX_ZERO, HERO_FX_ZERO]);
   const [manaPulse, setManaPulse] = useState(0);
   const fxIdRef = useRef(0);
+
+  // ---- Task 40: spell / turn / win animation state ----
+  const [projectiles, setProjectiles] = useState<ProjectileEntry[]>([]);
+  const [banners, setBanners] = useState<TurnBannerEntry[]>([]);
+  const [tokenBursts, setTokenBursts] = useState<{ id: number; side: 'top' | 'bottom' }[]>([]);
+  const [dims, setDims] = useState<{ id: number }[]>([]);
+  const [turnPulseSeq, setTurnPulseSeq] = useState(0);
+  const [powerFx, setPowerFx] = useState<[number, number]>([0, 0]);
+  const [gameOverFx, setGameOverFx] = useState(0); // 0 = cinematic off; >0 = key
+  // Damage targets per sourceCardId since the last effectResolved (the spell's
+  // damageDealt events precede its effectResolved, so the resolution knows
+  // where to aim).
+  const dmgTargetsRef = useRef<Record<string, TargetRef[]>>({});
+  // Delayed popup/shake timers for spell damage (land on projectile impact);
+  // cleared by skip() and on unmount.
+  const pendingFxRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Win-navigation timer (cleared on unmount so rematch/menu never double-fire).
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const me = viewer;
   const foe = (1 - viewer) as PlayerIndex;
@@ -138,6 +185,123 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     setRipples((prev) => prev.filter((r) => r.id !== id));
   }
 
+  function removeProjectile(id: number) {
+    setProjectiles((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function removeBanner(id: number) {
+    setBanners((prev) => prev.filter((b) => b.id !== id));
+  }
+
+  function removeTokenBurst(id: number) {
+    setTokenBursts((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  function removeDim(id: number) {
+    setDims((prev) => prev.filter((d) => d.id !== id));
+  }
+
+  // ---- Task 40: screen-position + projectile-kind helpers ----
+  // Positions are resolved against the .match root (the .match-fx overlay is
+  // inset: 0 over it), so queried bounding rects are translated into fx-space.
+  // Any lookup that fails (element not mounted yet, jsdom, dead creature)
+  // returns null and the caller falls back — never throws.
+  function pointOf(selector: string): { x: number; y: number } | null {
+    const el = document.querySelector(selector);
+    const host = document.querySelector('.match');
+    if (!(el instanceof HTMLElement) || !(host instanceof HTMLElement)) return null;
+    const a = el.getBoundingClientRect();
+    const b = host.getBoundingClientRect();
+    return { x: a.left + a.width / 2 - b.left, y: a.top + a.height / 2 - b.top };
+  }
+
+  const heroCircle = (player: PlayerIndex) => pointOf(`.heroportrait[data-player="${player}"] .heroportrait-circle`);
+  const creatureSlot = (id: string) => pointOf(`.board-slot[data-creature-id="${id}"]`);
+  const handArea = (player: PlayerIndex) => pointOf(player === viewer ? '.match-handwrap' : '.board-enemyhand');
+  const zoneCenter = (side: 'top' | 'bottom') => pointOf(side === 'top' ? '.board-zone--top' : '.board-zone--bottom');
+
+  /** Landing point for a damageDealt target (dead creature → foe hero). */
+  function targetPoint(ref: TargetRef): { x: number; y: number } | null {
+    if (ref.type === 'hero') return heroCircle(ref.player);
+    return creatureSlot(ref.id) ?? heroCircle(foe);
+  }
+
+  /** Board half a damageDealt target belongs to. */
+  function targetSide(ref: TargetRef): 'top' | 'bottom' {
+    return ref.type === 'hero' ? sideOf(ref.player) : creatureSideOf(ref.id);
+  }
+
+  /** Projectile kind from a card's art preset (spell theme). */
+  function projectileKindFor(card: CardSpec): ProjectileKind {
+    switch (card.art.preset) {
+      case 'ember':
+        return 'fireball';
+      case 'frost':
+      case 'storm':
+        return 'frost';
+      case 'shadow':
+      case 'void':
+      case 'curse':
+      case 'bone':
+        return 'shadow';
+      default:
+        return 'starbeam';
+    }
+  }
+
+  /** Projectile kind from a hero name (hero power theme). */
+  function heroKindForName(name: string): ProjectileKind {
+    const n = name.toLowerCase();
+    if (n.includes('ember') || n.includes('flame') || n.includes('fire')) return 'fireball';
+    if (n.includes('frost') || n.includes('storm') || n.includes('wrought')) return 'frost';
+    if (n.includes('shadow') || n.includes('void') || n.includes('grave') || n.includes('hex') || n.includes('choir')) {
+      return 'shadow';
+    }
+    return 'starbeam';
+  }
+
+  /** True when damageDealt's source is a spell or the hero power (→ FX). */
+  function isSpellDamage(sourceCardId: string): boolean {
+    if (sourceCardId === 'hero-power') return true;
+    const card = getCard(sourceCardId);
+    return card?.type === 'spell';
+  }
+
+  /** True when a spell's dealDamage spec hits multiple targets (→ AoE ring). */
+  function aoeFor(sourceCardId: string): boolean {
+    if (sourceCardId === 'hero-power') return false; // hero powers are single-target
+    const card = getCard(sourceCardId);
+    if (!card) return false;
+    return card.effects.some(
+      (s) =>
+        s.kind === 'dealDamage' &&
+        (s.target === 'allEnemies' ||
+          s.target === 'allEnemyCreatures' ||
+          s.target === 'allFriendlyCreatures'),
+    );
+  }
+
+  /** Launch a single-target projectile from the caster's hand/hero. */
+  function launchProjectile(kind: ProjectileKind, from: 'hand' | 'hero', caster: PlayerIndex, ref: TargetRef) {
+    const fromPt = from === 'hero' ? heroCircle(caster) : handArea(caster);
+    const toPt = targetPoint(ref);
+    if (!fromPt || !toPt) return;
+    setProjectiles((prev) => [
+      ...prev,
+      { id: ++fxIdRef.current, kind, from: fromPt, to: toPt, side: targetSide(ref) },
+    ]);
+  }
+
+  /** Launch an AoE ring + tint flash from the target zone's center. */
+  function launchAoe(kind: ProjectileKind, side: 'top' | 'bottom') {
+    const center = zoneCenter(side);
+    if (!center) return;
+    setProjectiles((prev) => [
+      ...prev,
+      { id: ++fxIdRef.current, kind, from: center, to: center, aoe: true, side },
+    ]);
+  }
+
   /**
    * One queued event → the matching board animation. The state mirror already
    * reflects every event (useMatch updates state immediately), so this only
@@ -154,18 +318,36 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
       case 'tokenSummoned':
         // Slam (creature slot mount) + ripple at the played zone; the first
         // enemy play/summon reveals the enemy row (Task 37 grayscale lifted).
+        // Tokens additionally pop a golden burst at the zone (Task 40).
         if (e.player === foe) setEnemyRevealed(true);
         setRipples((prev) => [...prev, { id: ++fxIdRef.current, side: sideOf(e.player) }]);
+        if (e.type === 'tokenSummoned') {
+          setTokenBursts((prev) => [...prev, { id: ++fxIdRef.current, side: sideOf(e.player) }]);
+        }
         break;
       case 'damageDealt':
-        // Damage popup + board shake; heroDamage additionally flashes the
-        // portrait via its own event below.
-        setShakeSeq((n) => n + 1);
-        addPopup(
-          e.amount,
-          'damage',
-          e.target.type === 'hero' ? sideOf(e.target.player) : creatureSideOf(e.target.id),
-        );
+        // Record the target for the spell's effectResolved to aim at, then
+        // popup + board shake. Spell damage lands on the projectile's impact
+        // (delayed by the flight budget); attack/other damage stays immediate.
+        {
+          const targets = dmgTargetsRef.current[e.sourceCardId] ?? [];
+          targets.push(e.target);
+          if (targets.length > 8) targets.shift();
+          dmgTargetsRef.current[e.sourceCardId] = targets;
+          const side = e.target.type === 'hero' ? sideOf(e.target.player) : creatureSideOf(e.target.id);
+          if (isSpellDamage(e.sourceCardId)) {
+            const delayMs = (aoeFor(e.sourceCardId) ? 0.75 : 0.55) * animScale * 1000;
+            const timer = setTimeout(() => {
+              pendingFxRef.current.delete(timer);
+              setShakeSeq((n) => n + 1);
+              addPopup(e.amount, 'damage', side);
+            }, delayMs);
+            pendingFxRef.current.add(timer);
+          } else {
+            setShakeSeq((n) => n + 1);
+            addPopup(e.amount, 'damage', side);
+          }
+        }
         break;
       case 'heroDamaged':
         // Portrait flash + HP bar/number tick-down (HeroPortrait tween).
@@ -188,8 +370,79 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         // Crystal tray pop (ManaTray replays on the new pulse counter).
         setManaPulse((n) => n + 1);
         break;
+      case 'effectResolved':
+        // Spell resolution (Task 40): dealDamage launches the kind-themed
+        // projectile from the caster's hand/hero to the recorded target(s) —
+        // or an AoE ring + tint from the zone center. The targets are
+        // consumed here (damageDealt precedes effectResolved per effect).
+        {
+          const targets = dmgTargetsRef.current[e.sourceCardId] ?? [];
+          dmgTargetsRef.current[e.sourceCardId] = [];
+          if (e.kind === 'dealDamage' && isSpellDamage(e.sourceCardId)) {
+            const kind = e.sourceCardId === 'hero-power'
+              ? heroKindForName(state.players[e.player].hero.name)
+              : (projectileKindFor(getCard(e.sourceCardId)!) as ProjectileKind);
+            if (aoeFor(e.sourceCardId)) {
+              launchAoe(kind, targets.length > 0 ? targetSide(targets[0]!) : sideOf(foe));
+            } else {
+              const ref = targets[targets.length - 1] ?? ({ type: 'hero', player: foe } as TargetRef);
+              const from = e.sourceCardId === 'hero-power' ? 'hero' : 'hand';
+              launchProjectile(kind, from, e.player, ref);
+            }
+          }
+        }
+        break;
+      case 'heroPowerUsed':
+        // Glyph flash on the user's portrait (Task 40). The power's own
+        // damage projectile already launched via its effectResolved above.
+        setPowerFx((fx) =>
+          fx.map((f, i) => (i === e.player ? f + 1 : f)) as [number, number],
+        );
+        break;
+      case 'turnStart':
+        // Turn banner sweep + board pulse (Task 40).
+        setBanners((prev) => [
+          ...prev,
+          {
+            id: ++fxIdRef.current,
+            text: e.player === viewer ? 'Your Turn' : state.players[e.player].hero.name,
+            kicker: `Turn ${Math.floor(state.turn / 2) + 1}`,
+            mine: e.player === viewer,
+          },
+        ]);
+        setTurnPulseSeq((n) => n + 1);
+        break;
+      case 'turnEnd':
+        // Dim-out veil as the turn hands over (Task 40).
+        setDims((prev) => [...prev, { id: ++fxIdRef.current }]);
+        break;
+      case 'gameOver':
+        // Win cinematic (Task 40): slow-mo class + bloom + ember burst + a
+        // title banner; the navigation timer (onGameOver) already runs and
+        // hands off to the victory screen. Fast mode skips all of it.
+        if (!fastMode) {
+          setGameOverFx((n) => n + 1);
+          setBanners((prev) => [
+            ...prev,
+            {
+              id: ++fxIdRef.current,
+              text:
+                e.winner === 'draw'
+                  ? 'Draw'
+                  : e.winner === viewer
+                    ? 'Victory'
+                    : isBotMode
+                      ? 'Defeat'
+                      : `Player ${e.winner + 1} wins`,
+              kicker: e.reason,
+              mine: e.winner === viewer,
+              holdMs: 900,
+            },
+          ]);
+        }
+        break;
       default:
-        break; // turnStart / turnEnd / buffApplied / … — Task 40 wires the rest
+        break; // buffApplied / frozen / spellFizzled / … — cosmetic no-ops
     }
   }
 
@@ -205,7 +458,28 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     skip();
     setPopups([]);
     setRipples([]);
+    setProjectiles([]);
+    setBanners([]);
+    setTokenBursts([]);
+    setDims([]);
+    setGameOverFx(0);
+    // Cancel spell-damage popups that were delayed to the projectile impact.
+    for (const t of pendingFxRef.current) clearTimeout(t);
+    pendingFxRef.current.clear();
   }
+
+  // Unmount safety: never navigate or popup after teardown (rematch/menu).
+  useEffect(
+    () => () => {
+      if (navTimerRef.current !== null) {
+        clearTimeout(navTimerRef.current);
+        navTimerRef.current = null;
+      }
+      for (const t of pendingFxRef.current) clearTimeout(t);
+      pendingFxRef.current.clear();
+    },
+    [],
+  );
 
   // Enemy row reveal (Task 39): the first enemy play/summon lifts the Task 37
   // grayscale. Eager over the raw event stream (not the animation queue) so a
@@ -247,6 +521,10 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // Board shake: a new keyframes array identity per damageDealt re-runs the
   // framer timeline; memoizing keeps unrelated re-renders from re-triggering.
   const shakeX = useMemo(() => (shakeSeq ? [0, -7, 7, -5, 5, -2, 0] : 0), [shakeSeq]);
+
+  // Turn-start board pulse (Task 40): a fresh keyframes identity per turnStart
+  // re-runs the subtle scale pop alongside any active shake.
+  const pulseScale = useMemo(() => (turnPulseSeq ? [1, 1.012, 1] : 1), [turnPulseSeq]);
 
   function submitOnce(intent: Intent) {
     setAwaiting(true);
@@ -347,9 +625,10 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
 
   // ---- main phase ----
   const turnNumber = Math.floor(state.turn / 2) + 1;
+  const showWinFx = gameOverFx > 0;
   return (
     <div
-      className="match"
+      className={`match${showWinFx ? ' match--gameover' : ''}`}
       style={{ '--anim-scale': animScale } as CSSProperties}
       onClick={(e) => {
         // Click anywhere while the animation queue is playing skips the rest;
@@ -374,7 +653,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
 
       <motion.div
         className="match-boardwrap"
-        animate={{ x: shakeX }}
+        animate={{ x: shakeX, scale: pulseScale }}
         transition={{ duration: 0.45 * animScale, ease: 'easeOut' }}
       >
         <Board
@@ -392,6 +671,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
           enemyRevealed={enemyRevealed}
           animScale={animScale}
           heroFx={heroFx}
+          powerFx={powerFx}
           manaPulse={manaPulse}
         />
       </motion.div>
@@ -406,6 +686,47 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
             className={`slam-ripple slam-ripple--${r.side}`}
             onAnimationEnd={() => removeRipple(r.id)}
           />
+        ))}
+        {tokenBursts.map((t) => (
+          <div
+            key={t.id}
+            className={`token-pop token-pop--${t.side}`}
+            onAnimationEnd={() => removeTokenBurst(t.id)}
+          />
+        ))}
+        {projectiles.map((p) => (
+          <Projectile key={p.id} entry={p} scale={animScale} onDone={() => removeProjectile(p.id)} />
+        ))}
+        {dims.map((d) => (
+          <motion.div
+            key={d.id}
+            className="turn-dim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.85, 0] }}
+            transition={{ duration: 0.6 * animScale, times: [0, 0.35, 1], ease: 'easeInOut' }}
+            onAnimationComplete={() => removeDim(d.id)}
+          />
+        ))}
+        {showWinFx && (
+          <>
+            <div className="gameover-bloom" />
+            {EMBER_SEEDS.map((e, i) => (
+              <div
+                key={i}
+                className="gameover-ember"
+                style={
+                  {
+                    left: `${e.left}%`,
+                    '--ember-drift-x': `${e.drift}px`,
+                    animationDelay: `${e.delay}s`,
+                  } as CSSProperties
+                }
+              />
+            ))}
+          </>
+        )}
+        {banners.map((b) => (
+          <TurnBanner key={b.id} entry={b} scale={animScale} onDone={() => removeBanner(b.id)} />
         ))}
       </div>
 

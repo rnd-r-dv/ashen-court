@@ -1,0 +1,47 @@
+/* TurnBanner (Task 40) — full-width turn/win banner. The sweep motion comes
+   from Framer (bannerSweep variants, scaled by the fast-mode `scale` prop);
+   this file styles the banner card. Theme tokens only. */
+
+.turnbanner {
+  position: absolute;
+  top: 16%;
+  left: 0;
+  right: 0;
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 32px 16px;
+  pointer-events: none;
+  text-align: center;
+  background: linear-gradient(90deg, rgba(13, 10, 22, 0) 0%, rgba(13, 10, 22, 0.82) 22%, rgba(13, 10, 22, 0.82) 78%, rgba(13, 10, 22, 0) 100%);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.turnbanner-kicker {
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.turnbanner-text {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+}
+
+.turnbanner--mine .turnbanner-text {
+  color: var(--gold);
+  text-shadow: var(--glow-gold);
+}
+
+.turnbanner--mine .turnbanner-kicker {
+  color: var(--gold-dim);
+}

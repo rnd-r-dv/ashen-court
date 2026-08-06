@@ -1,0 +1,75 @@
+/* Board (Task 31) — battlefield layout. Theme tokens only. */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.board-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.board-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.board-side--top {
+  justify-content: flex-start;
+  padding-left: var(--space-4);
+}
+
+.board-side--bottom {
+  justify-content: flex-start;
+  padding-left: var(--space-4);
+}
+
+/* enemy hand silhouettes sit beside the enemy hero */
+.board-enemyhand {
+  display: flex;
+  gap: 8px;
+  min-height: 130px;
+  align-items: center;
+  padding-left: var(--space-2);
+  border-left: 1px dashed var(--border);
+}
+
+/* creature rows */
+.board-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  min-height: 152px;
+  flex-wrap: wrap;
+  padding: 0 var(--space-4);
+}
+
+.board-row--top {
+  min-height: 152px;
+}
+
+.board-empty {
+  color: var(--text-faint);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+/* End Turn button */
+.board-endturn {
+  margin-left: auto;
+  min-width: 150px;
+}
+
+.board-endturn:disabled {
+  cursor: default;
+  opacity: 0.45;
+  box-shadow: none;
+}

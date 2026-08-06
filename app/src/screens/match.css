@@ -1,0 +1,146 @@
+/* Match screen (Task 31) — full-screen battlefield layout. Theme tokens. */
+
+.match {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: var(--space-3) var(--space-5) 0;
+  gap: var(--space-2);
+  overflow: hidden;
+}
+
+.match-topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 26px;
+}
+
+.match-banner {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.match-banner--mine {
+  color: var(--gold);
+  text-shadow: var(--glow-gold);
+}
+
+.match-hint {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ember);
+}
+
+.match-handwrap {
+  position: relative;
+  min-height: 300px;
+  margin: 0 calc(var(--space-5) * -1);
+  padding-top: var(--space-2);
+  background: linear-gradient(180deg, transparent 0%, rgba(13, 10, 22, 0.55) 40%, var(--bg-1) 100%);
+}
+
+/* ---- pass-device overlay (hotseat v1; Task 32 owns the real flow) ---- */
+.match-pass {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 5, 12, 0.85);
+  backdrop-filter: blur(3px);
+}
+
+.match-pass-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  border: 2px double var(--gold-dim);
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+  box-shadow: var(--glow-gold);
+  text-align: center;
+}
+
+.match-pass-note {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* ---- mulligan phase ---- */
+.match--mulligan {
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.mulligan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.mulligan-hand {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: 0 var(--space-4);
+}
+
+.mulligan-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.mulligan-toggle {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 3px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.mulligan-toggle:hover {
+  border-color: var(--text-dim);
+}
+
+.mulligan-toggle--keep {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
+
+.mulligan-toggle--redraw {
+  border-color: var(--ember-dim);
+  color: var(--ember);
+}
+
+.match-waiting {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-dim);
+  animation: match-waiting-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes match-waiting-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}

@@ -1,15 +1,24 @@
-// App shell router (Task 28). State-machine screen routing (no react-router):
-// App holds the current Screen in useState and renders a switch. A small
-// navigation context lets any screen navigate. The 'match' screen is a
-// placeholder until Task 30 lands the real MatchDriver.
+// App shell router (Task 28, extended Task 31). State-machine screen routing
+// (no react-router): App holds the current Screen in useState and renders a
+// switch. A small navigation context lets any screen navigate.
+//
+// Match flow (Task 31): onDeckPickComplete builds a real MatchScreenSetup
+// (core Game over the production pool + saved custom cards, local driver,
+// bot config for bot mode) and routes to the real Match screen. Victory
+// (Task 35) is wired with rematch (driver.reset over a fresh seed) and
+// change-deck. Hotseat v1 plays player 0 only — the pass flow is Task 32.
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import type { MatchDriver, MatchResult, MatchScreenSetup, Mode, Screen } from './types.js';
+import type { Screen } from './types.js';
+import { buildMatchEntry, rematchSetup } from './game/matchSetup.js';
+import type { MatchEntry, MatchEntryRequest } from './game/matchSetup.js';
 import Menu from './screens/Menu.js';
 import ModeSelect from './screens/ModeSelect.js';
 import DeckPick from './screens/DeckPick.js';
 import type { DeckPickResult } from './screens/DeckPick.js';
 import Forge from './screens/Forge.js';
 import DeckBuilder from './screens/DeckBuilder.js';
+import Match from './screens/Match.js';
+import Victory from './screens/Victory.js';
 import Background from './components/Background.js';
 
 // ---- navigation context ----
@@ -29,23 +38,10 @@ export function useNav(): Nav {
   return useContext(NavContext);
 }
 
-// ---- match placeholder state (Task 28) ----
+// ---- match entry building (Task 31) ----
 
-/** Pending match selection, held in App state so the placeholder can render it. */
-export interface PendingMatch {
-  mode: Mode;
-  difficulty?: DeckPickResult['difficulty'];
-  decks: DeckPickResult['decks']; // pick order: player 0 first
-}
-
-// The real MatchScreenSetup is built at match entry by Task 30
-// (createLocalDriver / createLanDriver). Until then the 'match' screen is a
-// placeholder that renders `pending` (App state) and never touches setup.
-// TODO(Task 30): wire real MatchDriver
-const PLACEHOLDER_SETUP: MatchScreenSetup = {
-  driver: undefined as unknown as MatchDriver,
-  myPlayer: 0,
-};
+/** Pending match selection, held in App state and converted to a setup at entry. */
+export type PendingMatch = MatchEntryRequest;
 
 // ---- App ----
 
@@ -53,6 +49,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'menu' });
   const [modeIntent, setModeIntent] = useState<'bot' | 'hotseat'>('bot');
   const [pending, setPending] = useState<PendingMatch | null>(null);
+  const [matchEntry, setMatchEntry] = useState<MatchEntry | null>(null);
 
   const navigate = useCallback((next: Screen) => setScreen(next), []);
   const startModeSelect = useCallback((mode: 'bot' | 'hotseat') => {
@@ -63,8 +60,36 @@ export default function App() {
   const nav = useMemo<Nav>(() => ({ navigate, startModeSelect }), [navigate, startModeSelect]);
 
   function onDeckPickComplete(pick: DeckPickResult) {
-    setPending({ mode: pick.mode, difficulty: pick.difficulty, decks: pick.decks });
-    navigate({ name: 'match', setup: PLACEHOLDER_SETUP });
+    if (pick.mode !== 'bot' && pick.mode !== 'hotseat') return; // LAN picks route elsewhere (Task 34)
+    const pendingMatch: PendingMatch = {
+      mode: pick.mode,
+      difficulty: pick.difficulty,
+      decks: pick.decks,
+    };
+    setPending(pendingMatch);
+    try {
+      const entry = buildMatchEntry(pendingMatch);
+      setMatchEntry(entry);
+      navigate({ name: 'match', setup: entry.setup });
+    } catch {
+      // A saved deck can reference custom cards that were later deleted —
+      // Game's constructor validates and throws; send the player back rather
+      // than crashing the router.
+      window.alert('That deck contains cards that are no longer available. Please pick again.');
+    }
+  }
+
+  function handleRematch() {
+    if (!matchEntry) return;
+    // Fresh seed, same decks/heroes; the driver's reset swaps in the new game.
+    matchEntry.setup.driver.reset(rematchSetup(matchEntry));
+    navigate({ name: 'match', setup: matchEntry.setup });
+  }
+
+  function handleChangeDeck() {
+    const mode = pending?.mode ?? 'bot';
+    if (mode === 'bot') navigate({ name: 'deckPick', mode: 'bot', difficulty: pending?.difficulty });
+    else navigate({ name: 'deckPick', mode: 'hotseat' });
   }
 
   return (
@@ -78,8 +103,16 @@ export default function App() {
       )}
       {screen.name === 'deckBuilder' && <DeckBuilder />}
       {screen.name === 'forge' && <Forge />}
-      {screen.name === 'match' && <MatchPlaceholder pending={pending} />}
-      {screen.name === 'victory' && <VictoryPlaceholder result={screen.result} />}
+      {screen.name === 'match' && <Match setup={screen.setup} />}
+      {screen.name === 'victory' && (
+        <Victory
+          result={screen.result}
+          myPlayer={matchEntry?.setup.bot ? matchEntry.setup.myPlayer : undefined}
+          onRematch={handleRematch}
+          onChangeDeck={handleChangeDeck}
+          onMenu={() => navigate({ name: 'menu' })}
+        />
+      )}
       {screen.name === 'lanHost' && <LanPlaceholder kind="host" />}
       {screen.name === 'lanJoin' && <LanPlaceholder kind="join" />}
     </NavContext.Provider>
@@ -94,66 +127,6 @@ function BackToMenuButton() {
     <button type="button" className="shell-btn" onClick={() => navigate({ name: 'menu' })}>
       Back to menu
     </button>
-  );
-}
-
-/**
- * Temporary match screen (Task 28). Renders the pending deck pick so the
- * menu → mode select → deck pick flow is walkable before the engine wiring
- * exists. Replaced by the real Match screen in Task 30.
- * TODO(Task 30): wire real MatchDriver
- */
-function MatchPlaceholder({ pending }: { pending: PendingMatch | null }) {
-  return (
-    <div className="shell">
-      <h1 className="shell-title">Match</h1>
-      {pending ? (
-        <>
-          <p className="shell-subtitle">
-            Mode: <strong>{pending.mode}</strong>
-            {pending.difficulty ? (
-              <>
-                {' '}· Difficulty: <strong>{pending.difficulty}</strong>
-              </>
-            ) : null}
-          </p>
-          <ul className="shell-list">
-            {pending.decks.map((deck, i) => (
-              <li key={`${deck.slug}-${i}`}>
-                Player {i + 1}: <strong>{deck.name}</strong>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <p className="shell-subtitle">No match selected.</p>
-      )}
-      <p className="shell-note">The match engine lands in Task 30 — this is a placeholder screen.</p>
-      <BackToMenuButton />
-    </div>
-  );
-}
-
-/** Deck builder ships in Task 27 — the menu button routes here until then. */
-function DeckBuilderPlaceholder() {
-  return (
-    <div className="shell">
-      <h1 className="shell-title">Deck Builder</h1>
-      <p className="shell-note">The deck builder screen lands in Task 27 — router wiring only.</p>
-      <BackToMenuButton />
-    </div>
-  );
-}
-
-/** Victory/defeat ships in Task 35 — the router case exists so the union is complete. */
-function VictoryPlaceholder({ result }: { result: MatchResult }) {
-  return (
-    <div className="shell">
-      <h1 className="shell-title">Victory</h1>
-      <p className="shell-subtitle">Winner: <strong>{String(result.winner)}</strong></p>
-      <p className="shell-note">The victory/defeat screen with match stats lands in Task 35.</p>
-      <BackToMenuButton />
-    </div>
   );
 }
 

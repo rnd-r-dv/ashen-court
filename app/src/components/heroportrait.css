@@ -1,0 +1,164 @@
+/* HeroPortrait (Task 31) — hero circle, HP bar, shield chip, hero power.
+ * Theme tokens only. */
+
+.heroportrait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 170px;
+  cursor: default;
+  transition: opacity 150ms ease;
+}
+
+/* ---- hero circle ---- */
+.heroportrait-circle {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--border);
+  background:
+    radial-gradient(circle at 50% 42%, #2c2440 0%, #1a1428 55%, var(--bg-2) 100%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.55);
+}
+
+.heroportrait-sigil {
+  font-size: 40px;
+  color: var(--text-dim);
+}
+
+.heroportrait--active .heroportrait-circle {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.35), var(--glow-gold);
+}
+
+.heroportrait-player {
+  position: absolute;
+  bottom: 6px;
+  right: 10px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+/* ---- name ---- */
+.heroportrait-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--text);
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ---- HP bar ---- */
+.heroportrait-hpbar {
+  position: relative;
+  width: 100%;
+  height: 18px;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.heroportrait-hpfill {
+  height: 100%;
+  transition: width 250ms ease;
+}
+
+.heroportrait-hpbar--ok .heroportrait-hpfill { background: linear-gradient(180deg, #7bc96f, #2f6d2a); }
+.heroportrait-hpbar--hurt .heroportrait-hpfill { background: linear-gradient(180deg, #e0b14d, #8a5f16); }
+.heroportrait-hpbar--critical .heroportrait-hpfill { background: linear-gradient(180deg, #e2604f, #8a1f14); }
+
+.heroportrait-hpnum {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.heroportrait-shield {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--gold);
+  border: 1px solid var(--gold-dim);
+  border-radius: 8px;
+  padding: 1px 8px;
+  background: rgba(217, 164, 65, 0.08);
+}
+
+/* ---- hero power button (viewer's own hero) ---- */
+.heroportrait-power {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: default;
+}
+
+.heroportrait-power--ready {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+  cursor: pointer;
+}
+.heroportrait-power--ready:hover {
+  border-color: var(--gold);
+  box-shadow: var(--glow-gold);
+}
+
+.heroportrait-power-cost {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  color: #120d04;
+  background: radial-gradient(circle at 35% 30%, #ffe9b8, var(--gold) 60%, #6d4c10);
+}
+
+.heroportrait-power-used {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* ---- targeting: ember ring + pulse (valid target) ---- */
+.heroportrait--target {
+  cursor: crosshair;
+}
+.heroportrait--target .heroportrait-circle {
+  border-color: var(--ember);
+  animation: heroportrait-target-pulse 1.3s ease-in-out infinite;
+}
+@keyframes heroportrait-target-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(255, 180, 84, 0.55), 0 0 10px rgba(255, 180, 84, 0.6); }
+  50% { box-shadow: 0 0 0 5px rgba(255, 180, 84, 0.9), 0 0 22px rgba(255, 180, 84, 0.85); }
+}
+
+.heroportrait--dimmed {
+  opacity: 0.45;
+  filter: saturate(0.6);
+}

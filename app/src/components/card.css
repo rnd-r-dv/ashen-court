@@ -25,6 +25,19 @@
 .card--hand    { zoom: 0.82; }
 .card--board   { zoom: 0.42; }
 
+/* Task 41 responsive tiers: hand cards shrink below 900px so the fan stays
+   usable down to ~700px; board minis scale with their rows. `zoom` is not
+   affected by media queries on the element itself, so the tiers live in
+   viewport @media blocks (Hand.tsx's fanSpread mirrors these values). */
+@media (max-width: 900px) {
+  .card--hand  { zoom: 0.7; }
+  .card--board { zoom: 0.38; }
+}
+@media (max-width: 700px) {
+  .card--hand  { zoom: 0.6; }
+  .card--board { zoom: 0.34; }
+}
+
 /* ---- base frame -------------------------------------------- */
 .card__frame {
   position: relative;

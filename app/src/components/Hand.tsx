@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Card as CardSpec } from '@ashen/core';
 import { motion } from 'framer-motion';
 import CardView from './CardView.js';
@@ -10,6 +11,13 @@ import './hand.css';
  * Playable cards (legal playCard intent this turn) get the golden glow;
  * everything else is dimmed (opponent's turn / targeting in progress).
  * Pure presentational — clicking reports the hand index, Match decides.
+ *
+ * Task 41 (responsive): the fan geometry is viewport-aware — the overlap
+ * (negative margin) widens just enough that a full hand stays inside the
+ * window at every breakpoint (hand cards also shrink below 900px via
+ * card.css zoom tiers), and the arc angle relaxes on narrow screens so the
+ * rotated cards don't dip off-screen. Mirror values (zoom tiers, hand
+ * padding) are kept in sync with card.css / hand.css.
  */
 
 export interface HandProps {
@@ -28,15 +36,42 @@ export interface HandProps {
   animScale?: number;
 }
 
-/** Fan geometry: overlap shrinks as the hand grows so a full hand fits. */
-function fanSpread(n: number): number {
+/** Track the viewport width so the fan can fit on-screen (resize-aware). */
+function useViewportWidth(): number {
+  const [vw, setVw] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return vw;
+}
+
+/** Rendered hand-card width — CardArt 250px + frame chrome, at zoom 1. */
+const HAND_CARD_WIDTH = 264;
+
+/**
+ * Fan overlap (negative margin between adjacent cards). Mirrors the card.css
+ * zoom tiers (0.82 / 0.7 / 0.6 below 900/700px) and the hand.css side
+ * padding, then picks the widest overlap that still (a) fits the whole fan
+ * inside the viewport and (b) keeps a fanned-overlap look (≤ 96px) without
+ * the old fixed-140 cap that hid ~65% of every card.
+ */
+function fanSpread(n: number, vw: number): number {
   if (n <= 1) return 0;
-  return Math.min(140, 540 / (n - 1));
+  const zoom = vw <= 700 ? 0.6 : vw <= 900 ? 0.7 : 0.82;
+  const cardW = HAND_CARD_WIDTH * zoom;
+  const pad = Math.max(24, Math.min(48, vw * 0.05)); // hand.css clamp(24px, 5vw, 48px)
+  const usable = Math.max(280, vw - 2 * pad);
+  const fit = (cardW * n - usable) / (n - 1); // widest overlap that still fits
+  return Math.max(fit, Math.min(96, 540 / (n - 1)));
 }
 
 export default function Hand({ hand, getCard, playable, interactive, targeting, onCardClick, animScale = 1 }: HandProps) {
+  const vw = useViewportWidth();
   const n = hand.length;
-  const spread = fanSpread(n);
+  const spread = fanSpread(n, vw);
+  const angleStep = vw <= 700 ? 3 : vw <= 900 ? 3.5 : 4;
   const mid = (n - 1) / 2;
 
   return (
@@ -46,7 +81,7 @@ export default function Hand({ hand, getCard, playable, interactive, targeting, 
         const card = getCard(id);
         if (!card) return null;
         const isPlayable = playable.has(i);
-        const angle = (i - mid) * 4;
+        const angle = (i - mid) * angleStep;
         return (
           // Task 39: new cards (draws) mount with a fade-and-lift via
           // handEnter; the inner slot keeps the fan rotate transform so the

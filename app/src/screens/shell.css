@@ -5,7 +5,7 @@
 .shell {
   min-height: 100vh;
   box-sizing: border-box;
-  padding: 3rem 1.5rem;
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(0.9rem, 4vw, 1.5rem);
   max-width: 900px;
   margin: 0 auto;
   display: flex;
@@ -83,7 +83,9 @@
   flex-direction: column;
   gap: 0.8rem;
   margin: 1.5rem 0;
-  min-width: 260px;
+  /* Task 41: never wider than the viewport (columns wrap on narrow
+     windows; min() keeps the menu usable down to ~700px). */
+  min-width: min(260px, 88vw);
 }
 
 .shell-toggle {
@@ -151,7 +153,9 @@
 
 .shell-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* Task 41: min(220px, 100%) so a single column never overflows a narrow
+     viewport; auto-fill already wraps the deck cards into rows. */
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
   gap: 0.9rem;
 }
 

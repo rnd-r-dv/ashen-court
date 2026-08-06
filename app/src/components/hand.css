@@ -5,8 +5,9 @@
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  min-height: 300px;
-  padding: 0 48px;
+  /* Task 41: track the (shrinking) card height instead of a fixed 300px. */
+  min-height: clamp(170px, 24vh, 300px);
+  padding: 0 clamp(24px, 5vw, 48px);
   pointer-events: none; /* slots re-enable it so empty gaps don't eat clicks */
 }
 

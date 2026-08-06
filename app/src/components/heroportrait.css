@@ -166,6 +166,22 @@
   color: var(--text-faint);
 }
 
+/* Task 41 responsive: compact portraits on shorter windows so the board
+   fits above the hand (the fixed 92px circle + chrome pushed the bottom
+   zone into the hand area on typical laptop viewports). */
+@media (max-height: 850px) {
+  .heroportrait { width: 150px; }
+  .heroportrait-circle { width: 78px; height: 78px; }
+  .heroportrait-sigil { font-size: 34px; }
+}
+@media (max-height: 760px) {
+  .heroportrait { width: 140px; }
+  .heroportrait-circle { width: 68px; height: 68px; }
+  .heroportrait-sigil { font-size: 30px; }
+  .heroportrait-name { font-size: 13px; }
+  .heroportrait-power { font-size: 11px; padding: 3px 8px; }
+}
+
 /* ---- targeting: ember ring + pulse (valid target) ---- */
 .heroportrait--target {
   cursor: crosshair;

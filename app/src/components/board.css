@@ -18,24 +18,29 @@
 .board-side {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: clamp(8px, 2vw, var(--space-4));
 }
 
 .board-side--top {
   justify-content: flex-start;
-  padding-left: var(--space-4);
+  padding-left: clamp(8px, 2vw, var(--space-4));
 }
 
 .board-side--bottom {
   justify-content: flex-start;
-  padding-left: var(--space-4);
+  padding-left: clamp(8px, 2vw, var(--space-4));
 }
 
 /* enemy hand silhouettes sit beside the enemy hero */
 .board-enemyhand {
   display: flex;
   gap: 8px;
-  min-height: 130px;
+  min-height: clamp(88px, 12vh, 130px);
+  min-width: 0;
+  /* Task 41: silhouettes are decorative duplicates — cap + clip so a large
+     enemy hand cannot push the side off a narrow viewport. */
+  max-width: 44vw;
+  overflow: hidden;
   align-items: center;
   padding-left: var(--space-2);
   border-left: 1px dashed var(--border);
@@ -46,8 +51,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 16px;
-  min-height: 152px;
+  gap: clamp(8px, 1.6vw, 16px);
+  min-height: clamp(90px, 13vh, 152px);
   flex-wrap: wrap;
   padding: 0 var(--space-4);
 }
@@ -58,7 +63,7 @@
 }
 
 .board-row--top {
-  min-height: 152px;
+  min-height: clamp(90px, 13vh, 152px);
 }
 
 .board-empty {
@@ -70,7 +75,15 @@
 /* End Turn button */
 .board-endturn {
   margin-left: auto;
-  min-width: 150px;
+  min-width: min(150px, 24vw);
+}
+
+/* Short windows: rows compress so the board fits above the hand. */
+@media (max-height: 760px) {
+  .board-row,
+  .board-row--top {
+    min-height: clamp(84px, 12vh, 110px);
+  }
 }
 
 .board-endturn:disabled {

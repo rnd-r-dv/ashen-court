@@ -28,6 +28,8 @@ export interface CardFrameProps {
   health?: number;
   keywords?: readonly Keyword[];
   flavor?: string;
+  /** Generated rules text (Task 43) — Card.tsx passes cardText(card). */
+  text?: string;
   /** Unrevealed enemy card: grayscale silhouette, no name/art (spec §12). */
   faceDown?: boolean;
   /** Extra classes from Card.tsx (`card--hand|board|preview`, state flags). */
@@ -79,6 +81,7 @@ export default function CardFrame({
   health,
   keywords,
   flavor,
+  text,
   faceDown = false,
   className,
   onClick,
@@ -135,6 +138,8 @@ export default function CardFrame({
                 ))}
               </div>
             )}
+
+            {text && <p className="card__text">{text}</p>}
 
             {isCreature && attack !== undefined && health !== undefined && (
               <div className="card__stats">

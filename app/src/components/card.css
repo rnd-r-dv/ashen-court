@@ -256,6 +256,15 @@
   color: #fff4f0;
 }
 
+/* ---- rules text ---------------------------------------------- */
+.card__text {
+  margin: 6px 2px 0;
+  font-size: 11px;
+  color: #d8d2c2;
+  line-height: 1.35;
+  text-align: center;
+}
+
 /* ---- flavor ---------------------------------------------------- */
 .card__flavor {
   margin: 5px 2px 0;
@@ -296,6 +305,7 @@
 
 /* board minis: keywords/flavor are unreadable at 0.42 zoom */
 .card--board .card__keywords,
-.card--board .card__flavor {
+.card--board .card__flavor,
+.card--board .card__text {
   display: none;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { motion } from 'framer-motion';
-import type { HeroState, PlayerIndex } from '@ashen/core';
+import { heroPowerText, type HeroState, type PlayerIndex } from '@ashen/core';
 import type { HeroFX } from './animations.js';
 import './heroportrait.css';
 
@@ -136,7 +136,7 @@ export default function HeroPortrait({
             onPowerClick?.();
           }}
           disabled={!powerEnabled}
-          title={hero.power.name}
+          title={`${hero.power.name} — ${heroPowerText(hero.power)}`}
         >
           {hero.power.name}
           <span className="heroportrait-power-cost">{hero.power.cost}</span>

@@ -3,7 +3,7 @@
 
 export type * from './types.js';
 
-export { validateCard, validateDeck, type ValidationIssue } from './validate.js';
+export { validateCard, validateDeck, RARITY_COPY_LIMIT, type ValidationIssue } from './validate.js';
 
 export {
   buildPool,

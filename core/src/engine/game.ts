@@ -39,7 +39,6 @@ export class Game implements Resolver {
 
   private rng: Rng;
   private rngCalls = 0;
-  private mulligansDone = new Set<PlayerIndex>();
 
   constructor(setup: MatchSetup, registry: CardRegistry) {
     if (!setup.heroes || setup.heroes.length !== 2) throw new Error('Two heroes required');
@@ -70,6 +69,7 @@ export class Game implements Resolver {
     players[1].mana = 1;
     this.state = {
       players, turn: 0, phase: 'mulligan', seed: setup.seed,
+      mulligansDone: [false, false],
       rngState: { seed: setup.seed, calls: 0 }, log: [],
     };
   }
@@ -124,8 +124,9 @@ export class Game implements Resolver {
   private resolveIntent(intent: Intent, me: PlayerIndex): GameEvent[] {
     if (intent.kind === 'mulligan') {
       if (this.state.phase !== 'mulligan') throw new Error('Not in mulligan');
-      // mulligan order: player 0, then player 1 (turn stays 0 during mulligan)
-      const mp = (this.mulligansDone.size % 2) as PlayerIndex;
+      // mulligan order: player 0, then player 1 (turn stays 0 during mulligan);
+      // progress lives in state so serialize/deserialize survives mid-mulligan (Task 12)
+      const mp = (this.state.mulligansDone[0] ? 1 : 0) as PlayerIndex;
       const p = this.state.players[mp];
       // keep set must be valid indices
       const kept = [...intent.keep].sort((a, b) => b - a);
@@ -141,8 +142,8 @@ export class Game implements Resolver {
         const cardId = p.deck[p.deck.length - 1 - i]!;
         this.emit({ type: 'cardDrawn', player: mp, cardId });
       }
-      this.mulligansDone.add(mp);
-      if (this.mulligansDone.size === 2) this.startMain();
+      this.state.mulligansDone[mp] = true;
+      if (this.state.mulligansDone[0] && this.state.mulligansDone[1]) this.startMain();
       return runQueue(this);
     }
     if (intent.kind === 'endTurn') {
@@ -435,7 +436,6 @@ export class Game implements Resolver {
     g.state = state;
     g.registry = registry;
     g.rngCalls = 0;
-    g.mulligansDone = new Set();
     g.queue = [];
     g.applied = [];
     g.draining = false;
@@ -461,7 +461,7 @@ export class Game implements Resolver {
 
   private startMain(): void {
     this.state.phase = 'main';
-    this.mulligansDone = new Set();
+    this.state.mulligansDone = [false, false];
     this.beginTurn(0);
   }
 

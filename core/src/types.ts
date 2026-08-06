@@ -53,6 +53,7 @@ export interface GameState {
   players: [PlayerState, PlayerState];
   turn: number;                 // 0-based; current player = turn % 2
   phase: Phase; seed: number;
+  mulligansDone: boolean[];     // per-player mulligan progress (survives serialize/deserialize, Task 12)
   rngState: { seed: number; calls: number };   // deterministic RNG position (serialization/replay)
   log: GameEvent[];
 }

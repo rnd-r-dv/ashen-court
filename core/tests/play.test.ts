@@ -25,7 +25,8 @@ describe('playCard', () => {
     game.state.players[0].hero.discountNextSpell = 1;
     game.state.players[0].hand.unshift('test-spell');   // 1-cost, dmg 1 anyCreature
     const foe = addCreature(game, 1, { id: 't-002', attack: 2, health: 3, keywords: [], exhausted: false });
-    game.submit({ kind: 'playCard', handIndex: 0, target: { type: 'creature', id: foe.id } });   // anyCreature → must target a creature
+    const evts = game.submit({ kind: 'playCard', handIndex: 0, target: { type: 'creature', id: foe.id } });   // anyCreature → must target a creature
+    expect(evts.some(e => e.type === 'damageDealt')).toBe(true);   // submit returns the full resolution tree
     expect(foe.health).toBe(2);
     expect(game.state.players[0].hand).not.toContain('test-spell');
     expect(game.state.players[0].mana).toBe(10);        // 1-cost spell, discountNextSpell 1 → effective 0 → mana unchanged
@@ -65,5 +66,17 @@ describe('playCard', () => {
     game.state.players[0].mana = 6;
     game.submit({ kind: 'playCard', handIndex: 1 });     // play the 7-cost → costs 5
     expect(game.state.players[0].mana).toBe(1);
+  });
+});
+
+describe('submit returns the full resolution tree (attack path)', () => {
+  it('attack returns its damageDealt events', () => {
+    const game = Game.create(makeTestSetup()); game.state.phase = 'main';
+    const defender = addCreature(game, 0, { id: 't-001', attack: 1, health: 3, keywords: [] });
+    const attacker = addCreature(game, 1, { id: 't-002', attack: 2, health: 3, keywords: [], exhausted: false });
+    game.submit({ kind: 'endTurn' });   // player 1's turn → may attack
+    const evts = game.submit({ kind: 'attack', attackerId: attacker.id, target: { type: 'creature', id: defender.id } });
+    expect(defender.health).toBe(1);
+    expect(evts.some(e => e.type === 'damageDealt')).toBe(true);   // attack damage events are returned
   });
 });

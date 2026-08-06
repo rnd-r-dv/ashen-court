@@ -99,6 +99,22 @@ export class Game implements Resolver {
 
   submit(intent: Intent): GameEvent[] {
     const me = this.currentPlayer();
+    if (!this.draining) {
+      // Controlled top-level session: initialize the collector so EVERY event
+      // applied during resolution (incl. applyEffect's internal nested drains)
+      // is collected; the final runQueue in resolveIntent then runs as a NESTED
+      // drain and returns the shared collector (full resolution tree).
+      this.applied = [];
+      this.draining = true;
+      try { return this.resolveIntent(intent, me); }
+      finally { this.draining = false; }
+    }
+    // Re-entrant submit (no external callers today): don't re-initialize the
+    // collector — the outer session owns it.
+    return this.resolveIntent(intent, me);
+  }
+
+  private resolveIntent(intent: Intent, me: PlayerIndex): GameEvent[] {
     if (intent.kind === 'mulligan') {
       if (this.state.phase !== 'mulligan') throw new Error('Not in mulligan');
       // mulligan order: player 0, then player 1 (turn stays 0 during mulligan)

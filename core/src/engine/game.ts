@@ -3,11 +3,13 @@ import { createTestPool } from '../data/test-pool.js';
 import { createRng, shuffle } from '../rng.js';
 import type { Rng } from '../rng.js';
 import type { Card, CreatureState, GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState, Trigger, TriggerSpec } from '../types.js';
+import { MANA_SURGE } from '../types.js';
 import { validateDeck } from '../validate.js';
-import { applyEffect, findCreature, removeCreature } from './effects.js';
+import { applyEffect, findCreature, makeCreature, removeCreature, SINGLE_TARGET_TARGETS } from './effects.js';
 import type { EffectCtx } from './effects.js';
 import { runQueue } from './events.js';
 import type { Resolver } from './events.js';
+import { isMostExpensiveCreatureInHand, playEffectiveCost, validatePlayCard } from './intents.js';
 import { canAttack, effectiveKeywords, tauntPresent } from './keywords.js';
 import { deserializeState, serializeState } from './serialize.js';
 
@@ -17,7 +19,6 @@ export interface MatchSetup {
   seed: number;
 }
 
-export const MANA_SURGE = 'mana-surge';
 const MAX_MANA = 15;
 const STARTING_HAND = 3;
 
@@ -150,7 +151,58 @@ export class Game implements Resolver {
       }
       return runQueue(this);
     }
-    throw new Error('Intent not implemented yet');   // replaced in Tasks 9-11
+    if (intent.kind === 'playCard') {
+      const err = validatePlayCard(this, intent, me);
+      if (err) throw new Error(err);
+      const p = this.state.players[me];
+      const card = this.registry.get(p.hand[intent.handIndex]!);
+      // pay effective cost (discounts already applied in playEffectiveCost),
+      // then consume the discounts on use — even when the effective cost is 0.
+      p.mana -= playEffectiveCost(this, card, me);
+      if (card.type === 'spell') p.hero.discountNextSpell = 0;
+      if (card.type === 'creature' && isMostExpensiveCreatureInHand(this, me, card)) p.hero.discountCheapest = 0;
+      if (card.id === MANA_SURGE) p.surged = true;   // surge consumed after its one use
+      p.hand.splice(intent.handIndex, 1);            // the card leaves the hand for every type
+      switch (card.type) {
+        case 'creature': {
+          // summon BEFORE the cardPlayed event dispatches so self-targeting
+          // battlecries (fired by dispatch(cardPlayed)) can see the creature.
+          const creature = makeCreature(this, card, me);
+          p.board.push(creature);
+          this.emit({ type: 'cardPlayed', player: me, cardId: card.id, creatureId: creature.id });
+          this.emit({ type: 'creatureSummoned', player: me, creatureId: creature.id, cardId: card.id });
+          break;
+        }
+        case 'spell': {
+          this.emit({ type: 'cardPlayed', player: me, cardId: card.id });
+          // Apply each effect in order. Single-target effects pass the resolved
+          // intent.target as the explicit ref; AoE/random kinds resolve internally.
+          for (const spec of card.effects) {
+            const ref = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) ? intent.target : undefined;
+            // Ward: a single-target creature ref on a warded creature consumes
+            // the ward, fizzles the whole spell (effects skipped) — but the
+            // spell is still paid and already removed from hand above.
+            if (ref && ref.type === 'creature') {
+              const warded = findCreature(this, ref.id);
+              if (warded && warded.warded) {
+                warded.warded = false;
+                this.emit({ type: 'spellFizzled', player: me, cardId: card.id, creatureId: warded.id });
+                break;
+              }
+            }
+            applyEffect(this, { player: me, cardId: card.id }, spec, ref);
+          }
+          break;
+        }
+        case 'artifact': {
+          this.emit({ type: 'cardPlayed', player: me, cardId: card.id });
+          p.artifacts.push({ id: this.nextArtifactId(card.id), cardId: card.id, owner: me });
+          break;
+        }
+      }
+      return runQueue(this);
+    }
+    throw new Error('Intent not implemented yet');   // replaced in Tasks 10-11
   }
 
   /**
@@ -203,9 +255,11 @@ export class Game implements Resolver {
       // (effects library), enqueuing their own follow-up events that runQueue
       // drains depth-first (deterministic).
       case 'cardPlayed': {
-        // battlecry of the played creature (spells/artifacts have no battlecry)
+        // battlecry of the played creature (spells/artifacts have no battlecry);
+        // the played creature's id rides in the event so self-targeting
+        // battlecries resolve against the summoned creature (Task 9).
         const card = this.safeCard(evt.cardId);
-        if (card && card.type === 'creature') this.fireTriggers('battlecry', evt.player, evt.cardId);
+        if (card && card.type === 'creature') this.fireTriggers('battlecry', evt.player, evt.cardId, evt.creatureId);
         break;
       }
       case 'damageDealt': {
@@ -228,6 +282,7 @@ export class Game implements Resolver {
         if (dead) removeCreature(this, dead);
         break;
       }
+      case 'spellFizzled':
       case 'heroHealed':
       case 'buffApplied':
       case 'cardDrawnExtra':
@@ -328,6 +383,13 @@ export class Game implements Resolver {
   private emit(evt: GameEvent): void {
     this.state.log.push(evt);
     this.queue.push(evt);
+  }
+
+  /** Deterministic per-cardId artifact id (mirrors the creature id scheme; survives serialization). */
+  private nextArtifactId(cardId: string): string {
+    let n = 0;
+    for (const p of this.state.players) for (const a of p.artifacts) if (a.cardId === cardId) n++;
+    return `${cardId}-${n + 1}`;
   }
 
   private startMain(): void {

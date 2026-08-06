@@ -1,4 +1,7 @@
 export type PlayerIndex = 0 | 1;
+
+/** Player 1's setup head-start spell (surge already granted; see Game constructor). */
+export const MANA_SURGE = 'mana-surge';
 export type CardType = 'creature' | 'spell' | 'artifact';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Keyword = 'taunt' | 'rush' | 'charge' | 'windfury' | 'lifesteal' | 'ward' | 'shield';
@@ -66,7 +69,7 @@ export type GameEvent =
   | { type: 'turnStart'; player: PlayerIndex; mana: number }
   | { type: 'cardDrawn'; player: PlayerIndex; cardId: string }
   | { type: 'manaChanged'; player: PlayerIndex; mana: number; maxMana: number }
-  | { type: 'cardPlayed'; player: PlayerIndex; cardId: string }
+  | { type: 'cardPlayed'; player: PlayerIndex; cardId: string; creatureId?: string }
   | { type: 'creatureSummoned'; player: PlayerIndex; creatureId: string; cardId: string }
   | { type: 'damageDealt'; target: TargetRef; amount: number; sourceCardId: string }
   | { type: 'creatureDied'; player: PlayerIndex; creatureId: string; cardId: string }

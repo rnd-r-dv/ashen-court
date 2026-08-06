@@ -30,8 +30,10 @@ const BOARD_CAP = 7;
 const MAX_MANA = 15;
 
 /** Targets that resolve to one ref (caller supplies an explicit ref via the
- *  legal-intent enumeration; fallback = resolveTargets()[0]). */
-const SINGLE_TARGET_TARGETS: ReadonlySet<EffectTarget> = new Set([
+ *  legal-intent enumeration; fallback = resolveTargets()[0]). Exported so
+ *  play-card validation/resolution (intents.ts, game.ts) share the set.
+ *  Task 9. */
+export const SINGLE_TARGET_TARGETS: ReadonlySet<EffectTarget> = new Set([
   'any', 'hero', 'self', 'anyCreature', 'enemyCreature', 'friendlyCreature', 'friendlyDragon',
 ]);
 /** Targets that resolve to all legal refs (or a seeded pick for random kinds)
@@ -241,7 +243,8 @@ function registryOf(game: Resolver): CardRegistry {
   return reg;
 }
 
-function isDragon(game: Resolver, c: CreatureState): boolean {
+/** True when the creature's card def archetype is 'dragon' (unknown cards are not). Exported for friendlyDragon target validation (Task 9). */
+export function isDragon(game: Resolver, c: CreatureState): boolean {
   try {
     return registryOf(game).get(c.cardId).archetype === 'dragon';
   } catch {
@@ -317,7 +320,10 @@ function summonTokens(game: Resolver, ctx: EffectCtx, spec: EffectSpec): void {
   }
 }
 
-function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): CreatureState {
+/** Build a CreatureState from a card def (exhausted = !(rush||charge), attacksLeft = windfury?2:1,
+ *  shields/warded from keywords). Exported so hand plays (game.ts) summon through the same
+ *  path as effect summons (Task 9). */
+export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): CreatureState {
   const keywords: Keyword[] = [...card.keywords];
   return {
     id: nextCreatureId(game, card.id),

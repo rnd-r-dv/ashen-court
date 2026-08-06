@@ -59,6 +59,7 @@ export function validateDeck(cardIds: string[], pool: Map<string, Card>): Valida
   for (const id of cardIds) {
     const card = pool.get(id);
     if (!card) { issues.push({ field: 'deck', message: `Unknown card id: ${id}`, severity: 'error' }); continue; }
+    if (card.archetype === 'token') issues.push({ field: 'deck', message: `Token cards cannot be in decks: ${id}`, severity: 'error' });
     const n = (counts.get(id) ?? 0) + 1;
     counts.set(id, n);
     if (n > RARITY_COPY_LIMIT[card.rarity]) issues.push({ field: 'deck', message: `More than ${RARITY_COPY_LIMIT[card.rarity]} copies of ${card.name} (${card.rarity}).`, severity: 'error' });

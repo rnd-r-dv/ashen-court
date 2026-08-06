@@ -5,15 +5,19 @@ import { useNav } from '../App.js';
 import type { MatchScreenSetup } from '../types.js';
 import Board from '../components/Board.js';
 import type { BoardTargeting } from '../components/Board.js';
+import CardView, { FACE_DOWN_CARD } from '../components/CardView.js';
 import Hand from '../components/Hand.js';
-import CardView from '../components/CardView.js';
+import PassDevice from '../components/PassDevice.js';
+import { playerVisibility } from '../game/playerVisibility.js';
 import './match.css';
 
 /**
- * Match (Task 31): the board screen. Wires useMatch (Task 30) with the
- * driver from App's match entry (bot mode auto-plays the opponent; hotseat
- * v1 renders both sides but only wires player 0 — the pass flow lands in
- * Task 32). Owns the interaction state machine on top of `legal`:
+ * Match (Task 31, hotseat flow Task 32): the board screen. Wires useMatch
+ * (Task 30) with the driver from App's match entry (bot mode auto-plays the
+ * opponent). Hotseat pass-and-play: the screen tracks a `viewer` (whoever
+ * holds the device), shows a pass overlay between turns (and between the two
+ * mulligans) while the incoming player's hand stays face-down, and flips the
+ * viewer on confirm. Owns the interaction state machine on top of `legal`:
  *   - click a playable card → resolve instantly if no effect needs a target,
  *     otherwise enter targeting mode; legal intents enumerate one variant per
  *     valid target ref, so candidates come straight from `legal`.
@@ -28,7 +32,7 @@ import './match.css';
 
 export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const { navigate } = useNav();
-  const { state, events, submit, legal, drainEvents, myPlayer } = useMatch({
+  const { state, events, submit, legal: hookLegal, drainEvents } = useMatch({
     driver: setup.driver,
     myPlayer: setup.myPlayer,
     bot: setup.bot,
@@ -38,14 +42,32 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const [targeting, setTargeting] = useState<BoardTargeting | null>(null);
   const [awaiting, setAwaiting] = useState(false); // submit in flight (button re-click guard)
 
-  const me = myPlayer;
-  const foe = (1 - myPlayer) as PlayerIndex;
-  const meP = state.players[me];
-  const foeP = state.players[foe];
+  // Hotseat pass-and-play (Task 32): the viewer is whoever currently holds
+  // the device — starts as the first pick (player 0) and alternates as the
+  // pass overlay is confirmed. Bot mode never passes, so the viewer stays
+  // the single human. Hands render face-down until the incoming player
+  // confirms — the visibility contract lives in playerVisibility.
+  const [viewer, setViewer] = useState<PlayerIndex>(setup.myPlayer);
+
+  const me = viewer;
+  const foe = (1 - viewer) as PlayerIndex;
+  const meP = state.players[viewer];
   const currentPlayer = (state.turn % 2) as PlayerIndex;
-  const myTurn = state.phase === 'main' && currentPlayer === me;
+  // The engine's acting player: current player in main, mulligan actor during
+  // mulligan (turn stays 0 through both mulligans — see playerVisibility).
+  const actor: PlayerIndex =
+    state.phase === 'mulligan' ? ((state.mulligansDone[0] ? 1 : 0) as PlayerIndex) : currentPlayer;
+  const visible = playerVisibility(state, viewer);
+  const myTurn = state.phase === 'main' && currentPlayer === viewer;
   const inTargeting = targeting !== null;
   const isBotMode = setup.bot !== undefined;
+  // Hotseat hands hide only at pass points (between turns and between the two
+  // mulligan phases). Bot mode never hides anything: the viewer's own hand
+  // stays up during the bot's turn, exactly as in Task 31.
+  const hideHands = !isBotMode && !visible;
+  // Pass overlay: same gate as hideHands. Game over navigates away on the
+  // next batch, so never flash an overlay on it.
+  const passVisible = hideHands && state.phase !== 'gameOver';
 
   /** Resolve card ids against the engine registry (unknown ids → undefined). */
   const getCard = useMemo(() => {
@@ -69,6 +91,16 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   useEffect(() => {
     if (awaiting && events.length > 0) setAwaiting(false);
   }, [awaiting, events]);
+
+  // Legal intents for the current acting player. Bot mode: useMatch computes
+  // them for the single human (myPlayer). Hotseat: both humans submit through
+  // the same driver, so the acting player is whoever's turn it is — read them
+  // straight from the engine (legalIntents returns [] unless it is genuinely
+  // that player's main turn).
+  const legal = useMemo<Intent[]>(() => {
+    if (isBotMode) return hookLegal;
+    return setup.driver.game().legalIntents(viewer);
+  }, [isBotMode, hookLegal, setup.driver, viewer, state]);
 
   // Hand indices with at least one legal playCard intent.
   const playable = useMemo(() => {
@@ -131,32 +163,36 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     }
   }
 
-  // Hotseat v1: player 1 (the second human) cannot act yet — show the
-  // pass-device note instead of a dead board. Task 32 owns the real flow.
-  const passVisible =
-    !isBotMode &&
-    ((state.phase === 'main' && currentPlayer === foe) ||
-      (state.phase === 'mulligan' && state.mulligansDone[me] && !state.mulligansDone[foe]));
+  // Pass point: the incoming player's hand sits face-down until they confirm
+  // the overlay — only its size is visible (the same info the board's
+  // enemy-hand silhouettes already show).
+  const handHidden = (
+    <div
+      className="match-hand-hidden"
+      aria-label={`Hand hidden — pass the device (${state.players[actor].hand.length} cards)`}
+    >
+      {state.players[actor].hand.map((id, i) => (
+        <CardView key={`${id}-${i}`} card={FACE_DOWN_CARD} size="hand" faceDown />
+      ))}
+    </div>
+  );
 
   const passOverlay = passVisible ? (
-    <div className="match-pass">
-      <div className="match-pass-inner">
-        <h2 className="shell-title">Player {foe + 1}&apos;s turn</h2>
-        <p className="shell-subtitle">Pass the device to Player {foe + 1}.</p>
-        <p className="match-pass-note">The full pass-and-play flow lands in a later update.</p>
-      </div>
-    </div>
+    <PassDevice player={actor} onConfirm={() => setViewer(actor)} />
   ) : null;
 
   // ---- mulligan phase ----
   if (state.phase === 'mulligan') {
-    const mineDone = state.mulligansDone[me];
+    // The mulligan actor sees their own hand and picks keeps; the other
+    // player sees the pass overlay (their hand stays hidden) until they take
+    // the device. Engine order is fixed: player 0 mulligans, then player 1.
+    const mineDone = state.mulligansDone[viewer];
     return (
       <div className="match match--mulligan">
         <h1 className="shell-title">Mulligan</h1>
         <p className="shell-subtitle">
           {mineDone
-            ? 'Waiting for your opponent…'
+            ? 'Waiting for the other player’s mulligan…'
             : 'Keep or redraw each card — redrawn cards are replaced from your deck.'}
         </p>
         {!mineDone && (
@@ -207,14 +243,18 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
       />
 
       <div className="match-handwrap">
-        <Hand
-          hand={meP.hand}
-          getCard={getCard}
-          playable={playable}
-          interactive={myTurn}
-          targeting={inTargeting}
-          onCardClick={onHandCardClick}
-        />
+        {hideHands ? (
+          handHidden
+        ) : (
+          <Hand
+            hand={meP.hand}
+            getCard={getCard}
+            playable={playable}
+            interactive={myTurn}
+            targeting={inTargeting}
+            onCardClick={onHandCardClick}
+          />
+        )}
       </div>
 
       {passOverlay}

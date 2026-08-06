@@ -1,18 +1,27 @@
 import type { CSSProperties } from 'react';
 import type { ArtRecipe } from '@ashen/core';
-import { ARCANE_PRESET, PRESETS, type ArtPreset, type ArtShape } from './artPresets.js';
+import { ARCANE_PRESET, PRESETS, type ArtPreset } from './artPresets.js';
+import { mulberry32, shapePaths, type Size } from './artShapes.js';
 
 /**
- * Procedural card art (Task 26).
+ * Procedural card art v2 (Task 38).
  *
- * Renders a card's ArtRecipe as a 250×350 SVG: linear-gradient background
- * (recipe.palette override, else the preset gradient), a large accent
- * silhouette path per shape, a runic glyph and a vignette overlay. When the
- * recipe carries an imageUrl (custom uploads), it short-circuits to an
- * `<img>` cover instead.
+ * Renders a card's ArtRecipe as a 250×350 layered SVG, every layer derived
+ * from a pure seeded PRNG (mulberry32 over recipe.seed) so the same recipe
+ * always produces the identical image — no Math.random, no state:
  *
- * Pure render component: no state, no Math.random. The only per-recipe
- * variation is a deterministic glyph tilt derived from the seed.
+ *   1. sky — linear gradient (recipe.palette override, else preset gradient)
+ *   2. midground — silhouette shape paths from artShapes.ts (per-shape rng)
+ *   3. runic glyph — recipe.glyph (or preset glyph) with a seeded tilt
+ *   4. embers — seeded particle specks drifting through the scene
+ *   5. vignette — radial darkening around the edges
+ *
+ * Rarity glow is intentionally absent: ArtRecipe carries no rarity (that
+ * belongs to CardFrame / Task 37). When the recipe carries an imageUrl
+ * (custom uploads) the whole composition short-circuits to an `<img>` cover.
+ *
+ * Pure render component: no state, no side effects, props stay
+ * `{ recipe, imageUrl?, className? }`.
  */
 
 export interface CardArtProps {
@@ -23,6 +32,7 @@ export interface CardArtProps {
 
 const WIDTH = 250;
 const HEIGHT = 350;
+const SIZE: Size = { w: WIDTH, h: HEIGHT };
 
 const frameStyle: CSSProperties = {
   width: WIDTH,
@@ -43,52 +53,7 @@ const imgCoverStyle: CSSProperties = {
 
 const svgStyle: CSSProperties = { display: 'block', borderRadius: 12, flexShrink: 0 };
 
-/** Silhouette outline paths, hand-drawn in the 250×350 viewBox (center x=125). */
-const SHAPE_PATHS: Record<ArtShape, string> = {
-  flame:
-    'M125 65 C 152 108, 176 128, 166 172 C 158 212, 142 234, 125 252 ' +
-    'C 108 234, 92 212, 84 172 C 74 128, 98 108, 125 65 Z',
-  ice:
-    'M125 60 L 148 130 L 138 210 L 112 210 L 102 130 Z ' +
-    'M88 110 L 100 160 L 90 205 L 74 190 Z ' +
-    'M162 110 L 176 190 L 160 205 L 150 160 Z',
-  skull:
-    'M125 97 A 38 38 0 1 1 125 173 A 38 38 0 1 1 125 97 Z ' +
-    'M112 128 A 7 7 0 1 1 112 142 A 7 7 0 1 1 112 128 Z ' +
-    'M138 128 A 7 7 0 1 1 138 142 A 7 7 0 1 1 138 128 Z ' +
-    'M125 150 L 131 160 L 119 160 Z ' +
-    'M108 168 L 142 168 L 139 200 C 137 214, 113 214, 111 200 Z',
-  leaf: 'M125 55 C 172 100, 178 165, 125 285 C 72 165, 78 100, 125 55 Z M125 55 L 125 285',
-  star:
-    'M125 70 L 148.5 137.6 L 220.1 139.1 L 163 182.4 L 183.8 250.9 ' +
-    'L 125 210 L 66.2 250.9 L 87 182.4 L 29.9 139.1 L 101.5 137.6 Z',
-  storm: 'M143 60 L 92 175 L 122 175 L 98 250 L 168 135 L 135 135 Z',
-  gem: 'M125 60 L 180 135 L 125 270 L 70 135 Z M125 60 L 125 270 M70 135 L 180 135',
-  bone: 'M85 100 L 165 240 M165 100 L 85 240',
-  moon: 'M125 55 C 190 90, 190 250, 125 280 C 95 235, 95 105, 125 55 Z',
-  eye:
-    'M55 170 C 90 120, 160 120, 195 170 C 160 220, 90 220, 55 170 Z ' +
-    'M107 170 A 18 18 0 1 1 143 170 A 18 18 0 1 1 107 170 Z ' +
-    'M118 170 A 7 7 0 1 1 132 170 A 7 7 0 1 1 118 170 Z',
-  shield: 'M125 65 L 178 88 L 172 185 C 166 238, 146 262, 125 278 C 104 262, 84 238, 78 185 L 72 88 Z M80 160 L 170 160',
-  sword:
-    'M116 60 L 134 60 L 130 190 L 120 190 Z ' +
-    'M95 195 L 155 195 ' +
-    'M121 200 L 121 232 L 129 232 L 129 200 Z ' +
-    'M111 244 A 9 9 0 1 1 129 244 A 9 9 0 1 1 111 244 Z',
-};
-
-/** Stroke width per shape (crossbones need a fat round stroke to read). */
-const SHAPE_STROKE: Record<ArtShape, number> = {
-  flame: 8, ice: 8, skull: 7, leaf: 8, star: 8, storm: 9,
-  gem: 8, bone: 15, moon: 8, eye: 8, shield: 8, sword: 8,
-};
-
-/**
- * Deterministic per-recipe gradient id so multiple SVGs on one page never
- * share an id (SVG url(#…) resolves document-wide). Hash of preset, seed and
- * palette — same recipe always yields the same id, no state, no randomness.
- */
+/** Per-recipe gradient id — hashes preset + seed + palette so sibling SVGs never collide. */
 function gradientId(recipe: ArtRecipe): string {
   let h = 0;
   const src = `${recipe.preset}|${recipe.seed}|${recipe.palette.join(',')}`;
@@ -100,6 +65,11 @@ function gradientId(recipe: ArtRecipe): string {
 function gradientOf(preset: ArtPreset, palette: string[]): [string, string] {
   if (palette.length >= 2 && palette[0] && palette[1]) return [palette[0], palette[1]];
   return preset.gradient;
+}
+
+/** Deterministic per-layer rng streams — layers never perturb each other. */
+function layerRng(seed: number, salt: number) {
+  return mulberry32(seed ^ salt);
 }
 
 export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
@@ -117,8 +87,35 @@ export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
   const gradient = gradientOf(preset, recipe.palette);
   const gid = gradientId(recipe);
   const glyph = recipe.glyph || preset.glyph;
-  const tilt = (recipe.seed % 7) - 3; // deterministic −3..+3 degrees
+
+  // Layers each draw from their own derived stream: same seed → same art.
+  const shapeRng = layerRng(recipe.seed, 0x9e3779b9);
+  const glyphRng = layerRng(recipe.seed, 0x85ebca6b);
+  const emberRng = layerRng(recipe.seed, 0xc2b2ae35);
+
+  const shapes = shapePaths(preset.shape, shapeRng, SIZE);
+  const tilt = (glyphRng() * 8 - 4); // seeded −4..+4 degrees
   const glyphY = 312;
+
+  const embers: Array<{ x: number; y: number; r: number; o: number }> = [];
+  const emberCount = 9 + Math.floor(emberRng() * 6);
+  for (let i = 0; i < emberCount; i++) {
+    embers.push({
+      x: 10 + emberRng() * (WIDTH - 20),
+      y: 42 + emberRng() * (HEIGHT - 76),
+      r: 1 + emberRng() * 1.9,
+      o: 0.2 + emberRng() * 0.6,
+    });
+  }
+  // a few larger, fainter embers read as heat-haze glows
+  for (let i = 0; i < 3; i++) {
+    embers.push({
+      x: 15 + emberRng() * (WIDTH - 30),
+      y: 60 + emberRng() * (HEIGHT - 120),
+      r: 2.6 + emberRng() * 2.2,
+      o: 0.1 + emberRng() * 0.12,
+    });
+  }
 
   return (
     <svg
@@ -141,18 +138,17 @@ export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
         </radialGradient>
       </defs>
 
+      {/* 1. sky */}
       <rect x="0" y="0" width={WIDTH} height={HEIGHT} rx="12" fill={`url(#${gid})`} />
 
-      <path
-        d={SHAPE_PATHS[preset.shape]}
-        fill="none"
-        stroke={preset.accent}
-        strokeWidth={SHAPE_STROKE[preset.shape]}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity="0.9"
-      />
+      {/* 2. midground silhouette */}
+      <g fill={preset.accent} fillRule="evenodd" opacity="0.32">
+        {shapes.map((d, i) => (
+          <path key={i} d={d} />
+        ))}
+      </g>
 
+      {/* 3. runic glyph */}
       <text
         x={WIDTH / 2}
         y={glyphY}
@@ -162,11 +158,17 @@ export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
         fontFamily="Georgia, 'Times New Roman', serif"
         letterSpacing="8"
         opacity="0.95"
-        transform={`rotate(${tilt} ${WIDTH / 2} ${glyphY})`}
+        transform={`rotate(${tilt.toFixed(1)} ${WIDTH / 2} ${glyphY})`}
       >
         {glyph}
       </text>
 
+      {/* 4. ember / particle specks */}
+      {embers.map((e, i) => (
+        <circle key={i} cx={e.x.toFixed(1)} cy={e.y.toFixed(1)} r={e.r.toFixed(1)} fill={preset.accent} opacity={e.o.toFixed(3)} />
+      ))}
+
+      {/* 5. vignette */}
       <rect x="0" y="0" width={WIDTH} height={HEIGHT} rx="12" fill={`url(#${gid}-vig)`} />
     </svg>
   );

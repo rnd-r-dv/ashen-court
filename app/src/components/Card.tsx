@@ -1,4 +1,5 @@
 import type { Card as CardSpec } from '@ashen/core';
+import { cardText } from '@ashen/core';
 import CardArt from './CardArt.js';
 import CardFrame from './CardFrame.js';
 import './card.css';
@@ -60,6 +61,7 @@ export default function Card({
       health={card.health}
       keywords={card.keywords}
       flavor={card.flavor}
+      text={cardText(card)}
       faceDown={faceDown}
       onClick={onClick ? () => onClick(card) : undefined}
     >

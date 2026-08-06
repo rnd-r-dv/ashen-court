@@ -72,7 +72,7 @@ export function createTestPool(): Card[] {
     },
     {
       id: 'bc-2dmg', name: 'Battlecry 2 Damage', type: 'creature', cost: 2, attack: 2, health: 2,
-      keywords: [], effects: [], triggers: [{ when: 'battlecry', effects: [{ kind: 'dealDamage', value: 2, target: 'hero' }] }],
+      keywords: [], effects: [], triggers: [{ when: 'battlecry', effects: [{ kind: 'dealDamage', value: 2, target: 'allEnemies' }] }],
       rarity: 'common', archetype: 'neutral', art: art(903), author: 'curated', version: 1,
     },
     {

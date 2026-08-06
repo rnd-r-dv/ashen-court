@@ -160,6 +160,20 @@ export class Game implements Resolver {
         this.state.turn += 1;
         this.beginTurn(this.currentPlayer());
         break;
+      // Task 6 effects-library events: effects apply their state mutations
+      // inline (per the effects brief); these handlers exist so runQueue
+      // accepts the events. Real resolution (death/removal, onDamage,
+      // trigger wiring) lands in Task 8+.
+      case 'damageDealt':
+      case 'creatureDied':
+      case 'heroHealed':
+      case 'buffApplied':
+      case 'cardDrawnExtra':
+      case 'tokenSummoned':
+      case 'creatureSummoned':
+      case 'frozen':
+      case 'effectResolved':
+        break;
       default:
         throw new Error('Unhandled event: ' + evt.type);
     }

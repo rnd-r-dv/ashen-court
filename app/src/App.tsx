@@ -9,6 +9,7 @@ import ModeSelect from './screens/ModeSelect.js';
 import DeckPick from './screens/DeckPick.js';
 import type { DeckPickResult } from './screens/DeckPick.js';
 import Forge from './screens/Forge.js';
+import DeckBuilder from './screens/DeckBuilder.js';
 
 // ---- navigation context ----
 
@@ -72,7 +73,7 @@ export default function App() {
       {screen.name === 'deckPick' && (
         <DeckPick mode={screen.mode} difficulty={screen.difficulty} onComplete={onDeckPickComplete} />
       )}
-      {screen.name === 'deckBuilder' && <DeckBuilderPlaceholder />}
+      {screen.name === 'deckBuilder' && <DeckBuilder />}
       {screen.name === 'forge' && <Forge />}
       {screen.name === 'match' && <MatchPlaceholder pending={pending} />}
       {screen.name === 'victory' && <VictoryPlaceholder result={screen.result} />}

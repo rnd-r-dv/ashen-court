@@ -1,0 +1,5 @@
+{
+  // App tsconfig (Task 25): gives esbuild the jsx: react-jsx it needs to
+  // transform .tsx with the automatic runtime without a vite.config / plugin.
+  "extends": "../tsconfig.base.json"
+}

@@ -8,6 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "jsx": "react-jsx",               // app .tsx screens (Task 25+); harmless for core/server
     "forceConsistentCasingInFileNames": true
   }
 }

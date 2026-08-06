@@ -46,34 +46,22 @@
   background: linear-gradient(180deg, transparent 0%, rgba(13, 10, 22, 0.55) 40%, var(--bg-1) 100%);
 }
 
-/* ---- pass-device overlay (hotseat v1; Task 32 owns the real flow) ---- */
-.match-pass {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: grid;
-  place-items: center;
-  background: rgba(7, 5, 12, 0.85);
-  backdrop-filter: blur(3px);
-}
-
-.match-pass-inner {
+/* ---- pass point (hotseat, Task 32): the incoming player's hand, face-down ----
+   The PassDevice overlay itself lives in components/passdevice.css. */
+.match-hand-hidden {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-5) var(--space-6);
-  border: 2px double var(--gold-dim);
-  border-radius: var(--radius-lg);
-  background: var(--bg-1);
-  box-shadow: var(--glow-gold);
-  text-align: center;
+  justify-content: center;
+  align-items: flex-end;
+  min-height: 300px;
+  padding: 0 48px;
 }
 
-.match-pass-note {
-  font-family: var(--font-body);
-  font-size: 12px;
-  color: var(--text-faint);
+.match-hand-hidden .cardview {
+  margin-right: -64px; /* overlap like the fanned hand; last card needs no pull */
+}
+
+.match-hand-hidden .cardview:last-child {
+  margin-right: 0;
 }
 
 /* ---- mulligan phase ---- */

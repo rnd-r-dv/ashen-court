@@ -256,6 +256,81 @@ describe('LAN rooms', () => {
     }
   });
 
+  it('rejects a guest endTurn during the host main turn (server turn gating)', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await startRoom(srv));
+      const mirror = mirrorGame(DECK, SEED);
+      // Both mulligans complete (host = player 0 mulligans first, then guest).
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = host.waitFor(eventsEq(m1));
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+      const m2 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m2P = guest.waitFor(eventsEq(m2));
+      guest.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m2P).type).toBe('events');
+      // It is now the host's (player 0) main turn. The guest's endTurn must be
+      // rejected: error reply to the sender ONLY, nothing broadcast, and the
+      // authoritative game untouched.
+      const errP = guest.waitFor(m => m.type === 'error');
+      const hostSilenceP = host.expectNoMessage();
+      guest.send({ type: 'intent', intent: { kind: 'endTurn' } });
+      const err = await errP;
+      if (err.type !== 'error') throw new Error('error never arrived');
+      expect(err.message).toMatch(/not your turn/i);
+      await hostSilenceP;
+      // State unchanged: the host's next legal play still resolves exactly as
+      // the mirror expects (no ghost endTurn shifted the turn or consumed mana).
+      const play = mirror.submit({ kind: 'playCard', handIndex: PLAY_INDEX });
+      expect(play.some(e => e.type === 'cardPlayed' && e.cardId === PLAY_CARD)).toBe(true);
+      const playP = host.waitFor(eventsEq(play));
+      host.send({ type: 'intent', intent: { kind: 'playCard', handIndex: PLAY_INDEX } });
+      expect((await playP).type).toBe('events');
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('rejects a guest mulligan while the host is the mulligan actor (server turn gating)', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await startRoom(srv));
+      const mirror = mirrorGame(DECK, SEED);
+      // Engine mulligan order is fixed (player 0, then player 1): the guest
+      // acting first must get an error reply with nothing broadcast.
+      const errP = guest.waitFor(m => m.type === 'error');
+      const hostSilenceP = host.expectNoMessage();
+      const guestSilenceP = guest.expectNoMessage();
+      guest.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      const err = await errP;
+      if (err.type !== 'error') throw new Error('error never arrived');
+      expect(err.message).toMatch(/not your turn/i);
+      await hostSilenceP;
+      await guestSilenceP;
+      // The authoritative game is untouched: the host's mulligan still
+      // resolves as the mirror expects, then the guest's own mulligan too.
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = host.waitFor(eventsEq(m1));
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+      const m2 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m2P = guest.waitFor(eventsEq(m2));
+      guest.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m2P).type).toBe('events');
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
   it('custom cards sync to the joiner', async () => {
     expect(validateCard(CUSTOM_CARD).filter(i => i.severity === 'error')).toEqual([]);
     // Host deck: ember deck with one card swapped for the custom card

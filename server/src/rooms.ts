@@ -160,6 +160,22 @@ export class RoomRegistry {
       send(socket, { type: 'error', message: 'Game not started' });
       return;
     }
+    // Server-authority turn gate (fix round 3): game.submit() computes the
+    // acting player from engine state internally and cannot know which socket
+    // submitted, so in LAN either client could act for the other. Gate by
+    // socket identity: the acting player is the mulligan actor during mulligan
+    // (turn stays 0 through both mulligans) and currentPlayer() in main phase
+    // (playCard/attack/heroPower/endTurn all require it).
+    const player = playerIndex(room, socket);
+    const g = room.game;
+    const acting: PlayerIndex =
+      g.state.phase === 'mulligan'
+        ? ((g.state.mulligansDone[0] ? 1 : 0) as PlayerIndex)
+        : g.currentPlayer();
+    if (player !== acting) {
+      send(socket, { type: 'error', message: 'Not your turn' });
+      return;
+    }
     try {
       const events: GameEvent[] = room.game.submit(intent);
       room.intents.push(intent);

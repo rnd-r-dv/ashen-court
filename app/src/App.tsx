@@ -149,7 +149,7 @@ export default function App() {
         heroes: [hero, hero],
         seed: nextSeed,
       });
-      navigate({ name: 'match', setup: { driver: session.driver, myPlayer: session.myPlayer } });
+      navigate({ name: 'match', setup: { driver: session.driver, myPlayer: session.myPlayer, mode: 'lan' } });
     };
     s.client.addMessageHandler(handler);
     return () => s.client.removeMessageHandler(handler);

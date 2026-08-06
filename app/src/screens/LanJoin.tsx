@@ -1,10 +1,16 @@
-// LAN join screen (Task 34). Enter a 4-letter room code (auto-uppercased) →
-// joinRoom → wait for the host → 'joined' feeds the room params (seed,
-// deckIds, full card registry) into useLanMatch → gameStart → Match.
-import { useEffect, useState } from 'react';
+// LAN join screen (Task 34 + fix round 2). Enter a 4-letter room code
+// (auto-uppercased) → joinRoom → wait for the host → 'joined' feeds the room
+// params (seed, deckIds, full card registry) into useLanMatch → gameStart →
+// register the LAN session with App (onSessionReady) → Match.
+//
+// Fix round 2: the screen's own message handler is removed on unmount, the
+// client remembers the room code for reconnect re-attach, and onStatus
+// surfaces a closed connection as an error.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNav } from '../App.js';
+import type { LanSession } from '../App.js';
 import { connectLan } from '../game/lanClient.js';
-import type { LanClient } from '../game/lanClient.js';
+import type { LanClient, LanStatus } from '../game/lanClient.js';
 import { heroNameForDeck } from '../game/lanDriver.js';
 import { useLanMatch } from '../game/useLanMatch.js';
 import type { LanRoomParams } from '../game/useLanMatch.js';
@@ -13,7 +19,7 @@ import type { ServerMessage } from '@ashen/server/protocol';
 import './shell.css';
 import './lan.css';
 
-export default function LanJoin() {
+export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSession) => void }) {
   const { navigate } = useNav();
   const [code, setCode] = useState('');
   const [joining, setJoining] = useState(false);
@@ -27,15 +33,12 @@ export default function LanJoin() {
 
   const { driver } = useLanMatch({ client, room, myPlayer });
 
-  // 'joined' + 'gameStart' arrive in one burst; navigate once the shadow
-  // driver exists (useLanMatch builds it from the 'joined' params).
-  useEffect(() => {
-    if (started && driver && myPlayer !== null) {
-      navigate({ name: 'match', setup: { driver, myPlayer } });
-    }
-  }, [started, driver, myPlayer, navigate]);
+  // Stable references for handler cleanup (the screen unmounts at match entry;
+  // the session client must not keep this screen's pre-match handler alive).
+  const clientRef = useRef<LanClient | null>(null);
+  clientRef.current = client;
 
-  function handleMessage(m: ServerMessage) {
+  const handleMessage = useCallback((m: ServerMessage) => {
     switch (m.type) {
       case 'joined':
         setRoom({
@@ -58,9 +61,27 @@ export default function LanJoin() {
         setError(m.reason);
         break;
       default:
-        break; // roomCreated / opponentJoined / events / rematchStart — not ours
+        break; // roomCreated / opponentJoined / events / intent / rematchStart — not ours
     }
-  }
+  }, []);
+
+  // I1: a closed connection (grace window expired / intentional close) is
+  // surfaced as an error the joining screen can show.
+  const onStatus = useCallback((s: LanStatus) => {
+    if (s === 'closed') setError('Connection closed — rejoin by code to continue.');
+  }, []);
+
+  // 'joined' + 'gameStart' arrive in one burst; navigate once the shadow
+  // driver exists (useLanMatch builds it from the 'joined' params).
+  useEffect(() => {
+    if (started && driver && myPlayer !== null && client && room) {
+      onSessionReady({ mode: 'lanJoin', client, room, myPlayer, driver });
+      navigate({ name: 'match', setup: { driver, myPlayer } });
+    }
+  }, [started, driver, myPlayer, client, room, onSessionReady, navigate]);
+
+  // Unmount cleanup: drop this screen's pre-match handler from the client.
+  useEffect(() => () => clientRef.current?.removeMessageHandler(handleMessage), [handleMessage]);
 
   function join() {
     const trimmed = code.trim();
@@ -71,7 +92,8 @@ export default function LanJoin() {
     setError(null);
     setSubmittedCode(trimmed);
     setJoining(true);
-    const c = connectLan(handleMessage);
+    const c = connectLan(handleMessage, onStatus);
+    c.setRoomCode(trimmed); // reconnect re-attach (fix round 2)
     setClient(c);
     c.send({ type: 'joinRoom', code: trimmed });
   }

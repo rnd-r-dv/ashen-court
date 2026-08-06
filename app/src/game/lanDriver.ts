@@ -1,30 +1,37 @@
-// LAN match driver (Task 34 + Task 34 fix round). Implements the Task 12/33
+// LAN match driver (Task 34 + Task 34 fix rounds). Implements the Task 12/33
 // LAN-mirroring contract: the client keeps a local "shadow" Game built from
 // the same seed, deck, heroes and card registry as the server's authoritative
 // Game, and the deterministic engine keeps both states identical.
 //
-// Shadow advancement policy (INTENT BROADCAST, verified against
-// core/src/engine/game.ts — see task-34-report):
+// Shadow advancement policy (INTENT BROADCAST + DRIVER-OWNED APPLICATION,
+// fix round 2 — verified against core/src/engine/game.ts):
 //
 //  1. The server broadcasts every ACCEPTED intent as {type:'intent', intent}
 //     (in addition to the {type:'events'} resolution tree for animation).
-//  2. submit() ONLY sends the intent to the server — it is never applied
-//     locally. The shadow advances exactly once, when the echoed intent
-//     message arrives, via applyIntent() → game.submit(intent). Single
-//     application point: no own-echo content matching, no pre-apply, no
-//     double-application possible (the old event-reconstruction policy — and
-//     its reconstructable turnEnd/gameOver/mulligan exceptions — is gone).
+//  2. The DRIVER registers its own message handler on the client at
+//     construction — the single application point. submit() ONLY sends the
+//     intent; when the echoed {type:'intent'} arrives, the driver applies it
+//     to the shadow itself (game.submit) and forwards the returned resolution
+//     tree to every onEvents subscriber (which is what the Match screen's
+//     useMatch consumes — fix round 2: the LAN match screen was frozen because
+//     application happened in the hook, which unmounts at match entry).
+//     No local pre-apply, no own-echo content matching, no double-application.
 //  3. Because the engine is deterministic (same seed + same intents =
 //     identical states), both shadows and the server reach byte-identical
-//     states after every intent, and the resolution tree applyIntent returns
-//     IS the server's broadcast events — the hook queues that tree as the
-//     animation batch (single animation source; the {type:'events'} broadcast
-//     is redundant for the client but kept on the wire).
-//  4. Shadow divergence (applyIntent throws) is unreachable while the states
-//     match; if it happens the driver console.warns with the intent kind and
-//     raises a resync flag the hook surfaces to the UI (v1 recovery: rejoin
-//     by code — the server replays the intent log to a fresh shadow).
-import { DECK_DEFS, Game, HEROES, expandDeck } from '@ashen/core';
+//     states after every intent, and the tree forwarded to subscribers IS the
+//     server's events broadcast (the {type:'events'} wire message is redundant
+//     for the client but kept on the wire).
+//  4. On a mid-game reconnect the server re-sends joined → the full intent
+//     log → gameStart. The driver rebuilds the shadow fresh from the 'joined'
+//     payload (same seed/deck/hero/registry resolution as the server's
+//     makeGame) so the replayed log applies cleanly — this works even after
+//     the LAN screens (and their hook) unmount at match entry.
+//  5. Shadow divergence (the shadow cannot apply an echoed intent) is
+//     unreachable while the states match; if it happens the driver
+//     console.warns with the intent kind and raises a resync flag the hook
+//     surfaces to the UI (v1 recovery: rejoin by code — the server replays
+//     the intent log to a fresh shadow).
+import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@ashen/core';
 import type { GameEvent, Intent, MatchSetup } from '@ashen/core';
 import type { MatchDriver } from '../types.js';
 import type { LanClient } from './lanClient.js';
@@ -48,28 +55,32 @@ export function heroNameForDeck(deckIds: string[]): string {
   return HEROES[0]!.name;
 }
 
-/** LAN driver: MatchDriver plus the shadow-application surface the hook uses. */
+/** LAN driver: MatchDriver plus the divergence flag the hook surfaces. */
 export interface LanMatchDriver extends MatchDriver {
-  /**
-   * Apply one echoed intent to the shadow (deterministic replay). Returns the
-   * resolution tree (identical to the server's events broadcast) for the UI
-   * to animate. On shadow divergence (should be unreachable) returns [] and
-   * sets resyncRequested.
-   */
-  applyIntent(intent: Intent): GameEvent[];
   /** True once a shadow divergence was detected (v1 recovery: rejoin by code). */
   resyncRequested: boolean;
 }
 
 /**
- * Create the LAN MatchDriver over a LanClient and a shadow Game. The driver's
- * own message handler only surfaces server errors. Echoed intents are applied
- * by the hook (or tests) via applyIntent when the {type:'intent'} message
- * arrives, and the returned resolution tree is queued as the animation batch —
- * the driver never applies intents or forwards events inside its handler, so
- * there is exactly one application point and one animation source per echo.
- * onEvents exists for MatchDriver shape compatibility; LAN animation flows
- * through applyIntent's return value instead.
+ * Create the LAN MatchDriver over a LanClient and a shadow Game. At
+ * construction the driver registers its own message handler on the client —
+ * it OWNS echo application, so the driver works even after the LAN screens
+ * (and useLanMatch) unmount at match entry:
+ *
+ *   - {type:'error'}  → onError (server-side rejection of a submitted intent;
+ *                        the shadow never applied it locally, so the states
+ *                        stay aligned).
+ *   - {type:'joined'} → rebuild the shadow fresh from the reconnect payload
+ *                        (seed/deckIds/cards), so the intent-log replay that
+ *                        follows applies cleanly.
+ *   - {type:'intent'} → apply the echoed intent to the shadow (try/catch:
+ *                        console.warn + resync flag + onResync on divergence)
+ *                        and forward the resolution tree to onEvents
+ *                        subscribers (the Match screen's useMatch pipeline).
+ *
+ * submit() only sends the intent — the echo applies, exactly once. onEvents
+ * stores the subscriber set (mirroring useMatch's single event pipeline, so
+ * local and LAN play flow through the same interface).
  */
 export function createLanDriver(
   client: LanClient,
@@ -79,18 +90,44 @@ export function createLanDriver(
 ): LanMatchDriver {
   let current = game;
   let resyncRequested = false;
+  const listeners = new Set<(events: GameEvent[]) => void>();
 
   client.addMessageHandler((m) => {
     if (m.type === 'error') {
-      // Server-side rejection (sent only to the sender). The shadow never
-      // applied this intent locally (no pre-apply), so the states stay
-      // aligned; surface the message and let the UI decide.
       onError?.(m.message);
+      return;
     }
-    // {type:'events'} / {type:'intent'} broadcasts are the hook's business:
-    // the events tree carries no reconstructable state (Task 12 ruling) and
-    // the intent echo advances the shadow — both handled at the single
-    // application point, so nothing happens here.
+    if (m.type === 'joined') {
+      // Reconnect: the server re-sent the setup and will replay the intent
+      // log. Rebuild the shadow fresh from the payload (the same resolution
+      // the server's makeGame uses: hero by NAME, merged registry) so the
+      // replay applies cleanly. The initial join is a no-op rebuild — the
+      // payload matches the shadow the hook already built.
+      const hero = HEROES.find(h => h.name === heroNameForDeck(m.deckIds)) ?? HEROES[0]!;
+      current = Game.create(
+        { decks: [m.deckIds, m.deckIds], heroes: [hero, hero], seed: m.seed },
+        new CardRegistry([...buildPool(), ...m.cards]),
+      );
+      resyncRequested = false;
+      return;
+    }
+    if (m.type === 'intent') {
+      try {
+        const tree = current.submit(m.intent); // deterministic mirror — same as the server
+        for (const cb of [...listeners]) cb(tree);
+      } catch (err) {
+        // Shadow divergence: unreachable while both sides replay the same
+        // intent script on the same seed. Flag it for the hook to surface;
+        // v1 recovery is a manual rejoin by code (the server replays the log).
+        resyncRequested = true;
+        console.warn(`[lan] shadow divergence applying ${m.intent.kind} intent`, err);
+        onResync?.(m.intent.kind);
+      }
+      return;
+    }
+    // {type:'events'} drives nothing client-side (the forwarded tree IS the
+    // events); gameStart / rematchStart / playerLeft are the screens' +
+    // App's business.
   });
 
   return {
@@ -99,23 +136,10 @@ export function createLanDriver(
       // once when the server broadcasts it back. No optimism, no content
       // matching, no double-application possible.
       client.send({ type: 'intent', intent });
-      return Promise.resolve([]); // animation events come from applyIntent's tree
+      return Promise.resolve([]); // events flow through the echoed tree
     },
-    applyIntent(intent: Intent): GameEvent[] {
-      try {
-        return current.submit(intent); // deterministic mirror — same as the server
-      } catch (err) {
-        // Shadow divergence: unreachable while both sides replay the same
-        // intent script on the same seed. Flag it for the hook to surface;
-        // v1 recovery is a manual rejoin by code (the server replays the log).
-        resyncRequested = true;
-        console.warn(`[lan] shadow divergence applying ${intent.kind} intent`, err);
-        onResync?.(intent.kind);
-        return [];
-      }
-    },
-    onEvents(_cb: (events: GameEvent[]) => void): void {
-      // Shape compatibility only — LAN animation is the applyIntent tree.
+    onEvents(cb: (events: GameEvent[]) => void): void {
+      listeners.add(cb);
     },
     game(): Game {
       return current;

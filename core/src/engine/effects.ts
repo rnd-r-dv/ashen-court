@@ -110,9 +110,10 @@ export function applyEffect(game: Resolver, ctx: EffectCtx, spec: EffectSpec, ex
         if (ref.type !== 'creature') continue;
         const c = findCreature(game, ref.id);
         if (!c) continue;
-        removeCreature(game, c);
+        // Removal + deathrattle resolve in dispatch(creatureDied) (Task 8):
+        // the creature stays on the board until then so the deathrattle fires
+        // before removal, matching the attack/damage path.
         push(game, { type: 'creatureDied', player: c.owner, creatureId: c.id, cardId: c.cardId });
-        // deathrattle firing lands in Task 8's dispatch(creatureDied)
       }
       break;
     }
@@ -248,7 +249,8 @@ function isDragon(game: Resolver, c: CreatureState): boolean {
   }
 }
 
-function findCreature(game: Resolver, id: string): CreatureState | undefined {
+/** Find a creature by id across both boards. Exported for Game's dispatch handlers (Task 8). */
+export function findCreature(game: Resolver, id: string): CreatureState | undefined {
   for (const p of game.state.players) {
     const c = p.board.find(x => x.id === id);
     if (c) return c;
@@ -256,7 +258,8 @@ function findCreature(game: Resolver, id: string): CreatureState | undefined {
   return undefined;
 }
 
-function removeCreature(game: Resolver, c: CreatureState): void {
+/** Remove a creature from its owner's board (no-op when already gone). */
+export function removeCreature(game: Resolver, c: CreatureState): void {
   const p = game.state.players[c.owner];
   const i = p.board.findIndex(x => x.id === c.id);
   if (i >= 0) p.board.splice(i, 1);

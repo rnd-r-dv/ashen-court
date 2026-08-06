@@ -2,9 +2,9 @@ import { CardRegistry } from '../cards.js';
 import { createTestPool } from '../data/test-pool.js';
 import { createRng, shuffle } from '../rng.js';
 import type { Rng } from '../rng.js';
-import type { CreatureState, GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState } from '../types.js';
+import type { Card, CreatureState, GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState, Trigger, TriggerSpec } from '../types.js';
 import { validateDeck } from '../validate.js';
-import { applyEffect } from './effects.js';
+import { applyEffect, findCreature, removeCreature } from './effects.js';
 import type { EffectCtx } from './effects.js';
 import { runQueue } from './events.js';
 import type { Resolver } from './events.js';
@@ -31,6 +31,10 @@ export class Game implements Resolver {
   registry: CardRegistry;
   /** Pending resolution queue (Resolver): drained by runQueue. */
   queue: GameEvent[] = [];
+  /** Applied-event collector (Resolver): filled by runQueue during a top-level drain. */
+  applied: GameEvent[] = [];
+  /** Nested-drain marker (Resolver): set while runQueue is draining this game. */
+  draining = false;
 
   private rng: Rng;
   private rngCalls = 0;
@@ -181,20 +185,49 @@ export class Game implements Resolver {
         break;
       }
       case 'turnStart':
-        break;   // no-op marker: mana/draw payloads ride in separate events
+        // startOfTurn triggers of the active player's artifacts + board creatures
+        this.fireTurnTriggers(evt.player, 'startOfTurn');
+        break;
       case 'gameOver':
         this.state.phase = 'gameOver';
         break;
       case 'turnEnd':
+        // endOfTurn triggers fire for the player ending their turn, BEFORE the
+        // turn advances (they belong to the turn that is ending).
+        this.fireTurnTriggers(evt.player, 'endOfTurn');
         this.state.turn += 1;
         this.beginTurn(this.currentPlayer());
         break;
-      // Task 6 effects-library events: effects apply their state mutations
-      // inline (per the effects brief); these handlers exist so runQueue
-      // accepts the events. Real resolution (death/removal, onDamage,
-      // trigger wiring) lands in Task 8+.
-      case 'damageDealt':
-      case 'creatureDied':
+      // Task 8 trigger wiring: dispatch-level hooks that fire a card's trigger
+      // groups and resolve death/removal. Trigger effects apply via applyEffect
+      // (effects library), enqueuing their own follow-up events that runQueue
+      // drains depth-first (deterministic).
+      case 'cardPlayed': {
+        // battlecry of the played creature (spells/artifacts have no battlecry)
+        const card = this.safeCard(evt.cardId);
+        if (card && card.type === 'creature') this.fireTriggers('battlecry', evt.player, evt.cardId);
+        break;
+      }
+      case 'damageDealt': {
+        // onDamage fires ONCE per damage event for the damaged creature.
+        // Skip amount <= 0 (shield absorbs emit a 0-amount damageDealt —
+        // shields must not fire damage triggers) and non-creature targets.
+        if (evt.amount > 0 && evt.target.type === 'creature') {
+          const c = findCreature(this, evt.target.id);
+          if (c) this.fireTriggers('onDamage', c.owner, c.cardId, c.id);
+        }
+        break;
+      }
+      case 'creatureDied': {
+        // deathrattle resolves FIRST (effects apply via the card def), then the
+        // creature is removed from the board. Removal lives here, not in
+        // dealDamage — retaliation is gated on the defender's health, so a dead
+        // creature never retaliates (see submit/attack).
+        this.fireTriggers('deathrattle', evt.player, evt.cardId, evt.creatureId);
+        const dead = findCreature(this, evt.creatureId);
+        if (dead) removeCreature(this, dead);
+        break;
+      }
       case 'heroHealed':
       case 'buffApplied':
       case 'cardDrawnExtra':
@@ -206,6 +239,36 @@ export class Game implements Resolver {
       default:
         throw new Error('Unhandled event: ' + evt.type);
     }
+  }
+
+  /** Card def lookup that tolerates unknown ids (synthetic cards without defs). */
+  private safeCard(cardId: string): Card | undefined {
+    try { return this.registry.get(cardId); } catch { return undefined; }
+  }
+
+  /** Trigger groups of `cardId` for `when` (empty for unknown cards / no group). */
+  private triggerGroups(cardId: string, when: Trigger): TriggerSpec[] {
+    return (this.safeCard(cardId)?.triggers ?? []).filter(t => t.when === when);
+  }
+
+  /**
+   * Apply every effect of every `when` trigger group of `cardId`, in group
+   * then effect order, with the trigger context (player = owner/player, and
+   * creatureId = the dying/damaged/played creature's id where available).
+   */
+  private fireTriggers(when: Trigger, player: PlayerIndex, cardId: string, creatureId?: string): void {
+    for (const group of this.triggerGroups(cardId, when)) {
+      for (const spec of group.effects) {
+        applyEffect(this, { player, cardId, creatureId }, spec);
+      }
+    }
+  }
+
+  /** startOfTurn/endOfTurn fire for the player's artifacts AND board creatures. */
+  private fireTurnTriggers(player: PlayerIndex, when: 'startOfTurn' | 'endOfTurn'): void {
+    const p = this.state.players[player];
+    for (const a of p.artifacts) this.fireTriggers(when, player, a.cardId);
+    for (const c of p.board) this.fireTriggers(when, player, c.cardId, c.id);
   }
 
   /** Legal intents for a player; playCard/attack/heroPower arrive in Tasks 9-11. */
@@ -252,6 +315,8 @@ export class Game implements Resolver {
     g.rngCalls = 0;
     g.mulligansDone = new Set();
     g.queue = [];
+    g.applied = [];
+    g.draining = false;
     // Re-seed from the saved position; advancing `calls` draws through the
     // counting wrapper restores both the raw rng position and rngCalls.
     const raw = createRng(state.rngState.seed);

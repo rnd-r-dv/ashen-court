@@ -147,8 +147,11 @@ export function useAnimationQueue(
   const drainRef = useRef(drain);
   drainRef.current = drain;
 
+  // One tick: play the next queued event, then schedule the following tick.
+  // pump() is ONLY ever called from a timer callback (never from ingest), so
+  // it cannot double-fire: each call plays exactly one event and arms exactly
+  // one timer.
   const pump = useCallback(() => {
-    timerRef.current = null;
     const next = queueRef.current.shift();
     if (next === undefined) {
       setPlaying(false);
@@ -156,18 +159,35 @@ export function useAnimationQueue(
     }
     setPlaying(true);
     onEventRef.current(next);
-    timerRef.current = setTimeout(pump, Math.max(30, spacing * scale));
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      pump();
+    }, Math.max(30, spacing * scale));
   }, [spacing, scale]);
 
   // Ingest new batches as they arrive, then drain useMatch's queue so the
   // events state stays bounded (replaces Match's old drain-per-batch effect).
+  // drainEvents() wipes the stream to [] after every ingest, so the old
+  // monotonic seenRef cursor silently dropped any later batch smaller than
+  // the events consumed so far (a 2-event batch after a 9-event one never
+  // animated). With the stream re-seeded fresh on every batch, ingest the
+  // whole batch and reset the cursor. Only pump when no tick is pending, so
+  // a batch arriving mid-playback waits its turn instead of firing its first
+  // event immediately (and never arms a second timer).
   useEffect(() => {
-    if (events.length > seenRef.current) {
+    if (events.length === 0) return;
+    if (drainRef.current) {
+      // Stream is drained after every ingest — always a fresh batch.
+      queueRef.current.push(...events);
+      seenRef.current = 0;
+      drainRef.current();
+    } else if (events.length > seenRef.current) {
+      // No drain (hook used standalone): events accumulate; ingest only the
+      // unseen suffix.
       queueRef.current.push(...events.slice(seenRef.current));
       seenRef.current = events.length;
-      drainRef.current?.();
-      pump();
     }
+    if (timerRef.current === null) pump();
   }, [events, pump]);
 
   // Clear the pending tick on unmount (no setState after teardown).

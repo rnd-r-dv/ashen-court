@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Card as CardSpec } from '@ashen/core';
 import { motion } from 'framer-motion';
 import CardView from './CardView.js';
@@ -34,6 +34,48 @@ export interface HandProps {
   onCardClick: (handIndex: number) => void;
   /** Animation duration scale (fast mode 0.5). */
   animScale?: number;
+}
+
+/**
+ * Stable per-hand-slot keys. The hand can hold duplicate card ids (decks
+ * carry 3x commons), so keying by id alone collides in React; and
+ * index-based keys (`${i}-${id}`) remount every later card when one is
+ * played from the middle, replaying the handEnter draw animation on cards
+ * that never moved. Instead each slot keeps the key it got at creation:
+ * ids pool their keys, so surviving cards keep theirs across a play (no
+ * remount) while a newly drawn card — even a second copy of an id already
+ * in hand — gets a fresh key (its draw animation replays). Computed on
+ * every render (not memoized): the engine mutates state.players[].hand in
+ * place, so the array reference is stable while the content changes.
+ */
+function useStableHandKeys(hand: string[]): string[] {
+  // id → keys currently held by that id's slots (first occurrence = first key).
+  const poolRef = useRef<Map<string, string[]>>(new Map());
+  // id → next fresh key number (monotonic per id; freed keys are dropped).
+  const nextRef = useRef<Map<string, number>>(new Map());
+  const counts = new Map<string, number>();
+  for (const id of hand) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const used = new Map<string, number>();
+  const keys: string[] = [];
+  for (const id of hand) {
+    const n = used.get(id) ?? 0;
+    used.set(id, n + 1);
+    const pool = poolRef.current;
+    const slotKeys = pool.get(id) ?? [];
+    while (slotKeys.length < (counts.get(id) ?? 0)) {
+      slotKeys.push(`${id}__${nextRef.current.get(id) ?? 0}`);
+      nextRef.current.set(id, (nextRef.current.get(id) ?? 0) + 1);
+    }
+    pool.set(id, slotKeys);
+    keys.push(slotKeys[n]!);
+  }
+  // Drop freed keys so the pool mirrors what is actually in hand (a played
+  // card's key is gone; the next draw of that id gets a fresh one).
+  for (const [id, slotKeys] of poolRef.current) {
+    const c = counts.get(id) ?? 0;
+    if (slotKeys.length > c) slotKeys.length = c;
+  }
+  return keys;
 }
 
 /** Track the viewport width so the fan can fit on-screen (resize-aware). */
@@ -73,6 +115,9 @@ export default function Hand({ hand, getCard, playable, interactive, targeting, 
   const spread = fanSpread(n, vw);
   const angleStep = vw <= 700 ? 3 : vw <= 900 ? 3.5 : 4;
   const mid = (n - 1) / 2;
+  // Stable slot keys: distinct cards keep their key across a play from the
+  // middle (no remount → no handEnter replay); fresh draws get new keys.
+  const slotKeys = useStableHandKeys(hand);
 
   return (
     <div className="hand" aria-label={`Hand: ${n} card${n === 1 ? '' : 's'}`}>
@@ -87,9 +132,10 @@ export default function Hand({ hand, getCard, playable, interactive, targeting, 
           // handEnter; the inner slot keeps the fan rotate transform so the
           // framer animation (on the wrapper) never fights it. The overlap
           // negative margin lives on the wrapper (the flex child) exactly as
-          // before Task 39.
+          // before Task 39. Keyed by the stable per-slot key (see
+          // useStableHandKeys) so playing a card never remounts the rest.
           <motion.div
-            key={`${i}-${id}`}
+            key={slotKeys[i]}
             className="hand-slot-anim"
             style={{ marginRight: i < n - 1 ? -spread : 0, zIndex: i + 1 }}
             variants={handEnter(animScale)}

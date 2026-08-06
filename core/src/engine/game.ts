@@ -9,7 +9,7 @@ import { applyEffect, findCreature, makeCreature, removeCreature, SINGLE_TARGET_
 import type { EffectCtx } from './effects.js';
 import { runQueue } from './events.js';
 import type { Resolver } from './events.js';
-import { isMostExpensiveCreatureInHand, playEffectiveCost, validatePlayCard } from './intents.js';
+import { isMostExpensiveCreatureInHand, legalIntents as computeLegalIntents, playEffectiveCost, validateEffectTargets, validatePlayCard } from './intents.js';
 import { canAttack, effectiveKeywords, tauntPresent } from './keywords.js';
 import { deserializeState, serializeState } from './serialize.js';
 
@@ -218,6 +218,24 @@ export class Game implements Resolver {
       }
       return runQueue(this);
     }
+    if (intent.kind === 'heroPower') {
+      if (this.state.phase !== 'main') throw new Error('Not in main phase');
+      const p = this.state.players[me];
+      if (p.hero.usedPower) throw new Error('Hero power already used this turn');
+      if (p.mana < p.hero.power.cost) throw new Error('Not enough mana');
+      const err = validateEffectTargets(this, me, p.hero.power.effects, intent.target);
+      if (err) throw new Error(err);
+      p.mana -= p.hero.power.cost;   // inline payment (Task 9 playCard pattern)
+      for (const spec of p.hero.power.effects) {
+        // single-target kinds take the chosen ref; hero/self and AoE/random
+        // kinds resolve internally (own hero / all legal refs)
+        const ref = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) ? intent.target : undefined;
+        applyEffect(this, { player: me, cardId: 'hero-power' }, spec, ref);
+      }
+      p.hero.usedPower = true;
+      this.emit({ type: 'heroPowerUsed', player: me });
+      return runQueue(this);
+    }
     throw new Error('Intent not implemented yet');   // replaced in Tasks 10-11
   }
 
@@ -306,6 +324,7 @@ export class Game implements Resolver {
       case 'creatureSummoned':
       case 'frozen':
       case 'effectResolved':
+      case 'heroPowerUsed':   // log-only marker (state already applied inline)
         break;
       default:
         throw new Error('Unhandled event: ' + evt.type);
@@ -342,23 +361,11 @@ export class Game implements Resolver {
     for (const c of p.board) this.fireTriggers(when, player, c.cardId, c.id);
   }
 
-  /** Legal intents for a player; playCard/attack/heroPower arrive in Tasks 9-11. */
+  /** Legal intents for a player (Task 10): full main-phase enumeration in
+   *  intents.ts; mulligan returns [] (bots use a fixed policy, UI its own
+   *  keep-selection). */
   legalIntents(player: PlayerIndex): Intent[] {
-    if (this.state.phase === 'mulligan') {
-      if ((this.mulligansDone.size % 2) !== player) return [];
-      const n = this.state.players[player].hand.length;
-      const out: Intent[] = [];
-      for (let mask = 0; mask < 1 << n; mask++) {
-        const keep: number[] = [];
-        for (let i = 0; i < n; i++) if (mask & (1 << i)) keep.push(i);
-        out.push({ kind: 'mulligan', keep });
-      }
-      return out;
-    }
-    if (this.state.phase === 'main' && this.currentPlayer() === player) {
-      return [{ kind: 'endTurn' }];
-    }
-    return [];
+    return computeLegalIntents(this, player);
   }
 
   random(): number {

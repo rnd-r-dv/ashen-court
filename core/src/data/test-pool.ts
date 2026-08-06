@@ -70,6 +70,17 @@ export function createTestPool(): Card[] {
       keywords: [], effects: [{ kind: 'dealDamage', value: 1, target: 'enemyCreature' }],
       rarity: 'common', archetype: 'neutral', art: art(902), author: 'curated', version: 1,
     },
+    // 2-cost AoE spell: Task 11 simultaneous-death fixture AND the legalIntents
+    // AoE fixture (allEnemies → enemy hero + creatures; self → own hero, auto-
+    // resolved — no target choice, so legalIntents emits a single no-target intent).
+    {
+      id: 'test-spell-2', name: 'Test Spell 2 (AoE)', type: 'spell', cost: 2,
+      keywords: [], effects: [
+        { kind: 'dealDamage', value: 1, target: 'allEnemies' },
+        { kind: 'dealDamage', value: 1, target: 'self' },
+      ],
+      rarity: 'common', archetype: 'neutral', art: art(906), author: 'curated', version: 1,
+    },
     {
       id: 'bc-2dmg', name: 'Battlecry 2 Damage', type: 'creature', cost: 2, attack: 2, health: 2,
       keywords: [], effects: [], triggers: [{ when: 'battlecry', effects: [{ kind: 'dealDamage', value: 2, target: 'allEnemies' }] }],

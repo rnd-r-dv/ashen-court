@@ -1,6 +1,7 @@
 import { MANA_SURGE } from '../types.js';
-import type { Card, EffectTarget, Intent, PlayerIndex, TargetRef } from '../types.js';
-import { findCreature, isDragon, SINGLE_TARGET_TARGETS } from './effects.js';
+import type { Card, EffectSpec, EffectTarget, Intent, PlayerIndex, TargetRef } from '../types.js';
+import { findCreature, isDragon, resolveTargets, SINGLE_TARGET_TARGETS } from './effects.js';
+import { canAttack, effectiveKeywords, tauntPresent } from './keywords.js';
 import type { Game } from './game.js';
 
 /**
@@ -59,10 +60,24 @@ export function validatePlayCard(
   if (p.mana < playEffectiveCost(game, card, me)) return 'Not enough mana';
   // Single-target effects require a valid target ref; every single-target
   // effect must accept the supplied ref (multi-target / no-target effects
-  // resolve internally and need no target).
-  for (const spec of card.effects) {
+  // resolve internally and need no target). hero/self effects auto-resolve to
+  // the caster's own hero (Task 10: legalIntents emits them without a target).
+  return validateEffectTargets(game, me, card.effects, intent.target);
+}
+
+/**
+ * Validate an intent.target against every single-target effect in `effects`
+ * (shared by playCard validation and hero power resolution so both paths
+ * agree). hero/self auto-resolve to the caster's own hero — no target needed;
+ * when one IS supplied it must be the own hero. Other single-target kinds
+ * require a legal ref per validateTarget. AoE/random/no-target effects are
+ * skipped (they resolve internally).
+ */
+export function validateEffectTargets(game: Game, me: PlayerIndex, effects: readonly EffectSpec[], target: TargetRef | undefined): string | null {
+  for (const spec of effects) {
     if (spec.target === undefined || !SINGLE_TARGET_TARGETS.has(spec.target)) continue;
-    const err = validateTarget(game, me, spec.target, intent.target);
+    if ((spec.target === 'hero' || spec.target === 'self') && target === undefined) continue;
+    const err = validateTarget(game, me, spec.target, target);
     if (err) return err;
   }
   return null;
@@ -100,4 +115,87 @@ function validateTarget(game: Game, me: PlayerIndex, kind: EffectTarget, target:
 /** Registry lookup that tolerates unknown ids (returns undefined instead of throwing). */
 function safeCard(game: Game, id: string): Card | undefined {
   try { return game.registry.get(id); } catch { return undefined; }
+}
+
+/**
+ * Full legal-intent enumeration for `player` (Task 10), used by the Phase 3
+ * bot and Phase 5 UI highlighting. Main phase only, for the current player:
+ * every playable card with one intent per legal target ref, every attack
+ * (taunt forces taunt defenders), the hero power with its target variants,
+ * and endTurn. Mulligan → [] (bots use a fixed policy; the UI its own
+ * keep-selection).
+ *
+ * Discount consistency: affordability uses the same playEffectiveCost that
+ * validatePlayCard and the playCard payment use, so validation/enumeration/
+ * payment never disagree. (Discounts are turn-scoped: beginTurn zeroes
+ * discountCheapest/discountNextSpell at every turn start.)
+ */
+export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
+  if (game.state.phase !== 'main' || game.currentPlayer() !== player) return [];
+  const p = game.state.players[player];
+  const enemy = (1 - player) as PlayerIndex;
+  const out: Intent[] = [];
+
+  // 1. playable cards: effective cost, then one intent per legal target ref
+  for (let i = 0; i < p.hand.length; i++) {
+    const card = safeCard(game, p.hand[i]!);
+    if (!card) continue;
+    // Mana Surge is unplayable once surged (validatePlayCard's gate) — never
+    // enumerate an intent submit would reject.
+    if (card.id === MANA_SURGE && p.surged) continue;
+    if (p.mana < playEffectiveCost(game, card, player)) continue;
+    const variants = targetVariants(game, player, card.effects);
+    if (!variants) continue;   // single-target effect with no legal ref → unplayable
+    for (const t of variants) out.push({ kind: 'playCard', handIndex: i, target: t });
+  }
+
+  // 2. attacks: while the enemy has a taunt, ONLY taunt defenders are legal
+  //    targets (hero excluded); otherwise every enemy creature + the hero.
+  const enemyBoard = game.state.players[enemy].board;
+  const taunt = tauntPresent(enemyBoard);
+  for (const c of p.board) {
+    if (!canAttack(c, game)) continue;
+    if (taunt) {
+      for (const d of enemyBoard) {
+        if (effectiveKeywords(d).has('taunt')) {
+          out.push({ kind: 'attack', attackerId: c.id, target: { type: 'creature', id: d.id } });
+        }
+      }
+    } else {
+      for (const d of enemyBoard) out.push({ kind: 'attack', attackerId: c.id, target: { type: 'creature', id: d.id } });
+      out.push({ kind: 'attack', attackerId: c.id, target: { type: 'hero', player: enemy } });
+    }
+  }
+
+  // 3. hero power: affordable + unused, with target variants per its effects
+  if (!p.hero.usedPower && p.mana >= p.hero.power.cost) {
+    const variants = targetVariants(game, player, p.hero.power.effects);
+    if (variants) for (const t of variants) out.push({ kind: 'heroPower', target: t });
+  }
+
+  // 4. endTurn is always legal in main phase (even with unused mana)
+  out.push({ kind: 'endTurn' });
+  return out;
+}
+
+/**
+ * Target variants for one set of effects. Single-target "choice" kinds
+ * (any/anyCreature/enemyCreature/friendlyCreature/friendlyDragon) enumerate
+ * one intent per legal ref via resolveTargets; hero/self auto-resolve to the
+ * caster's own hero and are never enumerated as choices. Effects with no
+ * single-target choice (AoE/random/no-target, or only hero/self) yield a
+ * single no-target variant. Returns null when a choice kind has no legal refs
+ * (the card/power is unplayable).
+ */
+function targetVariants(game: Game, me: PlayerIndex, effects: readonly EffectSpec[]): (TargetRef | undefined)[] | null {
+  let choice: EffectTarget | undefined;
+  for (const spec of effects) {
+    if (spec.target === undefined || !SINGLE_TARGET_TARGETS.has(spec.target)) continue;
+    if (spec.target === 'hero' || spec.target === 'self') continue;
+    choice = spec.target;
+    break;
+  }
+  if (!choice) return [undefined];
+  const refs = resolveTargets(game, me, choice);
+  return refs.length > 0 ? refs : null;
 }

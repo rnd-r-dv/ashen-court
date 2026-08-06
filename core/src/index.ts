@@ -18,4 +18,5 @@ export {
 
 export { CardRegistry } from './cards.js';
 export { Game, type MatchSetup } from './engine/game.js';
+export { summarize } from './engine/stats.js';
 export { serializeState, deserializeState } from './engine/serialize.js';

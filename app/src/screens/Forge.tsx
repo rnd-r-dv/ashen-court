@@ -470,7 +470,7 @@ export default function Forge() {
         <aside className="forge-side">
           <section className="forge-section forge-preview-section">
             <h2 className="forge-side-title">Preview</h2>
-            <Card card={draftToCard(draft)} />
+            <Card card={draftToCard(draft)} size="preview" />
           </section>
 
           <section className="forge-section forge-issues-section">

@@ -1,0 +1,301 @@
+/* ============================================================
+   Card chrome — frame, rarity layers, ribbon, gems and pips.
+   Task 37. Scoped strictly to `.card*` classes; does not depend
+   on the theme tokens (app/src/theme.css, Task 36) so it renders
+   standalone. The `.card-preview*` stub styles in forge.css are
+   retired with the old Card.tsx.
+   ============================================================ */
+
+.card {
+  --rarity-color: #8a8a8a;
+  position: relative;
+  width: fit-content;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: Georgia, 'Times New Roman', serif;
+  transition: transform 0.16s ease;
+}
+
+/* ---- sizes --------------------------------------------------
+   CardArt's contract is a fixed 250x350 render (Task 26; Task 38
+   keeps recipe/imageUrl props), so sizes scale the whole card with
+   `zoom` — it also shrinks the layout box, unlike transform.      */
+.card--preview { zoom: 1; }
+.card--hand    { zoom: 0.82; }
+.card--board   { zoom: 0.42; }
+
+/* ---- base frame -------------------------------------------- */
+.card__frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 14px;
+}
+
+/* common: flat charcoal + thin border */
+.card--rarity-common .card__frame {
+  border: 1px solid #3c3c46;
+  background: linear-gradient(180deg, #23232c, #1a1a21);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* rare: gilded gradient edge (border-box layer shows through the
+   transparent border; padding-box layer covers the card face)     */
+.card--rarity-rare .card__frame {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(180deg, #26231c, #1c1a16) padding-box,
+    linear-gradient(160deg, #8a6d2a 0%, #d4af37 40%, #f6e3a0 55%, #b8912e 100%) border-box;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* epic: gem accent (::after facet, top-right) + soft glow */
+.card--rarity-epic .card__frame {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(180deg, #241d2e, #191226) padding-box,
+    linear-gradient(160deg, #6d28d9 0%, #a855f7 45%, #d8b4fe 55%, #7c3aed 100%) border-box;
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.35), 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+.card--rarity-epic .card__frame::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  border-radius: 2px;
+  background: linear-gradient(135deg, #e9d5ff 0%, #a855f7 55%, #6d28d9 100%);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.9);
+  pointer-events: none;
+}
+.card--rarity-epic .card__nameplate {
+  margin-right: 16px; /* keep long names clear of the corner gem */
+}
+
+/* legendary: animated shimmer — border gradient and face sheen
+   sweep via background-position keyframes (alternate, seamless)   */
+.card--rarity-legendary .card__frame {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(180deg, #2a2118, #1c150e) padding-box,
+    linear-gradient(115deg, #ff9d2e 0%, #ffd08a 20%, #7a4400 40%, #ff9d2e 55%, #ffcf8a 70%, #6b3c00 90%, #ff9d2e 100%) border-box;
+  background-size: auto, 200% 100%;
+  background-position: 0 0, 100% 0;
+  box-shadow: 0 0 22px rgba(255, 157, 46, 0.28), 0 4px 14px rgba(0, 0, 0, 0.5);
+  animation: card-shimmer-edge 3s linear infinite alternate;
+}
+.card--rarity-legendary .card__frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 205, 130, 0.10) 46%,
+    rgba(255, 235, 200, 0.20) 50%,
+    rgba(255, 205, 130, 0.10) 54%,
+    transparent 62%
+  );
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  animation: card-shimmer-face 3s linear infinite alternate;
+}
+@keyframes card-shimmer-edge {
+  0% { background-position: 0 0, 100% 0; }
+  100% { background-position: 0 0, 0% 0; }
+}
+@keyframes card-shimmer-face {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* ---- face-down: grayscaled silhouette + darkened frame -------
+   Locked ruling (coverage audit): unrevealed enemy cards render as
+   grayscale silhouettes with a darkened frame; name/cost/ribbon are
+   suppressed in CardFrame.tsx. Placed after the rarity rules so it
+   wins at equal specificity.                                      */
+.card--face-down .card__frame {
+  border: 1px solid #2a2a33;
+  background: #101014;
+  box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.75), 0 4px 14px rgba(0, 0, 0, 0.5);
+  animation: none;
+}
+.card--face-down .card__frame::after {
+  display: none; /* no rarity gems/sheen on the back */
+}
+
+/* ---- top row: cost gem + name plate ------------------------- */
+.card__top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.card__cost {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid #0c0a12;
+  background: radial-gradient(circle at 35% 30%, #fdfdfd, var(--rarity-color) 62%, #201507);
+  color: #120d04;
+  font-size: 15px;
+  font-weight: 800;
+  filter: drop-shadow(0 0 4px var(--rarity-color));
+}
+.card__nameplate {
+  flex: 1;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2a2a33, #1c1c24);
+  border: 1px solid #3f3f4a;
+  color: #f0e6d0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card--rarity-rare .card__nameplate { color: #f2e2b3; }
+.card--rarity-epic .card__nameplate { color: #e3d2ff; }
+.card--rarity-legendary .card__nameplate { color: #ffd9a0; }
+
+/* ---- art slot ------------------------------------------------ */
+.card__art {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  line-height: 0;
+}
+.card__art--face-down {
+  filter: grayscale(1) brightness(0.5) contrast(1.15);
+}
+.card__sigil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 72px;
+  color: rgba(210, 210, 220, 0.16);
+  pointer-events: none;
+}
+
+/* ---- type ribbon --------------------------------------------- */
+.card__ribbon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #23232c;
+  border: 1px solid #3a3a44;
+  color: #cfc7b5;
+  font-size: 12px;
+  font-variant: small-caps;
+  letter-spacing: 0.6px;
+}
+.card__ribbon-icon { color: var(--rarity-color); font-size: 13px; }
+.card__ribbon-label { font-weight: 700; }
+.card__ribbon-rarity {
+  margin-left: auto;
+  color: var(--rarity-color);
+  font-weight: 700;
+}
+
+/* ---- keyword chips -------------------------------------------- */
+.card__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 5px;
+}
+.card__keyword {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #2c2c36;
+  border: 1px solid #43434f;
+  color: #d8d2c2;
+  font-family: system-ui, sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+}
+
+/* ---- creature stats pips -------------------------------------- */
+.card__stats {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.card__stat {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid #0c0a12;
+  font-size: 15px;
+  font-weight: 800;
+}
+.card__stat--attack {
+  background: radial-gradient(circle at 35% 30%, #f5c97b, #c97f2b 60%, #6e3a12);
+  color: #1c0f02;
+}
+.card__stat--health {
+  background: radial-gradient(circle at 35% 30%, #f08d8d, #c0392b 60%, #6e1510);
+  color: #fff4f0;
+}
+
+/* ---- flavor ---------------------------------------------------- */
+.card__flavor {
+  margin: 5px 2px 0;
+  font-size: 11px;
+  font-style: italic;
+  color: #9a927f;
+  line-height: 1.35;
+  text-align: center;
+}
+
+/* ---- interaction states ---------------------------------------- */
+/* hand: hover lift */
+.card--hand:hover {
+  transform: translateY(-12px);
+}
+
+/* board: compact tap-to-select */
+.card--board:hover {
+  transform: translateY(-5px);
+}
+.card--board.card--selected {
+  transform: translateY(-6px);
+}
+.card--selected .card__frame {
+  outline: 3px solid var(--rarity-color);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.06), 0 8px 18px rgba(0, 0, 0, 0.6);
+}
+
+/* playable: golden pulse glow (hand cards legal to play) */
+.card--playable {
+  animation: card-playable-glow 1.8s ease-in-out infinite;
+}
+@keyframes card-playable-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 205, 80, 0.35)); }
+  50% { filter: drop-shadow(0 0 10px rgba(255, 205, 80, 0.75)); }
+}
+
+/* board minis: keywords/flavor are unreadable at 0.42 zoom */
+.card--board .card__keywords,
+.card--board .card__flavor {
+  display: none;
+}

@@ -1,5 +1,7 @@
 import type { Card as CardSpec } from '@ashen/core';
+import { motion } from 'framer-motion';
 import CardView from './CardView.js';
+import { handEnter } from './animations.js';
 import './hand.css';
 
 /**
@@ -22,6 +24,8 @@ export interface HandProps {
   /** A targeting mode is active — the hand stands down. */
   targeting: boolean;
   onCardClick: (handIndex: number) => void;
+  /** Animation duration scale (fast mode 0.5). */
+  animScale?: number;
 }
 
 /** Fan geometry: overlap shrinks as the hand grows so a full hand fits. */
@@ -30,7 +34,7 @@ function fanSpread(n: number): number {
   return Math.min(140, 540 / (n - 1));
 }
 
-export default function Hand({ hand, getCard, playable, interactive, targeting, onCardClick }: HandProps) {
+export default function Hand({ hand, getCard, playable, interactive, targeting, onCardClick, animScale = 1 }: HandProps) {
   const n = hand.length;
   const spread = fanSpread(n);
   const mid = (n - 1) / 2;
@@ -44,23 +48,34 @@ export default function Hand({ hand, getCard, playable, interactive, targeting, 
         const isPlayable = playable.has(i);
         const angle = (i - mid) * 4;
         return (
-          <div
+          // Task 39: new cards (draws) mount with a fade-and-lift via
+          // handEnter; the inner slot keeps the fan rotate transform so the
+          // framer animation (on the wrapper) never fights it. The overlap
+          // negative margin lives on the wrapper (the flex child) exactly as
+          // before Task 39.
+          <motion.div
             key={`${i}-${id}`}
-            className="hand-slot"
-            style={{
-              marginRight: i < n - 1 ? -spread : 0,
-              transform: `rotate(${angle}deg)`,
-              zIndex: i + 1,
-            }}
+            className="hand-slot-anim"
+            style={{ marginRight: i < n - 1 ? -spread : 0, zIndex: i + 1 }}
+            variants={handEnter(animScale)}
+            initial="handIn"
+            animate="enter"
           >
-            <CardView
-              card={card}
-              size="hand"
-              playable={isPlayable && interactive && !targeting}
-              muted={!interactive || targeting || !isPlayable}
-              onClick={() => onCardClick(i)}
-            />
-          </div>
+            <div
+              className="hand-slot"
+              style={{
+                transform: `rotate(${angle}deg)`,
+              }}
+            >
+              <CardView
+                card={card}
+                size="hand"
+                playable={isPlayable && interactive && !targeting}
+                muted={!interactive || targeting || !isPlayable}
+                onClick={() => onCardClick(i)}
+              />
+            </div>
+          </motion.div>
         );
       })}
     </div>

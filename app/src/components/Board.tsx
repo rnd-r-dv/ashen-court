@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, TargetRef } from '@ashen/core';
 import CardView, { FACE_DOWN_CARD } from './CardView.js';
 import HeroPortrait from './HeroPortrait.js';
 import ManaTray from './ManaTray.js';
+import { deathFade, playSlam } from './animations.js';
+import type { HeroFX } from './animations.js';
 import './board.css';
 
 /**
@@ -38,6 +41,14 @@ export interface BoardProps {
   onEndTurn: () => void;
   /** Cancel the active targeting mode (empty-space click). */
   onCancel: () => void;
+  /** Enemy board creatures revealed (first enemy play/summon, Task 39). */
+  enemyRevealed?: boolean;
+  /** Animation duration scale (fast mode 0.5). */
+  animScale?: number;
+  /** Per-hero flash/heal sequence counters (damage flash, heal glow). */
+  heroFx?: [HeroFX, HeroFX];
+  /** manaChanged sequence counter — retriggers the crystal pop. */
+  manaPulse?: number;
 }
 
 function refKey(ref: TargetRef): string {
@@ -72,6 +83,10 @@ export default function Board({
   onHeroPower,
   onEndTurn,
   onCancel,
+  enemyRevealed = true,
+  animScale = 1,
+  heroFx = undefined,
+  manaPulse = 0,
 }: BoardProps) {
   const me = viewer;
   const foe = (1 - viewer) as PlayerIndex;
@@ -104,29 +119,40 @@ export default function Board({
     const selectable = friendly && myTurn && !inTargeting && attackers.has(c.id);
     const selected = friendly && targeting?.kind === 'attack' && targeting.attackerId === c.id;
     return (
-      <CardView
+      // Task 39: creatures slam in on mount (playSlam) and dissolve into
+      // embers on death (deathFade, via the row's AnimatePresence exit).
+      <motion.div
         key={c.id}
-        card={def}
-        size="board"
-        stats={{ attack: c.attack, health: c.health }}
-        status={{ exhausted: c.exhausted, frozen: c.frozen, shields: c.shields }}
-        targetable={targetable}
-        selected={selected}
-        muted={inTargeting && !targetable}
-        onClick={
-          targetable
-            ? (e) => {
-                e.stopPropagation();
-                onTargetClick(ref);
-              }
-            : selectable
+        className="board-slot"
+        variants={{ ...playSlam(animScale), ...deathFade(animScale) }}
+        initial="slam"
+        animate="enter"
+        exit="exit"
+      >
+        <CardView
+          card={def}
+          size="board"
+          faceDown={!friendly && !enemyRevealed}
+          stats={{ attack: c.attack, health: c.health }}
+          status={{ exhausted: c.exhausted, frozen: c.frozen, shields: c.shields }}
+          targetable={targetable}
+          selected={selected}
+          muted={inTargeting && !targetable}
+          onClick={
+            targetable
               ? (e) => {
                   e.stopPropagation();
-                  onSelectAttacker(c.id);
+                  onTargetClick(ref);
                 }
-              : undefined
-        }
-      />
+              : selectable
+                ? (e) => {
+                    e.stopPropagation();
+                    onSelectAttacker(c.id);
+                  }
+                : undefined
+          }
+        />
+      </motion.div>
     );
   }
 
@@ -149,6 +175,8 @@ export default function Board({
             active={currentPlayer === foe}
             targetable={foeHeroTarget}
             dimmed={inTargeting && !foeHeroTarget}
+            fx={heroFx?.[foe]}
+            animScale={animScale}
             onClick={
               foeHeroTarget
                 ? (e) => {
@@ -166,7 +194,7 @@ export default function Board({
         </div>
         <div className="board-row board-row--top">
           {foeP.board.length === 0 && <p className="board-empty">—</p>}
-          {foeP.board.map((c) => creatureSlot(c, false))}
+          <AnimatePresence>{foeP.board.map((c) => creatureSlot(c, false))}</AnimatePresence>
         </div>
       </section>
 
@@ -174,7 +202,7 @@ export default function Board({
       <section className="board-zone board-zone--bottom" aria-label="Your side">
         <div className="board-row board-row--bottom">
           {meP.board.length === 0 && <p className="board-empty">—</p>}
-          {meP.board.map((c) => creatureSlot(c, true))}
+          <AnimatePresence>{meP.board.map((c) => creatureSlot(c, true))}</AnimatePresence>
         </div>
         <div className="board-side board-side--bottom">
           <HeroPortrait
@@ -184,6 +212,8 @@ export default function Board({
             active={currentPlayer === me}
             targetable={myHeroTarget}
             dimmed={inTargeting && !myHeroTarget}
+            fx={heroFx?.[me]}
+            animScale={animScale}
             onClick={
               myHeroTarget
                 ? (e) => {
@@ -195,7 +225,7 @@ export default function Board({
             onPowerClick={onHeroPower}
             powerEnabled={myTurn && heroPowerLegal && !inTargeting}
           />
-          <ManaTray mana={meP.mana} maxMana={meP.maxMana} />
+          <ManaTray mana={meP.mana} maxMana={meP.maxMana} pulse={manaPulse} animScale={animScale} />
           <button
             type="button"
             className="shell-btn board-endturn"

@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
+import { motion } from 'framer-motion';
 import type { HeroState, PlayerIndex } from '@ashen/core';
+import type { HeroFX } from './animations.js';
 import './heroportrait.css';
 
 /**
@@ -25,9 +28,48 @@ export interface HeroPortraitProps {
   /** Hero power interactions — viewer's own hero only. */
   onPowerClick?: () => void;
   powerEnabled?: boolean;
+  /** Damage flash / heal glow sequence counters (Task 39). */
+  fx?: HeroFX;
+  /** Animation duration scale (fast mode 0.5). */
+  animScale?: number;
 }
 
 const SIGIL = '\u2726'; // four-pointed star (matches the card back sigil)
+
+/**
+ * Tween a changing number toward its target (HP tick-down/up). Tick-based
+ * (setTimeout) so it works identically under fake timers in tests and at ~60fps
+ * in the browser. Completes by snapping to the target and remembering it as
+ * the next tween's start.
+ */
+function useTween(value: number, ms: number): number {
+  const [display, setDisplay] = useState(value);
+  const prevRef = useRef(value);
+  useEffect(() => {
+    const from = prevRef.current;
+    if (from === value) {
+      setDisplay(value);
+      return;
+    }
+    const ticks = Math.max(1, Math.round(ms / 16));
+    let i = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const step = () => {
+      i += 1;
+      const p = Math.min(1, i / ticks);
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      setDisplay(Math.round(from + (value - from) * eased));
+      if (i < ticks) timer = setTimeout(step, 16);
+      else prevRef.current = value;
+    };
+    timer = setTimeout(step, 16);
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+      prevRef.current = value;
+    };
+  }, [value, ms]);
+  return display;
+}
 
 export default function HeroPortrait({
   hero,
@@ -39,6 +81,8 @@ export default function HeroPortrait({
   onClick,
   onPowerClick,
   powerEnabled = false,
+  fx = undefined,
+  animScale = 1,
 }: HeroPortraitProps) {
   const pct = Math.max(0, Math.min(100, (hero.hp / Math.max(hero.maxHp, 1)) * 100));
   const hpTone = pct > 50 ? 'ok' : pct > 25 ? 'hurt' : 'critical';
@@ -52,17 +96,34 @@ export default function HeroPortrait({
     .filter(Boolean)
     .join(' ');
 
+  // Task 39: flash/heal overlay — keyed by the sequence counters so each
+  // heroDamaged / heroHealed replays (remount) its tint fade; the color comes
+  // from the most recent effect kind. The tweened HP number lives on this
+  // component, not the overlay, so remounts never reset it.
+  const fxKey = `${fx?.flash ?? 0}:${fx?.heal ?? 0}`;
+  const fxActive = (fx?.flash ?? 0) > 0 || (fx?.heal ?? 0) > 0;
+  const hpDisplay = useTween(hero.hp, 340 * animScale);
+
   return (
     <div className={classes} onClick={(e) => onClick?.(e)}>
       <span className="heroportrait-name">{hero.name}</span>
       <div className="heroportrait-circle" aria-hidden="true">
         <span className="heroportrait-sigil">{SIGIL}</span>
         <span className="heroportrait-player">P{player + 1}</span>
+        {fxActive && (
+          <motion.span
+            key={fxKey}
+            className={`heroportrait-fx heroportrait-fx--${fx?.kind === 'heal' ? 'heal' : 'damage'}`}
+            initial={{ opacity: 0.9, scale: 0.9 }}
+            animate={{ opacity: 0, scale: 1.18 }}
+            transition={{ duration: 0.55 * animScale, ease: 'easeOut' }}
+          />
+        )}
       </div>
       <div className={`heroportrait-hpbar heroportrait-hpbar--${hpTone}`}>
         <div className="heroportrait-hpfill" style={{ width: `${pct}%` }} />
         <span className="heroportrait-hpnum">
-          {hero.hp}/{hero.maxHp}
+          {hpDisplay}/{hero.maxHp}
         </span>
       </div>
       {hero.shields > 0 && <span className="heroportrait-shield">Shield {hero.shields}</span>}

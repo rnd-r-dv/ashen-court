@@ -1,3 +1,5 @@
+import { motion } from 'framer-motion';
+import { manaPop } from './animations.js';
 import './manatray.css';
 
 /**
@@ -9,19 +11,31 @@ import './manatray.css';
 export interface ManaTrayProps {
   mana: number;
   maxMana: number;
+  /** manaChanged sequence counter — remounts the pips and replays the pop. */
+  pulse?: number;
+  /** Animation duration scale (fast mode 0.5). */
+  animScale?: number;
 }
 
 const MAX_PIPS = 15;
 
-export default function ManaTray({ mana, maxMana }: ManaTrayProps) {
+export default function ManaTray({ mana, maxMana, pulse = 0, animScale = 1 }: ManaTrayProps) {
   const pips = Array.from({ length: Math.min(Math.max(maxMana, 0), MAX_PIPS) }, (_, i) => i < mana);
   return (
     <div className="manatray" title={`${mana}/${maxMana} mana`} aria-label={`Mana ${mana} of ${maxMana}`}>
-      <div className="manatray-pips" aria-hidden="true">
+      {/* Task 39: keyed by the pulse counter so each manaChanged replays the pop */}
+      <motion.div
+        key={pulse}
+        className="manatray-pips"
+        variants={manaPop(animScale)}
+        initial={pulse ? 'pop' : false}
+        animate="enter"
+        aria-hidden="true"
+      >
         {pips.map((full, i) => (
           <span key={i} className={`manatray-pip${full ? ' manatray-pip--full' : ''}`} />
         ))}
-      </div>
+      </motion.div>
       <span className="manatray-readout">
         {mana}/{maxMana}
       </span>

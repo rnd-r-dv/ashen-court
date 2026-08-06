@@ -1,14 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { Card as CardSpec, Intent, PlayerIndex, TargetRef } from '@ashen/core';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import { motion } from 'framer-motion';
+import type { Card as CardSpec, GameEvent, Intent, PlayerIndex, TargetRef } from '@ashen/core';
 import { useMatch } from '../game/useMatch.js';
 import { useNav } from '../App.js';
 import type { MatchScreenSetup } from '../types.js';
+import { loadSettings } from '../storage.js';
 import Board from '../components/Board.js';
 import type { BoardTargeting } from '../components/Board.js';
 import CardView, { FACE_DOWN_CARD } from '../components/CardView.js';
+import DamagePopup from '../components/DamagePopup.js';
+import type { DamageEntry } from '../components/DamagePopup.js';
 import Hand from '../components/Hand.js';
 import PassDevice from '../components/PassDevice.js';
+import { useAnimationQueue } from '../components/animations.js';
+import { HERO_FX_ZERO } from '../components/animations.js';
+import type { HeroFX } from '../components/animations.js';
 import { playerVisibility } from '../game/playerVisibility.js';
+import './animations.css';
 import './match.css';
 
 /**
@@ -26,8 +35,11 @@ import './match.css';
  *   - click a target → submit the intent with that ref; click elsewhere
  *     (empty board space, hand, root margin) → cancel.
  * Mulligan phase renders the keep/redraw UI (per-card toggles, confirm).
- * Event queue is drained per batch; Task 39 replaces this with per-tick
- * animation consumption.
+ * Event queue (Task 39): useAnimationQueue consumes useMatch's events one at a
+ * time and fires the event → animation map (draw slide, play slam + ripple,
+ * damage popup + board shake, death dissolve, hero flash/HP tick, heal glow,
+ * mana pop); the first enemy play/summon reveals the enemy row. Clicking
+ * anywhere during the queue (or the Skip button) drains the rest instantly.
  */
 
 export default function Match({ setup }: { setup: MatchScreenSetup }) {
@@ -48,6 +60,23 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // the single human. Hands render face-down until the incoming player
   // confirms — the visibility contract lives in playerVisibility.
   const [viewer, setViewer] = useState<PlayerIndex>(setup.myPlayer);
+
+  // ---- Task 39: animation state -------------------------------
+  // animScale halves every duration in fast mode (0.5) — framer variants get
+  // the scale directly, CSS animations read the --anim-scale property set on
+  // the .match root. Transient FX below are keyed/self-removing, so skip()
+  // simply drops the events that have not played yet.
+  const [animScale] = useState(() => (loadSettings().fastMode ? 0.5 : 1));
+  // Enemy row reveal (Task 39): bot mode hides the enemy's creatures behind
+  // the Task 37 grayscale until their first play/summon; hotseat is
+  // pass-and-play with a public board, so it starts revealed.
+  const [enemyRevealed, setEnemyRevealed] = useState<boolean>(setup.bot === undefined);
+  const [popups, setPopups] = useState<DamageEntry[]>([]);
+  const [ripples, setRipples] = useState<{ id: number; side: 'top' | 'bottom' }[]>([]);
+  const [shakeSeq, setShakeSeq] = useState(0);
+  const [heroFx, setHeroFx] = useState<[HeroFX, HeroFX]>([HERO_FX_ZERO, HERO_FX_ZERO]);
+  const [manaPulse, setManaPulse] = useState(0);
+  const fxIdRef = useRef(0);
 
   const me = viewer;
   const foe = (1 - viewer) as PlayerIndex;
@@ -81,11 +110,115 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     };
   }, [setup.driver]);
 
-  // Drain the pending event queue each batch so it stays bounded. Task 39
-  // replaces this with per-animation-tick event consumption.
+  // ---- Task 39: event → animation map --------------------------------
+  /** Board half an event belongs to ('top' = enemy zone, 'bottom' = mine). */
+  function sideOf(player: PlayerIndex): 'top' | 'bottom' {
+    return player === viewer ? 'bottom' : 'top';
+  }
+
+  /** Board side for a creature target (owner may already have left the board). */
+  function creatureSideOf(id: string): 'top' | 'bottom' {
+    const owner = state.players[0].board.some((c) => c.id === id)
+      ? 0
+      : state.players[1].board.some((c) => c.id === id)
+        ? 1
+        : null;
+    return owner === null ? sideOf(foe) : sideOf(owner);
+  }
+
+  function addPopup(amount: number, kind: 'damage' | 'heal', side: 'top' | 'bottom') {
+    setPopups((prev) => [...prev, { id: ++fxIdRef.current, amount, kind, side }]);
+  }
+
+  function removePopup(id: number) {
+    setPopups((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function removeRipple(id: number) {
+    setRipples((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  /**
+   * One queued event → the matching board animation. The state mirror already
+   * reflects every event (useMatch updates state immediately), so this only
+   * fires cosmetics; skip() drops the events that have not played yet.
+   */
+  function handleEvent(e: GameEvent) {
+    switch (e.type) {
+      case 'cardDrawn':
+      case 'cardDrawnExtra':
+        // New hand cards animate on mount via Hand's handEnter.
+        break;
+      case 'cardPlayed':
+      case 'creatureSummoned':
+      case 'tokenSummoned':
+        // Slam (creature slot mount) + ripple at the played zone; the first
+        // enemy play/summon reveals the enemy row (Task 37 grayscale lifted).
+        if (e.player === foe) setEnemyRevealed(true);
+        setRipples((prev) => [...prev, { id: ++fxIdRef.current, side: sideOf(e.player) }]);
+        break;
+      case 'damageDealt':
+        // Damage popup + board shake; heroDamage additionally flashes the
+        // portrait via its own event below.
+        setShakeSeq((n) => n + 1);
+        addPopup(
+          e.amount,
+          'damage',
+          e.target.type === 'hero' ? sideOf(e.target.player) : creatureSideOf(e.target.id),
+        );
+        break;
+      case 'heroDamaged':
+        // Portrait flash + HP bar/number tick-down (HeroPortrait tween).
+        setHeroFx((fx) =>
+          fx.map((f, i) =>
+            i === e.player ? { ...f, flash: f.flash + 1, kind: 'flash' as const } : f,
+          ) as [HeroFX, HeroFX],
+        );
+        break;
+      case 'heroHealed':
+        // Green glow on the portrait + green heal popup.
+        setHeroFx((fx) =>
+          fx.map((f, i) =>
+            i === e.player ? { ...f, heal: f.heal + 1, kind: 'heal' as const } : f,
+          ) as [HeroFX, HeroFX],
+        );
+        addPopup(e.amount, 'heal', sideOf(e.player));
+        break;
+      case 'manaChanged':
+        // Crystal tray pop (ManaTray replays on the new pulse counter).
+        setManaPulse((n) => n + 1);
+        break;
+      default:
+        break; // turnStart / turnEnd / buffApplied / … — Task 40 wires the rest
+    }
+  }
+
+  // The animation queue consumes useMatch's event batches one per tick
+  // (~180ms), drains useMatch's queue so it stays bounded, and exposes skip().
+  const { skip, playing } = useAnimationQueue(events, {
+    onEvent: handleEvent,
+    drain: drainEvents,
+    scale: animScale,
+  });
+
+  function skipAnimations() {
+    skip();
+    setPopups([]);
+    setRipples([]);
+  }
+
+  // Enemy row reveal (Task 39): the first enemy play/summon lifts the Task 37
+  // grayscale. Eager over the raw event stream (not the animation queue) so a
+  // skip() can never leave the enemy row hidden.
   useEffect(() => {
-    if (events.length > 0) drainEvents();
-  }, [events, drainEvents]);
+    if (enemyRevealed) return;
+    const revealed = events.some(
+      (e) =>
+        (e.type === 'cardPlayed' || e.type === 'creatureSummoned' || e.type === 'tokenSummoned') &&
+        e.player === foe,
+    );
+    if (revealed) setEnemyRevealed(true);
+  }, [events, enemyRevealed, foe]);
 
   // A submit is acknowledged once the next event batch arrives.
   useEffect(() => {
@@ -110,6 +243,10 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     }
     return set;
   }, [legal]);
+
+  // Board shake: a new keyframes array identity per damageDealt re-runs the
+  // framer timeline; memoizing keeps unrelated re-renders from re-triggering.
+  const shakeX = useMemo(() => (shakeSeq ? [0, -7, 7, -5, 5, -2, 0] : 0), [shakeSeq]);
 
   function submitOnce(intent: Intent) {
     setAwaiting(true);
@@ -213,9 +350,11 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   return (
     <div
       className="match"
+      style={{ '--anim-scale': animScale } as CSSProperties}
       onClick={(e) => {
-        // Root-margin click while aiming → cancel (interactive elements stop
-        // propagation, so this only fires on genuinely empty space).
+        // Click anywhere while the animation queue is playing skips the rest;
+        // empty-space click while aiming still cancels targeting.
+        if (playing) skipAnimations();
         if (inTargeting && e.target === e.currentTarget) setTargeting(null);
       }}
     >
@@ -226,21 +365,49 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         {inTargeting && (
           <span className="match-hint">Choose a target — click elsewhere to cancel</span>
         )}
+        {playing && (
+          <button type="button" className="shell-btn match-skip" onClick={skipAnimations}>
+            Skip
+          </button>
+        )}
       </div>
 
-      <Board
-        state={state}
-        viewer={me}
-        getCard={getCard}
-        legal={legal}
-        targeting={targeting}
-        myTurn={myTurn}
-        onSelectAttacker={onSelectAttacker}
-        onTargetClick={onTargetClick}
-        onHeroPower={onHeroPower}
-        onEndTurn={() => submitOnce({ kind: 'endTurn' })}
-        onCancel={() => setTargeting(null)}
-      />
+      <motion.div
+        className="match-boardwrap"
+        animate={{ x: shakeX }}
+        transition={{ duration: 0.45 * animScale, ease: 'easeOut' }}
+      >
+        <Board
+          state={state}
+          viewer={me}
+          getCard={getCard}
+          legal={legal}
+          targeting={targeting}
+          myTurn={myTurn}
+          onSelectAttacker={onSelectAttacker}
+          onTargetClick={onTargetClick}
+          onHeroPower={onHeroPower}
+          onEndTurn={() => submitOnce({ kind: 'endTurn' })}
+          onCancel={() => setTargeting(null)}
+          enemyRevealed={enemyRevealed}
+          animScale={animScale}
+          heroFx={heroFx}
+          manaPulse={manaPulse}
+        />
+      </motion.div>
+
+      <div className="match-fx" aria-hidden="true">
+        {popups.map((p) => (
+          <DamagePopup key={p.id} entry={p} scale={animScale} onDone={() => removePopup(p.id)} />
+        ))}
+        {ripples.map((r) => (
+          <div
+            key={r.id}
+            className={`slam-ripple slam-ripple--${r.side}`}
+            onAnimationEnd={() => removeRipple(r.id)}
+          />
+        ))}
+      </div>
 
       <div className="match-handwrap">
         {hideHands ? (

@@ -1,19 +1,23 @@
-// useLanMatch (Task 34) — the LAN-side counterpart to useMatch (Task 30).
-// Given the LanClient plus the room parameters (host knows them at createRoom;
-// the guest receives them in the 'joined' message and feeds them in via props),
-// it builds the shadow Game (same seed/deck/hero/registry as the server),
-// creates the LAN MatchDriver, and mirrors useMatch's shape so match screens
-// can consume LAN play through the same interface. The driver owns the shadow:
-// own intents are replayed locally (Task 33 mirroring), opponent broadcasts
-// advance it where the engine allows (see lanDriver.ts), and every broadcast
-// batch is forwarded to the UI event queue for animation.
+// useLanMatch (Task 34 + fix round) — the LAN-side counterpart to useMatch
+// (Task 30). Given the LanClient plus the room parameters (host knows them at
+// createRoom; the guest receives them in the 'joined' message and feeds them
+// in via props), it builds the shadow Game (same seed/deck/hero/registry as
+// the server), creates the LAN MatchDriver, and mirrors useMatch's shape so
+// match screens can consume LAN play through the same interface. The driver
+// owns the shadow: every accepted intent is broadcast back by the server as
+// {type:'intent'} and applied exactly once via driver.applyIntent (no local
+// pre-apply), the returned resolution tree is queued for animation, and the
+// state mirror is refreshed from the shadow. On a mid-game reconnect the
+// server re-sends joined + the intent log + gameStart; this hook rebuilds the
+// shadow from seed on 'joined' so the replay catches up to the live state.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CardRegistry, Game, HEROES, buildPool, summarize } from '@ashen/core';
 import type { Card, GameEvent, GameState, Intent, PlayerIndex } from '@ashen/core';
 import type { MatchDriver, MatchResult } from '../types.js';
 import type { LanClient } from './lanClient.js';
 import type { ServerMessage } from '@ashen/server/protocol';
-import { createLanDriver } from './lanDriver.js';
+import { createLanDriver, heroNameForDeck } from './lanDriver.js';
+import type { LanMatchDriver } from './lanDriver.js';
 
 /** Everything needed to build the shadow Game. heroId is the hero NAME (the
  *  v1 wire protocol carries no hero id; the server resolves by name). */
@@ -48,7 +52,7 @@ export function useLanMatch(opts: {
 
   const eventsRef = useRef<GameEvent[]>([]);
   const allEventsRef = useRef<GameEvent[]>([]); // full log: summarized for stats
-  const driverRef = useRef<MatchDriver | null>(null);
+  const driverRef = useRef<LanMatchDriver | null>(null);
   const roomRef = useRef<LanRoomParams | null>(null);
   const playerRef = useRef<PlayerIndex | null>(null);
   const gameOverFiredRef = useRef(false);
@@ -72,34 +76,69 @@ export function useLanMatch(opts: {
     }
   }, []);
 
-  // Build the shadow Game + driver once the room and player are known.
-  useEffect(() => {
-    const { client, room, myPlayer } = opts;
-    if (!client || !room || myPlayer === null || driverRef.current) return;
-    roomRef.current = room;
-    playerRef.current = myPlayer;
+  /** Build (or rebuild, on reconnect) the shadow Game + driver for `room`. */
+  const buildDriver = useCallback((room: LanRoomParams, myPlayer: PlayerIndex) => {
+    const client = opts.client;
+    if (!client) return;
     const hero = HEROES.find(h => h.name === room.heroId) ?? HEROES[0]!;
     const registry = new CardRegistry([...buildPool(), ...room.customCards]);
     const shadow = Game.create(
       { decks: [room.deckIds, room.deckIds], heroes: [hero, hero], seed: room.seed },
       registry,
     );
-    const d = createLanDriver(client, shadow, (msg) => setError(msg));
-    d.onEvents(handleBatch);
+    const d = createLanDriver(
+      client,
+      shadow,
+      (msg) => setError(msg),
+      (kind) => setError(`connection out of sync (${kind} intent) — rejoin by code`),
+    );
     driverRef.current = d;
     setDriver(d);
     setState({ ...shadow.state });
-  }, [opts.client, opts.room, opts.myPlayer, handleBatch]);
+  }, [opts.client]);
+
+  // Build the shadow Game + driver once the room and player are known.
+  useEffect(() => {
+    const { room, myPlayer } = opts;
+    if (!room || myPlayer === null || driverRef.current) return;
+    roomRef.current = room;
+    playerRef.current = myPlayer;
+    buildDriver(room, myPlayer);
+  }, [opts.room, opts.myPlayer, buildDriver]);
 
   // Protocol messages the match needs beyond the event stream. Pre-match
   // messages (roomCreated/joined/opponentJoined/gameStart) are handled by the
-  // screens' own connectLan handler; this handler only reacts to in-match
-  // control messages.
+  // screens' own connectLan handler; this handler reacts to in-match control
+  // messages plus the rejoin replay sequence.
   useEffect(() => {
     const client = opts.client;
     if (!client) return;
     const handler = (m: ServerMessage) => {
-      if (m.type === 'rematchStart') {
+      if (m.type === 'joined') {
+        // Mid-game reconnect: the server re-sent the setup and will replay the
+        // intent log (joined → intents → gameStart). Rebuild the shadow fresh
+        // from seed so the replay applies cleanly. (Initial join is handled by
+        // the build effect above — the driver does not exist yet here.)
+        if (driverRef.current) {
+          const room: LanRoomParams = {
+            deckIds: m.deckIds,
+            customCards: m.cards,
+            heroId: heroNameForDeck(m.deckIds), // host resolves identically
+            seed: m.seed,
+          };
+          roomRef.current = room;
+          playerRef.current = m.player;
+          buildDriver(room, m.player);
+        }
+      } else if (m.type === 'intent') {
+        const d = driverRef.current;
+        if (!d) return;
+        // Single application point: apply the echoed intent to the shadow, then
+        // queue its resolution tree for animation (identical to the server's
+        // events broadcast; the tree also animates reconnect-log replays).
+        const tree = d.applyIntent(m.intent);
+        if (tree.length > 0) handleBatch(tree);
+      } else if (m.type === 'rematchStart') {
         // Server rematch: same decks/hero, seed + 1 (server/src/rooms.ts).
         const room = roomRef.current;
         if (room && driverRef.current) {
@@ -122,7 +161,7 @@ export function useLanMatch(opts: {
       }
     };
     client.addMessageHandler(handler);
-  }, [opts.client]);
+  }, [opts.client, buildDriver, handleBatch]);
 
   const submit = useCallback((intent: Intent) => {
     driverRef.current?.submit(intent);

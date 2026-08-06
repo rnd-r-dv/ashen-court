@@ -1,38 +1,45 @@
-// LAN driver shadow-mirror tests (Task 34). The driver's job is to keep the
-// local shadow Game identical to the server's authoritative Game. These tests
-// drive a real core Game through a fake LanClient and assert the mirroring
-// contract: own intents are replayed locally (their broadcast echoes are
-// recognized by content and NOT re-applied), opponent turnEnd broadcasts
-// advance the turn (dispatch regenerates the beginTurn follow-ups), and the
-// opponent's completing mulligan transitions the shadow out of the mulligan
-// phase. Expected event streams come from a fresh mirror Game with the same
-// seed (determinism is the Task 33 LAN-mirroring contract).
-import { describe, expect, it } from 'vitest';
+// LAN mirroring tests (Task 34 fix round). The wire protocol now broadcasts
+// every ACCEPTED intent ({type:'intent'}) in addition to the events tree, and
+// the LAN driver applies echoed intents to its shadow via applyIntent — the
+// single application point (no local pre-apply, no event reconstruction).
+//
+// These tests prove FULL mirroring against the REAL server (startServer on an
+// ephemeral port, two LanClient instances): a scripted match driven through
+// one side only keeps both client shadows byte-identical to each other AND to
+// a deterministic oracle Game that replayed the same intent script, and a
+// mid-game reconnect replays the server's intent log so a fresh shadow catches
+// up to the live state.
+import { describe, expect, it, vi } from 'vitest';
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@ashen/core';
-import type { GameEvent, Intent } from '@ashen/core';
+import type { Intent } from '@ashen/core';
 import type { ClientMessage, ServerMessage } from '@ashen/server/protocol';
-import { createLanDriver } from '../src/game/lanDriver.js';
+import type { AddressInfo } from 'ws';
+import { startServer } from '../../server/src/index.js';
+import type { LanServer } from '../../server/src/index.js';
 import type { LanClient } from '../src/game/lanClient.js';
+import { LanClient as RealLanClient } from '../src/game/lanClient.js';
+import { createLanDriver, heroNameForDeck } from '../src/game/lanDriver.js';
+import type { LanMatchDriver } from '../src/game/lanDriver.js';
 
+// Deterministic 60-card ember deck + Pyra (HEROES[0]). Seed 2 is verified:
+// after both keep-[] mulligans, player 0's hand is
+// [ember-hellhound, neutral-boar, ember-firestorm, ember-igniter] — a legal
+// 1-cost creature at index 1, and the script below exercises playCard,
+// heroPower, attack and endTurn (see task-34-report Fix round 1).
 const DECK = expandDeck(DECK_DEFS.ember);
 const HERO = HEROES[0]!;
 const SEED = 2;
-const REGISTRY = new CardRegistry([...buildPool()]);
 
-const MULLIGAN: Intent = { kind: 'mulligan', keep: [] };
-
-function makeGame(): Game {
-  return Game.create({ decks: [DECK, DECK], heroes: [HERO, HERO], seed: SEED }, REGISTRY);
+function makeShadow(): Game {
+  return Game.create(
+    { decks: [DECK, DECK], heroes: [HERO, HERO], seed: SEED },
+    new CardRegistry([...buildPool()]),
+  );
 }
 
-/** Deterministic mirror: identical setup → identical events for identical intents.
- *  Runs the whole script; returns the LAST intent's resolution tree. */
-function mirrorEvents(...script: Intent[]): GameEvent[] {
-  const mirror = makeGame();
-  let out: GameEvent[] = [];
-  for (const intent of script) out = mirror.submit(intent);
-  return out;
-}
+// ---------------------------------------------------------------------------
+// Unit tests: the driver policy in isolation (fake client, no server).
+// ---------------------------------------------------------------------------
 
 /** Minimal LanClient double: captures sends, lets tests push server messages. */
 class FakeLanClient {
@@ -49,105 +56,312 @@ class FakeLanClient {
   }
 }
 
-describe('createLanDriver shadow mirror', () => {
-  it('replays own intents locally, sends them, and skips their echo (no double apply)', () => {
+describe('createLanDriver intent policy', () => {
+  it('submit sends without applying; the echoed intent applies the shadow exactly once', () => {
     const client = new FakeLanClient();
-    const game = makeGame();
+    const game = makeShadow();
     const driver = createLanDriver(client as unknown as LanClient, game);
-    const logBefore = game.state.log.length;
+    const mulligan: Intent = { kind: 'mulligan', keep: [] };
 
-    driver.submit(MULLIGAN);
-    // Sent to the server AND applied to the shadow (deterministic mirror).
-    expect(client.sent).toEqual([{ type: 'intent', intent: MULLIGAN }]);
-    expect(game.state.log.length).toBe(logBefore + 3); // 3 cardDrawn redraws applied
+    driver.submit(mulligan);
+    // Sent to the server AND NOT applied locally (no pre-apply).
+    expect(client.sent).toEqual([{ type: 'intent', intent: mulligan }]);
+    expect(game.state.phase).toBe('mulligan');
+    expect(game.state.mulligansDone[0]).toBe(false);
+
+    // The hook applies the echoed intent (single application point) and gets
+    // the resolution tree back for animation. Deterministic oracle: identical.
+    const tree = driver.applyIntent(mulligan);
+    expect(tree.some(e => e.type === 'cardDrawn')).toBe(true);
+    const mirror = makeShadow();
+    mirror.submit(mulligan);
+    expect(game.serialize()).toBe(mirror.serialize());
     expect(game.state.mulligansDone[0]).toBe(true);
 
-    // The server's echo is the identical resolution tree (same seed → same
-    // events). The driver must recognize it as ours and not re-apply.
-    client.receive({ type: 'events', events: mirrorEvents(MULLIGAN) });
-    expect(game.state.log.length).toBe(logBefore + 3); // unchanged — no double apply
+    // Applying it a second time is NOT a double-application of the same
+    // intent: the engine's mulligansDone order routes it to player 1 (the
+    // server broadcasts each accepted intent exactly once, so this can only
+    // happen if the server replayed the log — which is the reconnect case).
+    const tree2 = driver.applyIntent(mulligan);
+    expect(tree2.some(e => e.type === 'turnStart')).toBe(true); // completes the phase
+    mirror.submit(mulligan);
+    expect(game.serialize()).toBe(mirror.serialize());
   });
 
-  it('applies the opponent completing mulligan and turnEnd broadcasts', () => {
+  it('flags resyncRequested and warns when an echoed intent cannot apply', () => {
     const client = new FakeLanClient();
-    const game = makeGame();
-    const driver = createLanDriver(client as unknown as LanClient, game);
-    const received: GameEvent[][] = [];
-    driver.onEvents((batch) => received.push(batch));
+    const game = makeShadow();
+    let resyncKind: string | null = null;
+    const driver = createLanDriver(
+      client as unknown as LanClient,
+      game,
+      undefined,
+      (kind) => { resyncKind = kind; },
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // My (p0) mulligan: replayed locally.
-    driver.submit(MULLIGAN);
-
-    // Opponent's (p1) mulligan completes the phase: [3 p1 redraws, turnStart,
-    // manaChanged, cardDrawn]. The redraws are not reconstructable (inline
-    // discards), but the transition to main + beginTurn(0) emissions are.
-    const oppMulligan = mirrorEvents(MULLIGAN, MULLIGAN);
-    expect(oppMulligan.some(e => e.type === 'turnStart')).toBe(true);
-    client.receive({ type: 'events', events: oppMulligan });
+    // Advance the shadow past mulligan so a mulligan echo is illegal.
+    game.submit({ kind: 'mulligan', keep: [] });
+    game.submit({ kind: 'mulligan', keep: [] });
     expect(game.state.phase).toBe('main');
-    expect(game.state.turn).toBe(0);
-    expect(game.state.players[0].mana).toBe(1);
-    expect(game.state.players[0].hand).toHaveLength(4); // 3 redraws + beginTurn draw
 
-    // My endTurn: local replay advances the shadow to p1's turn. The echo must
-    // be skipped (content match + turnEnd player no longer current).
-    driver.submit({ kind: 'endTurn' });
-    expect(game.state.turn).toBe(1);
-    const myEndTurn = mirrorEvents(MULLIGAN, MULLIGAN, { kind: 'endTurn' });
-    expect(myEndTurn[0]!.type).toBe('turnEnd');
-    const logBeforeEcho = game.state.log.length;
-    client.receive({ type: 'events', events: myEndTurn });
-    expect(game.state.log.length).toBe(logBeforeEcho); // own echo skipped
-    expect(game.state.turn).toBe(1); // NOT double-advanced
-
-    // Opponent's endTurn: applied — dispatch regenerates p0's beginTurn.
-    const oppEndTurn = mirrorEvents(MULLIGAN, MULLIGAN, { kind: 'endTurn' }, { kind: 'endTurn' });
-    expect(oppEndTurn[0]!.type).toBe('turnEnd');
-    expect((oppEndTurn[0] as Extract<GameEvent, { type: 'turnEnd' }>).player).toBe(1);
-    client.receive({ type: 'events', events: oppEndTurn });
-    expect(game.state.turn).toBe(2);
-    expect(game.state.players[0].mana).toBe(2); // p0's turn-2 refill regenerated
-
-    // The client's own side is exact: p0's hand matches a full mirror that ran
-    // the identical intent script (opponent hand content is the documented v1
-    // gap — the protocol broadcasts events, not the opponent's intents).
-    const fullMirror = makeGame();
-    fullMirror.submit(MULLIGAN);
-    fullMirror.submit(MULLIGAN);
-    fullMirror.submit({ kind: 'endTurn' });
-    fullMirror.submit({ kind: 'endTurn' });
-    expect(game.state.players[0].hand).toEqual(fullMirror.state.players[0].hand);
-
-    // Every broadcast (own echoes included) reached the UI listeners.
-    expect(received).toHaveLength(3);
+    const tree = driver.applyIntent({ kind: 'mulligan', keep: [] });
+    expect(tree).toEqual([]);
+    expect(driver.resyncRequested).toBe(true);
+    expect(resyncKind).toBe('mulligan');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
-  it('applies a gameOver broadcast to the shadow and forwards the batch', () => {
+  it('surfaces server error replies via onError (states stay aligned — no pre-apply)', () => {
     const client = new FakeLanClient();
-    const game = makeGame();
-    const driver = createLanDriver(client as unknown as LanClient, game);
-    const received: GameEvent[][] = [];
-    driver.onEvents((batch) => received.push(batch));
-
-    // Bring the shadow into main at p1's turn (mulligans + my endTurn).
-    driver.submit(MULLIGAN);
-    client.receive({ type: 'events', events: mirrorEvents(MULLIGAN, MULLIGAN) });
-    driver.submit({ kind: 'endTurn' });
-    client.receive({ type: 'events', events: mirrorEvents(MULLIGAN, MULLIGAN, { kind: 'endTurn' }) });
-    expect(game.state.turn).toBe(1);
-
-    // A mirror forced to MAX_TURNS produces a turn-limit draw resolution tree;
-    // the broadcast contains a gameOver event, which the driver applies.
-    const mirror = makeGame();
-    mirror.submit(MULLIGAN);
-    mirror.submit(MULLIGAN);
-    mirror.submit({ kind: 'endTurn' });
-    mirror.state.turn = 200; // MAX_TURNS → checkWin emits the draw on the next submit
-    const events = mirror.submit({ kind: 'endTurn' });
-    expect(events.some(e => e.type === 'gameOver')).toBe(true);
-
-    client.receive({ type: 'events', events });
-    expect(game.state.phase).toBe('gameOver');
-    expect(received.at(-1)).toEqual(events); // the full broadcast reached the UI
+    const game = makeShadow();
+    let err: string | null = null;
+    createLanDriver(client as unknown as LanClient, game, (m) => { err = m; });
+    client.receive({ type: 'error', message: 'Bad hand index' });
+    expect(err).toBe('Bad hand index');
   });
+});
+
+// ---------------------------------------------------------------------------
+// Integration tests: real server, two LanClients, full shadow mirroring.
+// ---------------------------------------------------------------------------
+
+/** Queue-backed wrapper over LanClient: no message is ever missed. */
+class LanHarness {
+  readonly client: RealLanClient;
+  private readonly queue: ServerMessage[] = [];
+  private readonly pendings: {
+    predicate: (m: ServerMessage) => boolean;
+    resolve: (m: ServerMessage) => void;
+    reject: (e: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }[] = [];
+
+  constructor(url: string) {
+    this.client = new RealLanClient(url, (m) => {
+      const idx = this.pendings.findIndex(p => p.predicate(m));
+      if (idx >= 0) {
+        const [p] = this.pendings.splice(idx, 1);
+        clearTimeout(p!.timer);
+        p!.resolve(m);
+        return;
+      }
+      this.queue.push(m);
+    });
+  }
+
+  send(m: ClientMessage): void {
+    this.client.send(m);
+  }
+
+  waitFor(predicate: (m: ServerMessage) => boolean, timeoutMs = 8000): Promise<ServerMessage> {
+    const idx = this.queue.findIndex(predicate);
+    if (idx >= 0) return Promise.resolve(this.queue.splice(idx, 1)[0]!);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const i = this.pendings.findIndex(p => p.timer === timer);
+        if (i >= 0) this.pendings.splice(i, 1);
+        reject(new Error('Timed out waiting for a matching message'));
+      }, timeoutMs);
+      this.pendings.push({ predicate, resolve, reject, timer });
+    });
+  }
+}
+
+async function makeServer(): Promise<{ srv: LanServer; url: string }> {
+  const srv = startServer(0);
+  await new Promise<void>((resolve, reject) => {
+    srv.wss.once('listening', () => resolve());
+    srv.wss.once('error', reject);
+  });
+  const addr = srv.wss.address() as AddressInfo;
+  return { srv, url: `ws://127.0.0.1:${addr.port}` };
+}
+
+/** Content-exact intent predicate (deterministic wire contract). */
+function intentEq(intent: Intent): (m: ServerMessage) => boolean {
+  return m => m.type === 'intent' && JSON.stringify(m.intent) === JSON.stringify(intent);
+}
+
+/** Wire a shadow + driver to a harness: echoes apply exactly once, like the hook. */
+function wire(harness: LanHarness, game: Game): LanMatchDriver {
+  const driver = createLanDriver(harness.client, game);
+  harness.client.addMessageHandler(m => {
+    if (m.type === 'intent') driver.applyIntent(m.intent);
+  });
+  return driver;
+}
+
+/** createRoom + joinRoom + gameStart for both harnesses; returns the room code. */
+async function startRoom(host: LanHarness, guest: LanHarness): Promise<string> {
+  host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO.name, seed: SEED });
+  const created = await host.waitFor(m => m.type === 'roomCreated');
+  if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+  const joinedP = guest.waitFor(m => m.type === 'joined');
+  const oppP = host.waitFor(m => m.type === 'opponentJoined');
+  const hostStartP = host.waitFor(m => m.type === 'gameStart');
+  const guestStartP = guest.waitFor(m => m.type === 'gameStart');
+  guest.send({ type: 'joinRoom', code: created.code });
+  await joinedP;
+  await oppP;
+  await hostStartP;
+  await guestStartP;
+  return created.code;
+}
+
+/**
+ * Drive one intent through the HOST client only. Waits for the echoed intent
+ * on BOTH clients (each applies it exactly once), then advances the
+ * deterministic oracle and asserts all three states are byte-identical.
+ */
+async function drive(
+  host: LanHarness, guest: LanHarness, mirror: Game,
+  hostDriver: LanMatchDriver, hostGame: Game, guestGame: Game,
+  intent: Intent,
+): Promise<void> {
+  const hostEcho = host.waitFor(intentEq(intent));
+  const guestEcho = guest.waitFor(intentEq(intent));
+  hostDriver.submit(intent); // send-only
+  await hostEcho;
+  await guestEcho;
+  mirror.submit(intent); // oracle replay — same engine, same seed
+  expect(hostGame.serialize()).toBe(guestGame.serialize());
+  expect(hostGame.serialize()).toBe(mirror.serialize());
+}
+
+describe('LAN full mirroring (real server)', () => {
+  it('keeps both shadows identical to the server across a scripted match', async () => {
+    const { srv, url } = await makeServer();
+    const host = new LanHarness(url);
+    const guest = new LanHarness(url);
+    const hostGame = makeShadow();
+    const guestGame = makeShadow();
+    const mirror = makeShadow();
+    const hostDriver = wire(host, hostGame);
+    wire(guest, guestGame);
+    try {
+      await startRoom(host, guest);
+      // No intents yet: all three states are identical fresh games.
+      expect(hostGame.serialize()).toBe(guestGame.serialize());
+      expect(hostGame.serialize()).toBe(mirror.serialize());
+
+      // Mulligan phase: keep [] for p0 then p1 (the engine's mulligansDone
+      // order — both mulligans are driven through the host's socket).
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'mulligan', keep: [] });
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'mulligan', keep: [] });
+      expect(mirror.state.phase).toBe('main');
+
+      // p0 turn 0: play the 1-cost creature (seed-2 deterministic hand).
+      const p0play = mirror.legalIntents(0).find(i => i.kind === 'playCard');
+      expect(p0play).toBeDefined();
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, p0play!);
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'endTurn' });
+
+      // p1 turn 1: hero power (Pyra, 2-cost dealDamage; p1 has 2 mana).
+      const hp = mirror.legalIntents(1).find(i => i.kind === 'heroPower');
+      expect(hp).toBeDefined();
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, hp!);
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'endTurn' });
+
+      // p0 turn 2: the boar is ready → attack the p1 hero.
+      const atk = mirror.legalIntents(0).find(i => i.kind === 'attack');
+      expect(atk).toBeDefined();
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, atk!);
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'endTurn' });
+
+      // p1 turn 2: play another creature.
+      const p1play = mirror.legalIntents(1).find(i => i.kind === 'playCard');
+      expect(p1play).toBeDefined();
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, p1play!);
+
+      // The match actually advanced: three turns played, damage dealt.
+      // (p0's boar is still on the board; p1's turn-2 play was a spell, so
+      // p1's board stays empty — the mirror equality above is the point.)
+      expect(mirror.state.turn).toBe(3);
+      expect(mirror.state.players[0].hero.hp).toBe(29); // boar dealt 1 (hero power cost 2 hit p0)
+      expect(mirror.state.players[1].hero.hp).toBe(28); // hero power dealt 2
+      expect(hostGame.state.players[0].board.length).toBe(1); // the boar
+    } finally {
+      host.client.close();
+      guest.client.close();
+      await srv.close();
+    }
+  }, 20000);
+
+  it('replays the intent log to a reconnecting guest so a fresh shadow catches up', async () => {
+    const { srv, url } = await makeServer();
+    const host = new LanHarness(url);
+    const guest = new LanHarness(url);
+    const hostGame = makeShadow();
+    const guestGame = makeShadow();
+    const mirror = makeShadow();
+    const hostDriver = wire(host, hostGame);
+    wire(guest, guestGame);
+    let code: string;
+    let re: LanHarness | null = null;
+    try {
+      code = await startRoom(host, guest);
+      // Play a scripted prefix through the host client only; both shadows
+      // mirror the live state exactly.
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'mulligan', keep: [] });
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'mulligan', keep: [] });
+      const p0play = mirror.legalIntents(0).find(i => i.kind === 'playCard');
+      expect(p0play).toBeDefined();
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, p0play!);
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'endTurn' });
+      const hp = mirror.legalIntents(1).find(i => i.kind === 'heroPower');
+      expect(hp).toBeDefined();
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, hp!);
+      await drive(host, guest, mirror, hostDriver, hostGame, guestGame, { kind: 'endTurn' });
+
+      // Mid-game: drop the guest socket. The host learns about it once the
+      // server processes the disconnect (guarantees the guest slot is free).
+      guest.client.close();
+      await host.waitFor(m => m.type === 'playerLeft');
+
+      // Rejoin by code with a FRESH client. The server sends joined → the
+      // full intent log → gameStart in one burst, so the fresh shadow must be
+      // built and wired SYNCHRONOUSLY inside the 'joined' dispatch — exactly
+      // like useLanMatch's reconnect path (hero resolved via heroNameForDeck)
+      // — before the first replayed intent message is delivered.
+      re = new LanHarness(url);
+      const rebuilt: { game: Game | null; joined: Extract<ServerMessage, { type: 'joined' }> | null } = {
+        game: null,
+        joined: null,
+      };
+      const joinedP = re.waitFor(m => m.type === 'joined');
+      const startP = re.waitFor(m => m.type === 'gameStart');
+      re.client.addMessageHandler((m) => {
+        if (m.type !== 'joined') return;
+        rebuilt.joined = m;
+        const heroName = heroNameForDeck(m.deckIds);
+        const hero = HEROES.find(h => h.name === heroName) ?? HEROES[0]!;
+        rebuilt.game = Game.create(
+          { decks: [m.deckIds, m.deckIds], heroes: [hero, hero], seed: m.seed },
+          new CardRegistry([...buildPool(), ...m.cards]),
+        );
+        const rd = createLanDriver(re!.client, rebuilt.game);
+        re!.client.addMessageHandler((i) => {
+          if (i.type === 'intent') rd.applyIntent(i.intent);
+        });
+      });
+      re.send({ type: 'joinRoom', code });
+      await joinedP;
+      await startP; // arrives after the full intent-log replay
+      if (!rebuilt.joined || !rebuilt.game) throw new Error('joined never arrived');
+      expect(rebuilt.joined.seed).toBe(SEED);
+      expect(rebuilt.joined.deckIds).toEqual(DECK);
+      expect(rebuilt.joined.cards.length).toBeGreaterThan(0);
+
+      // The replayed log brought the fresh shadow to the live state.
+      expect(rebuilt.game.serialize()).toBe(hostGame.serialize());
+      expect(rebuilt.game.serialize()).toBe(mirror.serialize());
+    } finally {
+      host.client.close();
+      guest.client.close();
+      re?.client.close();
+      await srv.close();
+    }
+  }, 20000);
 });

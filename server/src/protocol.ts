@@ -15,6 +15,7 @@ export type ServerMessage =
   | { type: 'opponentJoined'; opponentName: string }
   | { type: 'gameStart' }
   | { type: 'events'; events: GameEvent[] }
+  | { type: 'intent'; intent: Intent }
   | { type: 'playerLeft'; reason: string }
   | { type: 'rematchStart' }
   | { type: 'error'; message: string };

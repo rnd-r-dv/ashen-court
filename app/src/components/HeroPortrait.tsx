@@ -30,6 +30,8 @@ export interface HeroPortraitProps {
   powerEnabled?: boolean;
   /** Damage flash / heal glow sequence counters (Task 39). */
   fx?: HeroFX;
+  /** Hero power used sequence counter — glyph flash on the portrait (Task 40). */
+  powerFx?: number;
   /** Animation duration scale (fast mode 0.5). */
   animScale?: number;
 }
@@ -82,6 +84,7 @@ export default function HeroPortrait({
   onPowerClick,
   powerEnabled = false,
   fx = undefined,
+  powerFx = 0,
   animScale = 1,
 }: HeroPortraitProps) {
   const pct = Math.max(0, Math.min(100, (hero.hp / Math.max(hero.maxHp, 1)) * 100));
@@ -105,7 +108,7 @@ export default function HeroPortrait({
   const hpDisplay = useTween(hero.hp, 340 * animScale);
 
   return (
-    <div className={classes} onClick={(e) => onClick?.(e)}>
+    <div className={classes} data-player={player} onClick={(e) => onClick?.(e)}>
       <span className="heroportrait-name">{hero.name}</span>
       <div className="heroportrait-circle" aria-hidden="true">
         <span className="heroportrait-sigil">{SIGIL}</span>
@@ -117,6 +120,15 @@ export default function HeroPortrait({
             initial={{ opacity: 0.9, scale: 0.9 }}
             animate={{ opacity: 0, scale: 1.18 }}
             transition={{ duration: 0.55 * animScale, ease: 'easeOut' }}
+          />
+        )}
+        {powerFx > 0 && (
+          <motion.span
+            key={`power-${powerFx}`}
+            className="heroportrait-fx heroportrait-fx--power"
+            initial={{ opacity: 0.95, scale: 0.7 }}
+            animate={{ opacity: 0, scale: 1.5 }}
+            transition={{ duration: 0.6 * animScale, ease: 'easeOut' }}
           />
         )}
       </div>

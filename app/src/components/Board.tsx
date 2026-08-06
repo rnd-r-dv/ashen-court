@@ -47,6 +47,8 @@ export interface BoardProps {
   animScale?: number;
   /** Per-hero flash/heal sequence counters (damage flash, heal glow). */
   heroFx?: [HeroFX, HeroFX];
+  /** Per-hero hero-power-used counters (glyph flash, Task 40). */
+  powerFx?: [number, number];
   /** manaChanged sequence counter — retriggers the crystal pop. */
   manaPulse?: number;
 }
@@ -86,6 +88,7 @@ export default function Board({
   enemyRevealed = true,
   animScale = 1,
   heroFx = undefined,
+  powerFx = undefined,
   manaPulse = 0,
 }: BoardProps) {
   const me = viewer;
@@ -124,6 +127,7 @@ export default function Board({
       <motion.div
         key={c.id}
         className="board-slot"
+        data-creature-id={c.id}
         variants={{ ...playSlam(animScale), ...deathFade(animScale) }}
         initial="slam"
         animate="enter"
@@ -176,6 +180,7 @@ export default function Board({
             targetable={foeHeroTarget}
             dimmed={inTargeting && !foeHeroTarget}
             fx={heroFx?.[foe]}
+            powerFx={powerFx?.[foe]}
             animScale={animScale}
             onClick={
               foeHeroTarget
@@ -213,6 +218,7 @@ export default function Board({
             targetable={myHeroTarget}
             dimmed={inTargeting && !myHeroTarget}
             fx={heroFx?.[me]}
+            powerFx={powerFx?.[me]}
             animScale={animScale}
             onClick={
               myHeroTarget

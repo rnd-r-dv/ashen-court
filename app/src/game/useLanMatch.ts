@@ -1,22 +1,30 @@
-// useLanMatch (Task 34 + fix round) — the LAN-side counterpart to useMatch
+// useLanMatch (Task 34 + fix rounds) — the LAN-side counterpart to useMatch
 // (Task 30). Given the LanClient plus the room parameters (host knows them at
 // createRoom; the guest receives them in the 'joined' message and feeds them
 // in via props), it builds the shadow Game (same seed/deck/hero/registry as
 // the server), creates the LAN MatchDriver, and mirrors useMatch's shape so
-// match screens can consume LAN play through the same interface. The driver
-// owns the shadow: every accepted intent is broadcast back by the server as
-// {type:'intent'} and applied exactly once via driver.applyIntent (no local
-// pre-apply), the returned resolution tree is queued for animation, and the
-// state mirror is refreshed from the shadow. On a mid-game reconnect the
-// server re-sends joined + the intent log + gameStart; this hook rebuilds the
-// shadow from seed on 'joined' so the replay catches up to the live state.
+// match screens can consume LAN play through the same interface.
+//
+// Fix round 2: the DRIVER owns echo application (createLanDriver registers its
+// own handler on the client at construction and applies every echoed intent to
+// the shadow, forwarding the resolution tree to onEvents subscribers). The
+// hook therefore no longer touches intents itself: like useMatch, it just
+// subscribes to driver.onEvents to queue batches and mirror the shadow state
+// while it is mounted (the LAN screens render nothing from the hook's state,
+// but the mirror keeps the hook consistent with the Match screen). Because the
+// driver's handler lives on the LanClient — not in this hook — the match keeps
+// advancing after the screens navigate away at gameStart (round 1's frozen
+// match screen). The hook has NO client protocol handler of its own anymore:
+// 'joined' rebuilds live in the driver, rematchStart is App's session
+// handler, and errors surface via the driver's onError. The hook's onEvents
+// listener checks a disposed flag so an unmounted hook never touches React
+// state.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CardRegistry, Game, HEROES, buildPool, summarize } from '@ashen/core';
 import type { Card, GameEvent, GameState, Intent, PlayerIndex } from '@ashen/core';
-import type { MatchDriver, MatchResult } from '../types.js';
+import type { MatchResult } from '../types.js';
 import type { LanClient } from './lanClient.js';
-import type { ServerMessage } from '@ashen/server/protocol';
-import { createLanDriver, heroNameForDeck } from './lanDriver.js';
+import { createLanDriver } from './lanDriver.js';
 import type { LanMatchDriver } from './lanDriver.js';
 
 /** Everything needed to build the shadow Game. heroId is the hero NAME (the
@@ -42,20 +50,19 @@ export function useLanMatch(opts: {
   legal: Intent[];
   myPlayer: PlayerIndex | null;
   drainEvents(): GameEvent[];
-  driver: MatchDriver | null;
+  driver: LanMatchDriver | null;
   error: string | null;
 } {
   const [state, setState] = useState<GameState | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
-  const [driver, setDriver] = useState<MatchDriver | null>(null);
+  const [driver, setDriver] = useState<LanMatchDriver | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const eventsRef = useRef<GameEvent[]>([]);
   const allEventsRef = useRef<GameEvent[]>([]); // full log: summarized for stats
   const driverRef = useRef<LanMatchDriver | null>(null);
-  const roomRef = useRef<LanRoomParams | null>(null);
-  const playerRef = useRef<PlayerIndex | null>(null);
   const gameOverFiredRef = useRef(false);
+  const disposedRef = useRef(false);
   const onGameOverRef = useRef(opts.onGameOver);
   onGameOverRef.current = opts.onGameOver;
 
@@ -76,7 +83,17 @@ export function useLanMatch(opts: {
     }
   }, []);
 
-  /** Build (or rebuild, on reconnect) the shadow Game + driver for `room`. */
+  // Stable listener for driver.onEvents (mirrors useMatch): the driver
+  // forwards each echoed intent's resolution tree here. The disposed guard
+  // makes an unmounted hook a no-op (the LAN screens navigate away at
+  // gameStart; the Match screen's own useMatch subscription takes over).
+  const listenerRef = useRef<(events: GameEvent[]) => void>(() => {});
+  listenerRef.current = (batch) => {
+    if (disposedRef.current) return;
+    handleBatch(batch);
+  };
+
+  /** Build the shadow Game + driver for `room`. */
   const buildDriver = useCallback((room: LanRoomParams, myPlayer: PlayerIndex) => {
     const client = opts.client;
     if (!client) return;
@@ -92,6 +109,7 @@ export function useLanMatch(opts: {
       (msg) => setError(msg),
       (kind) => setError(`connection out of sync (${kind} intent) — rejoin by code`),
     );
+    d.onEvents(listenerRef.current); // the driver now owns application; we mirror
     driverRef.current = d;
     setDriver(d);
     setState({ ...shadow.state });
@@ -99,69 +117,14 @@ export function useLanMatch(opts: {
 
   // Build the shadow Game + driver once the room and player are known.
   useEffect(() => {
+    disposedRef.current = false;
     const { room, myPlayer } = opts;
     if (!room || myPlayer === null || driverRef.current) return;
-    roomRef.current = room;
-    playerRef.current = myPlayer;
     buildDriver(room, myPlayer);
-  }, [opts.room, opts.myPlayer, buildDriver]);
-
-  // Protocol messages the match needs beyond the event stream. Pre-match
-  // messages (roomCreated/joined/opponentJoined/gameStart) are handled by the
-  // screens' own connectLan handler; this handler reacts to in-match control
-  // messages plus the rejoin replay sequence.
-  useEffect(() => {
-    const client = opts.client;
-    if (!client) return;
-    const handler = (m: ServerMessage) => {
-      if (m.type === 'joined') {
-        // Mid-game reconnect: the server re-sent the setup and will replay the
-        // intent log (joined → intents → gameStart). Rebuild the shadow fresh
-        // from seed so the replay applies cleanly. (Initial join is handled by
-        // the build effect above — the driver does not exist yet here.)
-        if (driverRef.current) {
-          const room: LanRoomParams = {
-            deckIds: m.deckIds,
-            customCards: m.cards,
-            heroId: heroNameForDeck(m.deckIds), // host resolves identically
-            seed: m.seed,
-          };
-          roomRef.current = room;
-          playerRef.current = m.player;
-          buildDriver(room, m.player);
-        }
-      } else if (m.type === 'intent') {
-        const d = driverRef.current;
-        if (!d) return;
-        // Single application point: apply the echoed intent to the shadow, then
-        // queue its resolution tree for animation (identical to the server's
-        // events broadcast; the tree also animates reconnect-log replays).
-        const tree = d.applyIntent(m.intent);
-        if (tree.length > 0) handleBatch(tree);
-      } else if (m.type === 'rematchStart') {
-        // Server rematch: same decks/hero, seed + 1 (server/src/rooms.ts).
-        const room = roomRef.current;
-        if (room && driverRef.current) {
-          const hero = HEROES.find(h => h.name === room.heroId) ?? HEROES[0]!;
-          driverRef.current.reset({
-            decks: [room.deckIds, room.deckIds],
-            heroes: [hero, hero],
-            seed: room.seed + 1,
-          });
-          gameOverFiredRef.current = false;
-          allEventsRef.current = [];
-          eventsRef.current = [];
-          setEvents([]);
-          setState({ ...driverRef.current.game().state });
-        }
-      } else if (m.type === 'error') {
-        setError(m.message);
-      } else if (m.type === 'playerLeft') {
-        setError(m.reason);
-      }
+    return () => {
+      disposedRef.current = true;
     };
-    client.addMessageHandler(handler);
-  }, [opts.client, buildDriver, handleBatch]);
+  }, [opts.room, opts.myPlayer, buildDriver]);
 
   const submit = useCallback((intent: Intent) => {
     driverRef.current?.submit(intent);

@@ -108,6 +108,33 @@ describe('LanClient', () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
+  it('re-sends joinRoom on the reconnect re-open so the server re-attaches the room (I1)', () => {
+    const client = new LanClient('ws://test:8080', () => {});
+    client.setRoomCode('ABCD');
+    latest().open();
+    client.send({ type: 'joinRoom', code: 'ABCD' }); // original session join
+    expect(latest().sent).toEqual(['{"type":"joinRoom","code":"ABCD"}']);
+
+    latest().drop(); // unexpected close → reconnect backoff
+    vi.advanceTimersByTime(1001);
+    const ws2 = latest();
+    ws2.open(); // reconnect re-open → re-sends joinRoom so the slot re-attaches
+    expect(ws2.sent).toEqual(['{"type":"joinRoom","code":"ABCD"}']);
+    client.close();
+
+    // Without a remembered room code (the host never sends joinRoom) the
+    // reconnect re-open sends nothing extra.
+    const noCode = new LanClient('ws://test:8080', () => {});
+    latest().open();
+    noCode.send({ type: 'createRoom', name: 'You', deckIds: [], customCards: [], heroId: 'H', seed: 1 });
+    latest().drop();
+    vi.advanceTimersByTime(1001);
+    const ws3 = latest();
+    ws3.open();
+    expect(ws3.sent).toEqual([]);
+    noCode.close();
+  });
+
   it('reconnects with exponential backoff after an unexpected close', () => {
     const statuses: string[] = [];
     const client = new LanClient('ws://test:8080', () => {}, (s) => statuses.push(s));

@@ -1,15 +1,23 @@
-// LAN host screen (Task 34). Pick a deck (lightweight inline single-pick grid
-// reusing DeckPick's deck sources: @ashen/core DECK_DEFS/HEROES + the
-// loadDecks() custom overlays) → create a room on the LAN server → show the
-// big room code with a copy button → waiting spinner until an opponent joins
-// → gameStart → navigate to the Match screen with the LAN driver.
-import { useEffect, useMemo, useState } from 'react';
+// LAN host screen (Task 34 + fix round 2). Pick a deck (lightweight inline
+// single-pick grid reusing DeckPick's deck sources: @ashen/core DECK_DEFS/HEROES
+// + the loadDecks() custom overlays) → create a room on the LAN server → show
+// the big room code with a copy button → waiting spinner until an opponent
+// joins → gameStart → register the LAN session with App (onSessionReady, so
+// Victory/rematch wiring has the client + driver after this screen unmounts)
+// → navigate to the Match screen with the LAN driver.
+//
+// Fix round 2: the screen's own message handler is removed on unmount (the
+// driver owns echo application and lives on the client), the client remembers
+// the room code for reconnect re-attach, and onStatus surfaces a closed
+// connection as an error.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CardRegistry, DECK_DEFS, HEROES, buildPool, expandDeck, validateDeck } from '@ashen/core';
 import type { ArchetypeId } from '@ashen/core';
 import type { ServerMessage } from '@ashen/server/protocol';
 import { useNav } from '../App.js';
+import type { LanSession } from '../App.js';
 import { connectLan } from '../game/lanClient.js';
-import type { LanClient } from '../game/lanClient.js';
+import type { LanClient, LanStatus } from '../game/lanClient.js';
 import { heroNameForDeck } from '../game/lanDriver.js';
 import { useLanMatch } from '../game/useLanMatch.js';
 import type { LanRoomParams } from '../game/useLanMatch.js';
@@ -82,7 +90,7 @@ function roomParamsFor(deck: DeckCard): LanRoomParams {
   };
 }
 
-export default function LanHost() {
+export default function LanHost({ onSessionReady }: { onSessionReady: (s: LanSession) => void }) {
   const { navigate } = useNav();
   const [picked, setPicked] = useState<DeckCard | null>(null);
   const [client, setClient] = useState<LanClient | null>(null);
@@ -97,15 +105,16 @@ export default function LanHost() {
   const custom = useMemo(buildCustom, []);
   const { driver } = useLanMatch({ client, room, myPlayer: 0 });
 
-  // gameStart → the driver is ready (host's shadow exists from mount) → Match.
-  useEffect(() => {
-    if (started && driver) navigate({ name: 'match', setup: { driver, myPlayer: 0 } });
-  }, [started, driver, navigate]);
+  // Stable references for handler cleanup (the screen unmounts at match entry;
+  // the session client must not keep this screen's pre-match handler alive).
+  const clientRef = useRef<LanClient | null>(null);
+  clientRef.current = client;
 
-  function handleMessage(m: ServerMessage) {
+  const handleMessage = useCallback((m: ServerMessage) => {
     switch (m.type) {
       case 'roomCreated':
         setCode(m.code);
+        clientRef.current?.setRoomCode(m.code); // reconnect re-attach (fix round 2)
         break;
       case 'opponentJoined':
         setOpponent(m.opponentName);
@@ -120,9 +129,27 @@ export default function LanHost() {
         setError(m.reason);
         break;
       default:
-        break; // joined / events / rematchStart are the driver's + hook's business
+        break; // joined / events / intent / rematchStart are the driver's + App's business
     }
-  }
+  }, []);
+
+  // I1: a closed connection (grace window expired / intentional close) is
+  // surfaced as an error the waiting room can show.
+  const onStatus = useCallback((s: LanStatus) => {
+    if (s === 'closed') setError('Connection closed — rejoin by code to continue.');
+  }, []);
+
+  // gameStart → the driver is ready (host's shadow exists from mount) → hand
+  // the session to App (Victory/rematch wiring) → Match.
+  useEffect(() => {
+    if (started && driver && client && room) {
+      onSessionReady({ mode: 'lanHost', client, room, myPlayer: 0, driver });
+      navigate({ name: 'match', setup: { driver, myPlayer: 0 } });
+    }
+  }, [started, driver, client, room, onSessionReady, navigate]);
+
+  // Unmount cleanup: drop this screen's pre-match handler from the client.
+  useEffect(() => () => clientRef.current?.removeMessageHandler(handleMessage), [handleMessage]);
 
   function startHosting(deck: DeckCard) {
     const params = roomParamsFor(deck);
@@ -134,7 +161,7 @@ export default function LanHost() {
     }
     setPicked(deck);
     setRoom(params);
-    const c = connectLan(handleMessage);
+    const c = connectLan(handleMessage, onStatus);
     setClient(c);
     c.send({ type: 'createRoom', name: 'You', deckIds: params.deckIds, customCards: params.customCards, heroId: params.heroId, seed: params.seed });
   }

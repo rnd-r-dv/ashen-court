@@ -1,8 +1,8 @@
 // Match driver + useMatch tests (Task 30). Covers: the local driver's
 // submit/onEvents contract, useMatch driving turns against a Recruit bot
 // (mulligan via mulliganPolicy, turns via chooseIntent, 300ms pacing),
-// driver.reset rematch semantics, a full bot-vs-bot game through two drivers,
-// and the LAN stub rejecting until Task 34.
+// driver.reset rematch semantics, and a full bot-vs-bot game through two
+// drivers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, createElement, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -18,7 +18,7 @@ import {
   mulliganPolicy,
 } from '@ashen/core';
 import type { GameEvent, Intent, MatchSetup } from '@ashen/core';
-import { createLanDriver, createLocalDriver } from '../src/game/drivers.js';
+import { createLocalDriver } from '../src/game/drivers.js';
 import { useMatch } from '../src/game/useMatch.js';
 import type { UseMatchOpts, UseMatchApi } from '../src/game/useMatch.js';
 
@@ -190,13 +190,5 @@ describe('useMatch', () => {
     } finally {
       hook.unmount();
     }
-  });
-});
-
-describe('LAN driver stub', () => {
-  it('rejects submits until Task 34 lands', async () => {
-    const driver = createLanDriver({}, makeGame(1));
-    await expect(driver.submit({ kind: 'endTurn' })).rejects.toThrow('Task 34');
-    expect(driver.game().state.phase).toBe('mulligan');
   });
 });

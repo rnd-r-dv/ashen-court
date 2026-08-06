@@ -1,14 +1,29 @@
-// App shell router (Task 28, extended Task 31). State-machine screen routing
-// (no react-router): App holds the current Screen in useState and renders a
-// switch. A small navigation context lets any screen navigate.
+// App shell router (Task 28, extended Task 31 + Task 34 fix round 2).
+// State-machine screen routing (no react-router): App holds the current Screen
+// in useState and renders a switch. A small navigation context lets any screen
+// navigate.
 //
 // Match flow (Task 31): onDeckPickComplete builds a real MatchScreenSetup
 // (core Game over the production pool + saved custom cards, local driver,
 // bot config for bot mode) and routes to the real Match screen. Victory
 // (Task 35) is wired with rematch (driver.reset over a fresh seed) and
 // change-deck. Hotseat v1 plays player 0 only — the pass flow is Task 32.
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+//
+// LAN flow (Task 34, fix round 2): the LAN screens report their session up
+// (onSessionReady) when the game starts. App keeps it for the Victory wiring:
+// the LAN client survives match + victory (the screens unmount at match
+// entry), so rematch sends {type:'rematch'} over the wire and a session-level
+// rematchStart listener resets the driver at seed+1 and routes back to the
+// Match screen. Change-Deck / Main-Menu close the session and return to the
+// LAN host/join screens.
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Screen } from './types.js';
+import { HEROES } from '@ashen/core';
+import type { PlayerIndex } from '@ashen/core';
+import type { ServerMessage } from '@ashen/server/protocol';
+import type { LanClient } from './game/lanClient.js';
+import type { LanMatchDriver } from './game/lanDriver.js';
+import type { LanRoomParams } from './game/useLanMatch.js';
 import { buildMatchEntry, rematchSetup } from './game/matchSetup.js';
 import type { MatchEntry, MatchEntryRequest } from './game/matchSetup.js';
 import Menu from './screens/Menu.js';
@@ -45,6 +60,20 @@ export function useNav(): Nav {
 /** Pending match selection, held in App state and converted to a setup at entry. */
 export type PendingMatch = MatchEntryRequest;
 
+// ---- LAN session (Task 34 fix round 2) ----------------
+
+/** The live LAN session, reported by LanHost/LanJoin at gameStart and kept in
+ *  App so Victory/rematch wiring survives the screens' unmount at match entry.
+ *  The driver owns the shadow (echo application lives on the client); App only
+ *  needs it to reset on rematchStart and to send {type:'rematch'}. */
+export interface LanSession {
+  mode: 'lanHost' | 'lanJoin';
+  client: LanClient;
+  room: LanRoomParams;
+  myPlayer: PlayerIndex;
+  driver: LanMatchDriver;
+}
+
 // ---- App ----
 
 export default function App() {
@@ -52,6 +81,9 @@ export default function App() {
   const [modeIntent, setModeIntent] = useState<'bot' | 'hotseat'>('bot');
   const [pending, setPending] = useState<PendingMatch | null>(null);
   const [matchEntry, setMatchEntry] = useState<MatchEntry | null>(null);
+  const [lanSession, setLanSession] = useState<LanSession | null>(null);
+  const lanSessionRef = useRef<LanSession | null>(null);
+  lanSessionRef.current = lanSession;
 
   const navigate = useCallback((next: Screen) => setScreen(next), []);
   const startModeSelect = useCallback((mode: 'bot' | 'hotseat') => {
@@ -60,6 +92,8 @@ export default function App() {
   }, []);
 
   const nav = useMemo<Nav>(() => ({ navigate, startModeSelect }), [navigate, startModeSelect]);
+
+  const onSessionReady = useCallback((s: LanSession) => setLanSession(s), []);
 
   function onDeckPickComplete(pick: DeckPickResult) {
     if (pick.mode !== 'bot' && pick.mode !== 'hotseat') return; // LAN picks route elsewhere (Task 34)
@@ -94,6 +128,43 @@ export default function App() {
     else navigate({ name: 'deckPick', mode: 'hotseat' });
   }
 
+  // ---- LAN session listeners (fix round 2) ----
+
+  // Rematch handshake: Victory's Rematch button sends {type:'rematch'} via the
+  // client; when BOTH players have requested it the server resets the game at
+  // seed+1 and broadcasts rematchStart. This listener (registered per session,
+  // alive across match + victory — the screens unmount at match entry) resets
+  // the driver to the new seed and routes back to the Match screen.
+  useEffect(() => {
+    const s = lanSession;
+    if (!s) return;
+    const handler = (m: ServerMessage) => {
+      if (m.type !== 'rematchStart') return;
+      const session = lanSessionRef.current;
+      if (!session) return;
+      const nextSeed = session.driver.game().state.seed + 1; // server does seed += 1 per rematch
+      const hero = HEROES.find(h => h.name === session.room.heroId) ?? HEROES[0]!;
+      session.driver.reset({
+        decks: [session.room.deckIds, session.room.deckIds],
+        heroes: [hero, hero],
+        seed: nextSeed,
+      });
+      navigate({ name: 'match', setup: { driver: session.driver, myPlayer: session.myPlayer } });
+    };
+    s.client.addMessageHandler(handler);
+    return () => s.client.removeMessageHandler(handler);
+  }, [lanSession, navigate]);
+
+  function lanLeave() {
+    if (!lanSession) return;
+    lanSession.client.close();
+    setLanSession(null);
+  }
+
+  function lanRematch() {
+    lanSession?.client.send({ type: 'rematch' });
+  }
+
   return (
     <NavContext.Provider value={nav}>
       {/* Ambient layer: fixed, z-index -1, pointer-events none — shows on every screen. */}
@@ -109,26 +180,16 @@ export default function App() {
       {screen.name === 'victory' && (
         <Victory
           result={screen.result}
-          myPlayer={matchEntry?.setup.bot ? matchEntry.setup.myPlayer : undefined}
-          onRematch={handleRematch}
-          onChangeDeck={handleChangeDeck}
-          onMenu={() => navigate({ name: 'menu' })}
+          myPlayer={lanSession ? lanSession.myPlayer : matchEntry?.setup.bot ? matchEntry.setup.myPlayer : undefined}
+          lan={lanSession !== null}
+          onRematch={lanSession ? lanRematch : handleRematch}
+          onChangeDeck={lanSession ? () => { lanLeave(); navigate({ name: lanSession.mode === 'lanHost' ? 'lanHost' : 'lanJoin' }); } : handleChangeDeck}
+          onMenu={() => { lanLeave(); navigate({ name: 'menu' }); }}
         />
       )}
-      {screen.name === 'lanHost' && <LanHost />}
-      {screen.name === 'lanJoin' && <LanJoin />}
+      {screen.name === 'lanHost' && <LanHost onSessionReady={onSessionReady} />}
+      {screen.name === 'lanJoin' && <LanJoin onSessionReady={onSessionReady} />}
     </NavContext.Provider>
-  );
-}
-
-// ---- placeholder screens (router wiring only, replaced by later tasks) ----
-
-function BackToMenuButton() {
-  const { navigate } = useNav();
-  return (
-    <button type="button" className="shell-btn" onClick={() => navigate({ name: 'menu' })}>
-      Back to menu
-    </button>
   );
 }
 

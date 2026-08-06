@@ -76,7 +76,7 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
   useEffect(() => {
     if (started && driver && myPlayer !== null && client && room) {
       onSessionReady({ mode: 'lanJoin', client, room, myPlayer, driver });
-      navigate({ name: 'match', setup: { driver, myPlayer } });
+      navigate({ name: 'match', setup: { driver, myPlayer, mode: 'lan' } });
     }
   }, [started, driver, myPlayer, client, room, onSessionReady, navigate]);
 

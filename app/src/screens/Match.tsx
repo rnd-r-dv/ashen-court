@@ -98,8 +98,9 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // simply drops the events that have not played yet.
   // Enemy row reveal (Task 39): bot mode hides the enemy's creatures behind
   // the Task 37 grayscale until their first play/summon; hotseat is
-  // pass-and-play with a public board, so it starts revealed.
-  const [enemyRevealed, setEnemyRevealed] = useState<boolean>(setup.bot === undefined);
+  // pass-and-play with a public board, so it starts revealed. LAN behaves like
+  // bot mode (remote opponent — fog of war until first play).
+  const [enemyRevealed, setEnemyRevealed] = useState<boolean>(setup.mode === 'hotseat');
   const [popups, setPopups] = useState<DamageEntry[]>([]);
   const [ripples, setRipples] = useState<{ id: number; side: 'top' | 'bottom' }[]>([]);
   const [shakeSeq, setShakeSeq] = useState(0);
@@ -136,14 +137,16 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const visible = playerVisibility(state, viewer);
   const myTurn = state.phase === 'main' && currentPlayer === viewer;
   const inTargeting = targeting !== null;
-  const isBotMode = setup.bot !== undefined;
-  // Hotseat hands hide only at pass points (between turns and between the two
+  const isBotMode = setup.mode === 'bot';
+  // Hands hide only at hotseat pass points (between turns and between the two
   // mulligan phases). Bot mode never hides anything: the viewer's own hand
-  // stays up during the bot's turn, exactly as in Task 31.
-  const hideHands = !isBotMode && !visible;
-  // Pass overlay: same gate as hideHands. Game over navigates away on the
-  // next batch, so never flash an overlay on it.
-  const passVisible = hideHands && state.phase !== 'gameOver';
+  // stays up during the bot's turn, exactly as in Task 31. LAN never hides:
+  // the viewer always sees their own hand (the enemy hand is never rendered
+  // in main phase anyway) and never sees the pass overlay.
+  const hideHands = setup.mode === 'hotseat' && !visible;
+  // Pass overlay: same gate as hideHands, and never in LAN. Game over
+  // navigates away on the next batch, so never flash an overlay on it.
+  const passVisible = hideHands && setup.mode !== 'lan' && state.phase !== 'gameOver';
 
   /** Resolve card ids against the engine registry (unknown ids → undefined). */
   const getCard = useMemo(() => {
@@ -598,26 +601,31 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
 
   // ---- mulligan phase ----
   if (state.phase === 'mulligan') {
-    // The mulligan actor sees their own hand and picks keeps; the other
-    // player sees the pass overlay (their hand stays hidden) until they take
-    // the device. Engine order is fixed: player 0 mulligans, then player 1.
+    // The engine's mulligan actor (fixed order: player 0, then player 1,
+    // tracked by mulligansDone — turn stays 0 through both). The actor sees
+    // their own hand and picks keeps; anyone else waits. Hotseat shows the
+    // pass overlay for the incoming player (viewer !== actor → hand hidden →
+    // PassDevice for the engine actor); LAN never passes — each client's
+    // viewer is their own seat, so only the actor's client renders the hand.
     const mineDone = state.mulligansDone[viewer];
+    const iAmActor = viewer === actor;
+    const showMulliganHand = iAmActor && !mineDone;
     return (
       <div className="match match--mulligan">
         <h1 className="shell-title">Mulligan</h1>
         <p className="shell-subtitle">
-          {mineDone
-            ? 'Waiting for the other player’s mulligan…'
-            : 'Keep or redraw each card — redrawn cards are replaced from your deck.'}
+          {showMulliganHand
+            ? 'Keep or redraw each card — redrawn cards are replaced from your deck.'
+            : 'Waiting for the other player’s mulligan…'}
         </p>
-        {!mineDone && (
+        {showMulliganHand && (
           <MulliganHand
             hand={meP.hand}
             getCard={getCard}
             onConfirm={(keep) => submitOnce({ kind: 'mulligan', keep })}
           />
         )}
-        {mineDone && <p className="match-waiting">The match begins shortly…</p>}
+        {!showMulliganHand && <p className="match-waiting">The match begins shortly…</p>}
         {passOverlay}
       </div>
     );

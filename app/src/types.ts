@@ -37,4 +37,6 @@ export interface MatchScreenSetup {
   myPlayer: PlayerIndex;
   /** Bot auto-play for the opponent (bot mode). Omitted for hotseat/LAN. */
   bot?: { level: BotLevel };
+  /** Match flavor: bot vs hotseat vs LAN — drives hand/pass visibility (fix round 3). */
+  mode: 'bot' | 'hotseat' | 'lan';
 }

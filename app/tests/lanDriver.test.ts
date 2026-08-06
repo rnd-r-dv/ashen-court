@@ -14,7 +14,7 @@
 // and replays the intent log so it catches up to the live state.
 import { describe, expect, it, vi } from 'vitest';
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@ashen/core';
-import type { Intent } from '@ashen/core';
+import type { Intent, PlayerIndex } from '@ashen/core';
 import type { ClientMessage, ServerMessage } from '@ashen/server/protocol';
 import type { AddressInfo } from 'ws';
 import { startServer } from '../../server/src/index.js';
@@ -259,9 +259,13 @@ async function startRoom(host: LanHarness, guest: LanHarness): Promise<string> {
 }
 
 /**
- * Drive one intent through the HOST client only. Waits for the echoed intent
- * on BOTH clients (each driver applies it via its own handler), then advances
- * the deterministic oracle and asserts all three states are byte-identical.
+ * Drive one intent through the acting player's OWN socket only (server turn
+ * gating, fix round 3: the server rejects intents from the non-acting socket
+ * with 'Not your turn'). The acting player is the mulligan actor during
+ * mulligan (mulligansDone order) and currentPlayer() in main phase. Waits for
+ * the echoed intent on BOTH clients (each driver applies it via its own
+ * handler), then advances the deterministic oracle and asserts all three
+ * states are byte-identical.
  */
 async function drive(
   host: LanHarness, guest: LanHarness, mirror: Game,
@@ -270,7 +274,12 @@ async function drive(
 ): Promise<void> {
   const hostEcho = host.waitFor(intentEq(intent));
   const guestEcho = guest.waitFor(intentEq(intent));
-  hostDriver.submit(intent); // send-only
+  const actor: PlayerIndex =
+    mirror.state.phase === 'mulligan'
+      ? ((mirror.state.mulligansDone[0] ? 1 : 0) as PlayerIndex)
+      : mirror.currentPlayer();
+  const driver = actor === 0 ? hostDriver : guestDriver;
+  driver.submit(intent); // send-only
   await hostEcho;
   await guestEcho;
   mirror.submit(intent); // oracle replay — same engine, same seed
@@ -300,7 +309,7 @@ describe('LAN full mirroring (real server)', () => {
       expect(hostDriver.game().serialize()).toBe(mirror.serialize());
 
       // Mulligan phase: keep [] for p0 then p1 (the engine's mulligansDone
-      // order — both mulligans are driven through the host's socket).
+      // order — each mulligan is driven through its actor's own socket).
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
       expect(mirror.state.phase).toBe('main');
@@ -354,8 +363,8 @@ describe('LAN full mirroring (real server)', () => {
     let re: LanHarness | null = null;
     try {
       code = await startRoom(host, guest);
-      // Play a scripted prefix through the host client only; both shadows
-      // mirror the live state exactly.
+      // Play a scripted prefix, each intent through its actor's own socket;
+      // both shadows mirror the live state exactly.
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
       const p0play = mirror.legalIntents(0).find(i => i.kind === 'playCard');

@@ -66,6 +66,7 @@ export function buildMatchEntry(pending: MatchEntryRequest): MatchEntry {
   const setup: MatchScreenSetup = {
     driver,
     myPlayer: 0,
+    mode: pending.mode,
     ...(pending.mode === 'bot' ? { bot: { level: pending.difficulty ?? 'recruit' } } : {}),
   };
   return { setup, core };

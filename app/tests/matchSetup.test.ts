@@ -63,6 +63,7 @@ describe('buildMatchEntry', () => {
     });
     const g = entry.setup.driver.game();
     expect(entry.setup.myPlayer).toBe(0);
+    expect(entry.setup.mode).toBe('bot');
     expect(entry.setup.bot).toEqual({ level: 'veteran' });
     expect(entry.core.decks[0]).toEqual(deckCardIds('dragon'));
     expect(entry.core.decks[1]).toEqual(deckCardIds('ember')); // Math.random 0 → first archetype
@@ -87,6 +88,7 @@ describe('buildMatchEntry', () => {
       ],
     });
     expect(entry.setup.bot).toBeUndefined();
+    expect(entry.setup.mode).toBe('hotseat');
     expect(entry.setup.myPlayer).toBe(0);
     const g = entry.setup.driver.game();
     expect(g.state.players[0].hero.name).toBe(heroFor('ember').name);

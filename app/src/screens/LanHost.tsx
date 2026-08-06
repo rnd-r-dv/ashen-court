@@ -144,7 +144,7 @@ export default function LanHost({ onSessionReady }: { onSessionReady: (s: LanSes
   useEffect(() => {
     if (started && driver && client && room) {
       onSessionReady({ mode: 'lanHost', client, room, myPlayer: 0, driver });
-      navigate({ name: 'match', setup: { driver, myPlayer: 0 } });
+      navigate({ name: 'match', setup: { driver, myPlayer: 0, mode: 'lan' } });
     }
   }, [started, driver, client, room, onSessionReady, navigate]);
 

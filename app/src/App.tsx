@@ -70,9 +70,18 @@ export interface LanSession {
   mode: 'lanHost' | 'lanJoin';
   client: LanClient;
   room: LanRoomParams;
-  myPlayer: PlayerIndex;
   driver: LanMatchDriver;
+  /** Live seat: reads the driver's wire-assigned seat rather than a value
+   *  frozen at gameStart. A mid-game reconnect can REMAP the seat (audit 06
+   *  I2: both players away → the first rejoin reclaims the host slot), so
+   *  Victory/rematch bookkeeping must track the CURRENT seat. */
+  get myPlayer(): PlayerIndex;
 }
+
+/** Session-level banner state (audit 06 I3): mid-match feedback that survives
+ *  the LAN screens' unmount at match entry. 'left' offers a return-to-menu
+ *  affordance; 'reconnected' marks a seat remap; 'error' is a plain toast. */
+type LanNotice = { kind: 'error' | 'left' | 'reconnected'; text: string };
 
 // ---- App ----
 
@@ -82,8 +91,11 @@ export default function App() {
   const [pending, setPending] = useState<PendingMatch | null>(null);
   const [matchEntry, setMatchEntry] = useState<MatchEntry | null>(null);
   const [lanSession, setLanSession] = useState<LanSession | null>(null);
+  const [lanNotice, setLanNotice] = useState<LanNotice | null>(null);
   const lanSessionRef = useRef<LanSession | null>(null);
   lanSessionRef.current = lanSession;
+  /** Last-known wire seat, for reconnect seat-change detection (I2). */
+  const seatRef = useRef<PlayerIndex | null>(null);
 
   const navigate = useCallback((next: Screen) => setScreen(next), []);
   const startModeSelect = useCallback((mode: 'bot' | 'hotseat') => {
@@ -135,23 +147,54 @@ export default function App() {
   // seed+1 and broadcasts rematchStart. This listener (registered per session,
   // alive across match + victory — the screens unmount at match entry) resets
   // the driver to the new seed and routes back to the Match screen.
+  //
+  // I3 (audit 06): the SAME session-level listener surfaces mid-match errors
+  // and opponent-leaves. The LAN screens (and the hook's setError) unmount at
+  // gameStart, so the old driver onError landed on a dead setter and playerLeft
+  // reached nobody — App owns the session and must own this feedback.
   useEffect(() => {
     const s = lanSession;
     if (!s) return;
+    // Reference seat for reconnect seat-change detection (a 'joined' carrying
+    // a different player index means the seat was remapped — both players
+    // were away and the first rejoin took the host slot).
+    seatRef.current = s.myPlayer;
     const handler = (m: ServerMessage) => {
-      if (m.type !== 'rematchStart') return;
-      const session = lanSessionRef.current;
-      if (!session) return;
-      const nextSeed = session.driver.game().state.seed + 1; // server does seed += 1 per rematch
-      // Task 45: both players' real heroes + decks live in the room state
-      // (host's own + the guest's from opponentJoined / joined).
-      const heroes = session.room.heroes.map(name => HEROES.find(h => h.name === name) ?? HEROES[0]!);
-      session.driver.reset({
-        decks: session.room.decks,
-        heroes: heroes as [HeroSpec, HeroSpec],
-        seed: nextSeed,
-      });
-      navigate({ name: 'match', setup: { driver: session.driver, myPlayer: session.myPlayer, mode: 'lan' } });
+      if (m.type === 'rematchStart') {
+        const session = lanSessionRef.current;
+        if (!session) return;
+        // M5 (audit 06): the server's post-increment seed rides on the wire
+        // message — no client-side state.seed + 1 derivation (implicit
+        // coupling that silently desyncs if the increment ever drifts).
+        const nextSeed = m.seed;
+        // Task 45: both players' real heroes + decks live in the room state
+        // (host's own + the guest's from opponentJoined / joined).
+        const heroes = session.room.heroes.map(name => HEROES.find(h => h.name === name) ?? HEROES[0]!);
+        session.driver.reset({
+          decks: session.room.decks,
+          heroes: heroes as [HeroSpec, HeroSpec],
+          seed: nextSeed,
+        });
+        navigate({ name: 'match', setup: { driver: session.driver, myPlayer: session.myPlayer, mode: 'lan' } });
+        return;
+      }
+      if (m.type === 'error') { setLanNotice({ kind: 'error', text: m.message }); return; }
+      if (m.type === 'playerLeft') { setLanNotice({ kind: 'left', text: m.reason }); return; }
+      if (m.type === 'joined') {
+        // A reconnect 'joined' carries the wire seat (I2). A change vs. the
+        // last known seat means the seat was remapped — surface it so the UI
+        // never silently submits the wrong seat's intents; a same-seat
+        // re-attach clears any stale notice (reconnected / opponent back).
+        const prev = seatRef.current;
+        if (prev !== null && m.player !== prev) {
+          setLanNotice({ kind: 'reconnected', text: `Reconnected as Player ${m.player + 1}` });
+        } else {
+          setLanNotice(null);
+        }
+        seatRef.current = m.player;
+        return;
+      }
+      if (m.type === 'opponentJoined') { setLanNotice(null); return; }
     };
     s.client.addMessageHandler(handler);
     return () => s.client.removeMessageHandler(handler);
@@ -161,6 +204,7 @@ export default function App() {
     if (!lanSession) return;
     lanSession.client.close();
     setLanSession(null);
+    setLanNotice(null); // a session-level banner must not linger on other screens
   }
 
   function lanRematch() {
@@ -171,6 +215,34 @@ export default function App() {
     <NavContext.Provider value={nav}>
       {/* Ambient layer: fixed, z-index -1, pointer-events none — shows on every screen. */}
       <Background />
+      {/* I3 (audit 06): session-level mid-match banner — errors, opponent
+          leaves (with a return-to-menu exit) and reconnect seat remaps. Alive
+          across match + victory because the LAN screens unmount at entry. */}
+      {lanNotice ? (
+        <div
+          role="alert"
+          style={{
+            position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 1000,
+            background: '#1a1016', color: '#f0e6d2', border: '1px solid #8b2f2f',
+            padding: '10px 16px', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+            display: 'flex', gap: 12, alignItems: 'center', maxWidth: 'min(90vw, 520px)',
+          }}
+        >
+          <span>{lanNotice.text}</span>
+          {lanNotice.kind === 'left' ? (
+            <button
+              type="button"
+              className="shell-btn"
+              onClick={() => { setLanNotice(null); lanLeave(); navigate({ name: 'menu' }); }}
+            >
+              Return to Menu
+            </button>
+          ) : null}
+          <button type="button" className="shell-btn" onClick={() => setLanNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       {screen.name === 'menu' && <Menu />}
       {screen.name === 'modeSelect' && <ModeSelect mode={modeIntent} />}
       {screen.name === 'deckPick' && (

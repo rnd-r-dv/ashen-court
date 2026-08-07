@@ -109,6 +109,32 @@ describe('createLanDriver owns echo application', () => {
     expect(game.serialize()).toBe(mirror.serialize());
   });
 
+  it('I2: exposes the wire seat and remaps it on a reconnect joined (seat swap)', () => {
+    const client = new FakeLanClient();
+    const game = makeShadow();
+    // The hook passes its known seat at construction (host: 0, guest: 1).
+    const driver = createLanDriver(client as unknown as LanClient, game, undefined, undefined, 0);
+    expect(driver.seat).toBe(0);
+    // A mid-game reconnect 'joined' remaps the seat: both players were away
+    // and this client rejoined into the guest slot (v1: the first rejoin
+    // takes the host slot). The UI reads the seat live so it never submits
+    // the wrong seat's intents after a swap.
+    client.receive({
+      type: 'joined',
+      player: 1,
+      seed: SEED,
+      opponentName: 'Hosty',
+      decks: [DECK, DECK],
+      heroes: [HERO.name, HERO.name],
+      cards: [],
+    });
+    expect(driver.seat).toBe(1);
+    // Without a known seat at creation the driver starts null until a
+    // 'joined' arrives.
+    const fresh = createLanDriver(client as unknown as LanClient, game);
+    expect(fresh.seat).toBeNull();
+  });
+
   it('flags resyncRequested and warns when an echoed intent cannot apply', () => {
     const client = new FakeLanClient();
     const game = makeShadow();

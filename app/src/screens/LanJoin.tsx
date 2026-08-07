@@ -87,7 +87,10 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
   // driver exists (useLanMatch builds it from the 'joined' params).
   useEffect(() => {
     if (started && driver && myPlayer !== null && client && room) {
-      onSessionReady({ mode: 'lanJoin', client, room, myPlayer, driver });
+      // I2 (audit 06): the session's seat is LIVE — the getter reads the
+      // driver's wire seat (myPlayer here is only the initial join seat), so
+      // a mid-game reconnect seat remap reaches Victory/rematch bookkeeping.
+      onSessionReady({ mode: 'lanJoin', client, room, driver, get myPlayer() { return driver.seat ?? myPlayer; } });
       navigate({ name: 'match', setup: { driver, myPlayer, mode: 'lan' } });
     }
   }, [started, driver, myPlayer, client, room, onSessionReady, navigate]);
@@ -149,7 +152,11 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
             id="lan-code-input"
             className="lan-code-input"
             value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))}
+            // M3 (audit 06): server codes use CODE_ALPHABET
+            // 'ABCDEFGHJKLMNPQRSTUVWXYZ' (A-Z minus O/I) — filter to that
+            // alphabet so typing O or I can never produce a guaranteed
+            // 'Room not found' code.
+            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-HJ-NP-Z]/g, '').slice(0, 4))}
             onKeyDown={(e) => {
               if (e.key === 'Enter') next();
             }}

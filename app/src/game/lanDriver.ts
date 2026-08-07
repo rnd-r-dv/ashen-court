@@ -32,7 +32,7 @@
 //     surfaces to the UI (v1 recovery: rejoin by code — the server replays
 //     the intent log to a fresh shadow).
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@ashen/core';
-import type { GameEvent, HeroSpec, Intent, MatchSetup } from '@ashen/core';
+import type { GameEvent, HeroSpec, Intent, MatchSetup, PlayerIndex } from '@ashen/core';
 import type { MatchDriver } from '../types.js';
 import type { LanClient } from './lanClient.js';
 
@@ -55,10 +55,17 @@ export function heroNameForDeck(deckIds: string[]): string {
   return HEROES[0]!.name;
 }
 
-/** LAN driver: MatchDriver plus the divergence flag the hook surfaces. */
+/** LAN driver: MatchDriver plus the divergence flag and the wire seat. */
 export interface LanMatchDriver extends MatchDriver {
   /** True once a shadow divergence was detected (v1 recovery: rejoin by code). */
   resyncRequested: boolean;
+  /** The wire-assigned seat (player index). Set from the session's initial
+   *  join (createLanDriver's initialSeat); a reconnect 'joined' can REMAP it
+   *  (audit 06 I2 — both players away, the first rejoin reclaims the host
+   *  slot). Screens + App read this live so the UI never keeps submitting the
+   *  old seat's intents (each would land as the other seat's → 'Not your
+   *  turn' → deadlock). */
+  seat: PlayerIndex | null;
 }
 
 /**
@@ -90,9 +97,11 @@ export function createLanDriver(
   game: Game,
   onError?: (message: string) => void,
   onResync?: (intentKind: string) => void,
+  initialSeat: PlayerIndex | null = null,
 ): LanMatchDriver {
   let current = game;
   let resyncRequested = false;
+  let seat = initialSeat;
   const listeners = new Set<(events: GameEvent[]) => void>();
 
   client.addMessageHandler((m) => {
@@ -107,6 +116,10 @@ export function createLanDriver(
       // same resolution the server's makeGame uses: hero by NAME, merged
       // registry) so the replay applies cleanly. The initial join is a no-op
       // rebuild — the payload matches the shadow the hook already built.
+      // I2 (audit 06): the reconnect 'joined' also carries the wire-assigned
+      // SEAT (the first rejoin after a dual disconnect reclaims the host
+      // slot) — remap so the UI never submits the wrong seat's intents.
+      if (m.type === 'joined') seat = m.player;
       const heroes = m.heroes.map(name => HEROES.find(h => h.name === name) ?? HEROES[0]!);
       current = Game.create(
         { decks: m.decks, heroes: heroes as [HeroSpec, HeroSpec], seed: m.seed },
@@ -154,6 +167,9 @@ export function createLanDriver(
     },
     get resyncRequested(): boolean {
       return resyncRequested;
+    },
+    get seat(): PlayerIndex | null {
+      return seat;
     },
   };
 }

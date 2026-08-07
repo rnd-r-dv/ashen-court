@@ -27,7 +27,21 @@ export function startServer(port: number): LanServer {
         send(socket, { type: 'error', message: 'Invalid JSON' });
         return;
       }
-      handle(registry, socket, msg);
+      // C1 (audit 06): JSON.parse output was cast straight to ClientMessage
+      // and msg.type dereferenced with no shape check — a body of null/true/
+      // 42/[]/"…" threw a TypeError inside this listener and, with no
+      // uncaughtException handler, killed the whole Node process (every
+      // active room). Guard the shape before dispatch AND wrap handle() so no
+      // future crash can escape the listener.
+      if (typeof msg !== 'object' || msg === null || typeof (msg as { type?: unknown }).type !== 'string') {
+        send(socket, { type: 'error', message: 'Invalid message' });
+        return;
+      }
+      try {
+        handle(registry, socket, msg);
+      } catch {
+        send(socket, { type: 'error', message: 'Invalid message' });
+      }
     });
     socket.on('close', () => {
       console.log('[lan] client disconnected');

@@ -45,7 +45,11 @@ export class LanClient {
    *  so the re-attached socket re-joins its room with a valid joinRoom
    *  (Task 45: the guest's deck/hero ride along; fix round 2 added the code). */
   private joinPayload: { code: string; deckIds: string[]; customCards: Card[]; heroId: string } | null = null;
-  private readonly graceUntil = Date.now() + RECONNECT_GRACE_MS;
+  /** Grace deadline (epoch ms): the server keeps a room alive this long after
+   *  a socket drops. Re-anchored at each drop from an ESTABLISHED connection
+   *  (I1, audit 06) — NOT at construction — so a drop late in a long session
+   *  still gets the full reconnect window. 0 = not yet anchored. */
+  private graceUntil = 0;
   /** Sends made before the socket opened (e.g. createRoom right after connect). */
   private pendingSends: ClientMessage[] = [];
 
@@ -81,9 +85,18 @@ export class LanClient {
     }
   }
 
-  /** Intentional close: no reconnect, buffered sends dropped. */
-  close(): void {
+  /** Terminal close: no reconnect, buffered sends dropped, registered handlers
+   *  released (M2, audit 06 — the old code kept pendingSends and handlers alive
+   *  after the final give-up, holding the screen/hook closures forever). */
+  private finalize(): void {
     this.closed = true;
+    this.pendingSends = [];
+    this.handlers.clear();
+  }
+
+  /** Intentional close: no reconnect, buffered sends and handlers dropped. */
+  close(): void {
+    this.finalize();
     if (this.retryTimer !== null) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
@@ -149,6 +162,13 @@ export class LanClient {
       if (this.ws !== ws) return;
       this.ws = null;
       if (this.closed) return;
+      // I1 (audit 06): each drop from an ESTABLISHED connection restarts the
+      // grace window (reconnectAttempts === 0 means the main connection or a
+      // freshly-opened reconnect). Failed CONNECTION attempts
+      // (reconnectAttempts > 0) do NOT extend the window — they count against
+      // it, so the client gives up once the server's own grace (anchored at
+      // the first drop) has passed without a successful re-attach.
+      if (this.reconnectAttempts === 0) this.graceUntil = Date.now() + RECONNECT_GRACE_MS;
       this.scheduleReconnect();
     };
   }
@@ -156,7 +176,10 @@ export class LanClient {
   private scheduleReconnect(): void {
     if (this.closed) return;
     if (Date.now() >= this.graceUntil) {
-      // Reconnect window expired: the server will have dropped the room.
+      // Reconnect window expired: the server will have dropped the room. The
+      // client is dead — drop buffered sends and registered handlers so
+      // nothing is retained (M2, audit 06).
+      this.finalize();
       this.onStatus?.('closed');
       return;
     }

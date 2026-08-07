@@ -591,13 +591,19 @@ Append to `card.css`:
 }
 
 /* Art is the backdrop, not a band: it fills the frame and everything
-   else stacks on top of it. */
+   else stacks on top of it.
+
+   Deliberately NO z-index here. Setting one would make this element a
+   stacking context, which would trap .card__stats (its child) beneath
+   .card__body's z-index — the pips would vanish behind the bottom
+   scrim on exactly the cards meant to look premium. Positioned with
+   z-index:auto, it paints below the relatively-positioned rows by DOM
+   order, and .card__stats stays free to out-rank them. */
 .card--bleed .card__artwrap {
   position: absolute;
   inset: 0;
   flex: none;
   height: auto;
-  z-index: 0;
 }
 
 .card--bleed .card__art {
@@ -625,9 +631,11 @@ Append to `card.css`:
   background: rgba(20, 18, 28, 0.82);
 }
 
+/* padding-bottom reserves the pip row (32px pip + breathing room), so
+   rules text can never run underneath the stats. */
 .card--bleed .card__body {
   flex: 0 0 auto;
-  padding: 6px var(--card-pad) var(--card-pad);
+  padding: 6px var(--card-pad) 44px;
   background: linear-gradient(180deg, rgba(8, 6, 14, 0) 0%, rgba(8, 6, 14, 0.9) 26%, rgba(8, 6, 14, 0.96) 100%);
 }
 
@@ -643,10 +651,17 @@ Append to `card.css`:
   color: #f2ecdc;
 }
 
-/* Pips sit over the bottom scrim; the ribbon's own inset keeps clear of them. */
+/* Pips sit in the card's bottom corners, over the scrim. Anchored to the
+   bottom rather than offset from the top — a top offset would be a magic
+   number that silently breaks if --card-h ever changes. z-index out-ranks
+   .card__body (1) so the pips paint above the scrim; this works only
+   because .card__artwrap has no z-index of its own (see above). */
 .card--bleed .card__stats {
-  bottom: auto;
-  top: calc(var(--card-h) - 92px);
+  top: auto;
+  bottom: 6px;
+  left: 8px;
+  right: 8px;
+  z-index: 3;
 }
 
 /* Full-bleed board minis: art plus the name row only, same as banded minis. */
@@ -664,12 +679,13 @@ npm run dev
 
 You need a legendary with generated art in hand. If the art pipeline has not run, temporarily force the treatment by editing `treatmentFor` to `return 'bleed'`, look, then **revert the edit**.
 
-Check, and do not sign this task off until all four hold:
+Check, and do not sign this task off until all five hold:
 
 1. Rules text is readable against the brightest generated image, not just a dark one
 2. The card is exactly the same size as a banded card beside it
-3. Stat pips do not cover the ribbon or the rules text
-4. The name is legible against the top of the art
+3. **Both stat pips are visible.** If they are missing, something has given `.card__artwrap` a stacking context and trapped them beneath the bottom scrim — check that no rule sets `z-index`, `transform`, `filter`, `opacity < 1` or `will-change` on it.
+4. Rules text does not run underneath the pips (that is what the 44px `padding-bottom` reserves)
+5. The name is legible against the top of the art
 
 If a specific generated image defeats the scrim, the fix is to regenerate that card (`scripts/art/overrides.ts` + `--force`), **not** to darken the scrim until the art is invisible on every card.
 

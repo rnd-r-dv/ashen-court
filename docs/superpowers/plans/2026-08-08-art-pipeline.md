@@ -21,6 +21,17 @@ Copied verbatim from `docs/superpowers/specs/2026-08-08-ui-overhaul-design.md`. 
 - **Existing suite is 402 tests across 50 files and must stay green.** Run `npm test` before every commit.
 - **Do not commit generated images in the same commit as code.** Images are reviewed separately.
 
+## Toolchain gotcha — read before Task 8
+
+`core/package.json` declares `"main": "src/index.ts"` — a **raw TypeScript file**, with no build output (`npm run build -w core` is `tsc --noEmit`). So `import { buildPool } from '@ashen/core'` only resolves under a TypeScript-aware loader.
+
+- `npx tsx scripts/art/generate.ts` — **works**
+- `npm run art:generate` — **works** (the script is `tsx scripts/art/generate.ts`)
+- `vitest` — **works** (Vite transforms it)
+- `node scripts/art/generate.ts` — **fails** with an unhelpful parse error
+
+Always invoke the CLI through `npm run art:generate` or `npx tsx`. Never plain `node`.
+
 ## Verified facts (do not re-derive)
 
 ```
@@ -72,10 +83,12 @@ HEROES is positionally zipped with Object.keys(DECK_DEFS): index 0 = ember = Pyr
 
 ```bash
 cd "/Users/lucas/Local Storage/PROJECTS/tcg"
-npm install -D --workspaces=false sharp tsx
+npm install -D sharp tsx
 ```
 
-Expected: root `package.json` `devDependencies` gains `sharp` and `tsx` alongside the existing `typescript` and `vitest`.
+Expected: root `package.json` `devDependencies` gains `sharp` and `tsx` alongside the existing `typescript` and `vitest`. Run from the repo root with no `-w` flag so they land at the root, not inside a workspace.
+
+`sharp` is a native module and will compile on install; if it fails, that is an environment problem to solve now rather than at Task 8.
 
 - [ ] **Step 2: Create the vitest project config**
 
@@ -1111,6 +1124,16 @@ describe('parseArgs', () => {
       .toEqual(['choir-seraph', 'ember-imp']);
   });
 
+  it('keeps --force and --limit independent', () => {
+    // Regression guard for the Stage 0 batch: --force must select WHICH cards,
+    // --limit only caps how many. An earlier version let --force waive the
+    // coverage filter without restricting the job set, so a forced + limited
+    // run generated the first N cards in pool order instead of the forced ids.
+    const a = parseArgs(['--force', 'x', '--force', 'y', '--limit', '3']);
+    expect(a.force).toEqual(['x', 'y']);
+    expect(a.limit).toBe(3);
+  });
+
   it('rejects an unknown flag instead of ignoring it', () => {
     // Silently ignoring --limt would generate the whole pool by accident.
     expect(() => parseArgs(['--limt', '3'])).toThrow(/unknown/i);
@@ -1131,7 +1154,6 @@ import { mkdir, writeFile, access } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import sharp from 'sharp';
 import { buildPool, DECK_DEFS, HEROES } from '@ashen/core';
-import type { Card } from '@ashen/core';
 import { inCoverage, parseCoverage, type Coverage } from './coverage.js';
 import { generateImage } from './openrouter.js';
 import { cardArtPath, heroArtPath } from './paths.js';
@@ -1204,9 +1226,17 @@ function buildJobs(args: Args): Job[] {
   const forced = new Set(args.force);
   const jobs: Job[] = [];
 
-  for (const card of buildPool() as Card[]) {
-    if (args.only !== null && card.archetype !== args.only) continue;
-    if (!forced.has(card.id) && !inCoverage(card.rarity, args.coverage)) continue;
+  for (const card of buildPool()) {
+    // --force means "exactly these cards". Without this branch, --force merely
+    // waived the coverage filter, so `--force a --force b --force c --limit 3`
+    // still enumerated the whole pool and then sliced the first three in pool
+    // order — generating three arbitrary cards instead of the three asked for.
+    if (forced.size > 0) {
+      if (!forced.has(card.id)) continue;
+    } else {
+      if (args.only !== null && card.archetype !== args.only) continue;
+      if (!inCoverage(card.rarity, args.coverage)) continue;
+    }
     jobs.push({
       key: card.id,
       outPath: resolve(cardArtPath(card.id)),
@@ -1214,7 +1244,8 @@ function buildJobs(args: Args): Job[] {
     });
   }
 
-  if (args.heroes) {
+  // Forced runs are card-only: --force names card ids, never hero names.
+  if (args.heroes && forced.size === 0) {
     // HEROES is positionally zipped with Object.keys(DECK_DEFS) — index i of
     // one matches index i of the other. Both the app and the server rely on
     // this ordering; do not sort either side.
@@ -1314,12 +1345,26 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
 Run: `npx vitest run scripts/tests/generateArgs.test.ts`
 Expected: PASS, 8 tests.
 
-If importing `generate.ts` causes `main()` to execute during the test, the guard at the bottom is wrong for this environment. Replace it with an explicit env check instead:
+The bottom-of-file guard exists so the test can `import { parseArgs }` without `main()` firing. It compares `import.meta.url` against `process.argv[1]`'s basename: under `tsx scripts/art/generate.ts` those match and `main()` runs; under vitest `argv[1]` is the vitest binary, so they do not.
+
+If `main()` nevertheless executes during the test — you will see the job count printed in the test output — replace the guard with an explicit opt-out:
 
 ```ts
-if (process.env['ART_GENERATE_CLI'] !== 'off') { main().catch(...) }
+if (!process.env['ART_GENERATE_NO_MAIN']) {
+  main().catch((err: unknown) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}
 ```
-and set `ART_GENERATE_CLI=off` in the test file's first line via `vi.stubEnv`. Prefer the simpler guard if it works.
+
+and add this as the **first line** of `scripts/tests/generateArgs.test.ts`, before any import of `generate.js`:
+
+```ts
+process.env['ART_GENERATE_NO_MAIN'] = '1';
+```
+
+Prefer the original guard if it works — it needs no test-side cooperation.
 
 - [ ] **Step 5: Commit**
 
@@ -1378,11 +1423,16 @@ Expected: `66 image(s) to generate` and `285 image(s) to generate` respectively.
 
 ```bash
 export OPENROUTER_API_KEY=...        # never commit this
-npm run art:generate -- --commit --no-heroes --limit 3 \
-  --force choir-smite --force ember-imp --force neutral-knight
+
+# Confirm the exact three first — costs nothing.
+npm run art:generate -- --force choir-smite --force neutral-knight --force star-meteor
+
+# Then spend.
+npm run art:generate -- --commit \
+  --force choir-smite --force neutral-knight --force star-meteor
 ```
 
-If those exact ids do not exist, pick one Hollow Choir spell, one Ember Court creature and one neutral by running `--dry-run` first and reading the ids.
+`--force` selects exactly these three, so `--limit` is unnecessary here. Verify from the dry run that all three ids exist and that the printed cards are what you expect — one Hollow Choir spell, one neutral, one from a third archetype. If an id is wrong the dry run prints fewer than three prompts; fix the ids before adding `--commit`.
 
 - [ ] **Step 2: Record the measurements**
 

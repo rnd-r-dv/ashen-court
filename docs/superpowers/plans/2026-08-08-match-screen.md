@@ -236,11 +236,19 @@ with:
   box-shadow: inset 0 2px 14px rgba(0, 0, 0, 0.45);
 }
 
-/* Empty capacity marker. Sized to a board mini so the row does not
-   reflow when a creature lands in a slot. */
+/* Empty capacity marker, sized to a board mini so the row does not reflow
+   when a creature lands in a slot.
+   
+   These are literal px on purpose. A board mini is 240 x 205 at zoom 0.5
+   (card.css: --card-w, and .card--board's derived --card-h), but those
+   custom properties are scoped to .card and are not in scope here. Copying
+   them into :root would create a second copy of a DERIVED value that drifts
+   the moment the art ratio changes — the exact failure the card-frame plan
+   avoids by deriving --card-art-h. A decorative outline being a few px off
+   is harmless; a silently stale duplicate is not. */
 .board-slot {
-  width: calc(var(--card-w, 240px) * 0.5);
-  height: calc(var(--card-h-board, 205px) * 0.5);
+  width: 120px;
+  height: 103px;
   border-radius: var(--radius-sm);
   border: 1px dashed var(--border);
   background: rgba(255, 255, 255, 0.015);
@@ -253,11 +261,7 @@ with:
 }
 ```
 
-Add to `app/src/theme.css` (or the `:root` block wherever the tokens live) so the slot can size itself:
-
-```css
-  --card-h-board: 205px;   /* mirrors card.css .card--board --card-h */
-```
+Do **not** add a `--card-h-board` token to `theme.css`. The slot's dimensions are literal px for the reason given in the comment above.
 
 - [ ] **Step 5: Run the test**
 
@@ -272,7 +276,7 @@ Expected: PASS, 4 tests.
 
 ```bash
 npm test
-git add app/src/components/Board.tsx app/src/components/board.css app/src/theme.css app/tests/boardSurface.test.ts
+git add app/src/components/Board.tsx app/src/components/board.css app/tests/boardSurface.test.ts
 git commit -m "feat(board): battlefield surface with capacity slot outlines"
 ```
 

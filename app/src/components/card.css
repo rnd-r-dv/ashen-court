@@ -22,10 +22,13 @@
   --card-top-h: 32px;
   /* ---- art panel geometry -------------------------------------
      ONE decision expressed twice would drift, so the panel height
-     is DERIVED from the ratio, never typed in. Generated card art
-     is requested at exactly this ratio (scripts/art/prompt.ts,
-     aspectForRarity), so panel and image agree and nothing crops.
-     Change --card-art-ratio and the panel follows.                */
+     is DERIVED from the ratio, never typed in. The banded panel  
+     only hosts 3:2 generated art: common/rare are requested at   
+     exactly this ratio (scripts/art/prompt.ts, aspectForRarity); 
+     epic/legendary with art skip the panel entirely via the      
+     full-bleed treatment (cardTreatment.ts); cards without art   
+     render the procedural SVG. So banded art always agrees with  
+     the panel and nothing crops. Change --card-art-ratio and the  */
   --card-art-w: calc(var(--card-w) - 2 * var(--card-pad) - 4px);  /* 220px */
   --card-art-ratio: 1.5;                                          /* 3:2   */
   --card-art-h: calc(var(--card-art-w) / var(--card-art-ratio));  /* 147px */

@@ -20,18 +20,25 @@ export interface TurnBannerEntry {
   holdMs?: number;
 }
 
+/**
+ * Hold before the sweep-out when the entry does not name one. Hold time is
+ * per-banner DATA (the win title's shorter 900ms rides on the entry Match
+ * builds), so the entry is the single channel — the component used to also
+ * take a `holdMs` prop, but `entry.holdMs ?? holdMs` meant no caller could
+ * ever reach it, and a second channel for one value can only drift.
+ */
+const DEFAULT_HOLD_MS = 1200;
+
 export interface TurnBannerProps {
   entry: TurnBannerEntry;
   /** Animation duration scale (fast mode 0.5). */
   scale?: number;
-  /** Milliseconds the banner holds before sweeping out (default 1200). */
-  holdMs?: number;
   onDone?: () => void;
 }
 
-export default function TurnBanner({ entry, scale = 1, holdMs = 1200, onDone }: TurnBannerProps) {
+export default function TurnBanner({ entry, scale = 1, onDone }: TurnBannerProps) {
   const [leaving, setLeaving] = useState(false);
-  const hold = entry.holdMs ?? holdMs;
+  const hold = entry.holdMs ?? DEFAULT_HOLD_MS;
 
   useEffect(() => {
     setLeaving(false);

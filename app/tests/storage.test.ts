@@ -74,6 +74,37 @@ describe('custom cards', () => {
     expect(() => deleteCustomCard('custom-001')).toThrow(/Cannot delete custom-001: referenced by deck:custom:my-deck/);
     expect(loadCustomCards()).toHaveLength(1);
   });
+  it('reports delete failure when localStorage rejects the write (I9)', () => {
+    // Backing store seeded with a real card, so the delete path runs its full
+    // reference check and only the final write() fails.
+    const backing = new Map<string, string>([['tcg.customCards', JSON.stringify([card()])]]);
+    const real = globalThis.localStorage;
+    const broken: Storage = {
+      get length() { return backing.size; },
+      clear() { backing.clear(); },
+      key() { return null; },
+      getItem(k: string) { return backing.get(k) ?? null; },
+      removeItem(k: string) { backing.delete(k); },
+      setItem() {
+        throw new DOMException('QuotaExceededError', 'QuotaExceededError');
+      },
+    };
+    Object.defineProperty(globalThis, 'localStorage', { value: broken, configurable: true, writable: true });
+    try {
+      expect(deleteCustomCard('custom-001')).toBe(false);
+      expect(deleteDeck('bone')).toBe(false);
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { value: real, configurable: true, writable: true });
+    }
+  });
+  it('reports delete success when the write lands (I9)', () => {
+    saveCustomCard(card());
+    saveDeck('bone', ['custom-001']);
+    expect(deleteDeck('bone')).toBe(true);
+    expect(deleteCustomCard('custom-001')).toBe(true);
+    expect(loadCustomCards()).toEqual([]);
+    expect(loadDecks()).toEqual({});
+  });
   it('reports save failure when localStorage rejects the write (I1 quota)', () => {
     // Replace the jsdom storage global with one whose setItem always throws
     // (vi.spyOn cannot shadow Storage.prototype methods reliably here).

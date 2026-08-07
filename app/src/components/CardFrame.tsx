@@ -16,6 +16,11 @@ import './card.css';
  *
  * faceDown renders the card back: the art is grayscaled into a silhouette
  * and every chrome element (name, cost, ribbon, stats) is suppressed.
+ *
+ * The frame is a FIXED box (card.css --card-w/--card-h): the art panel has a
+ * fixed height, the stat pips are absolutely positioned corner ornaments, and
+ * all variable-length copy lives in one clipped `.card__body` well. Card type,
+ * keyword count and flavor length therefore cannot change the card's size.
  */
 
 export interface CardFrameProps {
@@ -110,12 +115,30 @@ export default function CardFrame({
           </div>
         )}
 
-        <div className={faceDown ? 'card__art card__art--face-down' : 'card__art'}>
-          {children}
-          {faceDown && (
-            <span className="card__sigil" aria-hidden="true">
-              {BACK_SIGIL}
-            </span>
+        {/* The art wrapper is the positioning context for the stat pips, which
+            straddle the panel's bottom edge. It must NOT clip (the pips hang
+            outside it) — the inner .card__art does the clipping instead. */}
+        <div className="card__artwrap">
+          <div className={faceDown ? 'card__art card__art--face-down' : 'card__art'}>
+            {children}
+            {faceDown && (
+              <span className="card__sigil" aria-hidden="true">
+                {BACK_SIGIL}
+              </span>
+            )}
+          </div>
+
+          {/* Corner pips, not a layout row: a creature and a spell must occupy
+              the SAME box, so stats are lifted out of the flow entirely. */}
+          {!faceDown && isCreature && attack !== undefined && health !== undefined && (
+            <div className="card__stats">
+              <span className="card__stat card__stat--attack" title="Attack">
+                {attack}
+              </span>
+              <span className="card__stat card__stat--health" title="Health">
+                {health}
+              </span>
+            </div>
           )}
         </div>
 
@@ -129,30 +152,24 @@ export default function CardFrame({
               <span className="card__ribbon-rarity">{RARITY_LABEL[rarity]}</span>
             </div>
 
-            {keywords && keywords.length > 0 && (
-              <div className="card__keywords">
-                {keywords.map((k) => (
-                  <span className="card__keyword" key={k}>
-                    {k}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* One fixed-height text well. Rules text and flavor are clamped
+                inside it rather than growing the card, so a long flavor line
+                can no longer make one card taller than its neighbour. */}
+            <div className="card__body">
+              {keywords && keywords.length > 0 && (
+                <div className="card__keywords">
+                  {keywords.map((k) => (
+                    <span className="card__keyword" key={k}>
+                      {k}
+                    </span>
+                  ))}
+                </div>
+              )}
 
-            {text && <p className="card__text">{text}</p>}
+              {text && <p className="card__text">{text}</p>}
 
-            {isCreature && attack !== undefined && health !== undefined && (
-              <div className="card__stats">
-                <span className="card__stat card__stat--attack" title="Attack">
-                  {attack}
-                </span>
-                <span className="card__stat card__stat--health" title="Health">
-                  {health}
-                </span>
-              </div>
-            )}
-
-            {flavor && <p className="card__flavor">“{flavor}”</p>}
+              {flavor && <p className="card__flavor">“{flavor}”</p>}
+            </div>
           </>
         )}
       </div>

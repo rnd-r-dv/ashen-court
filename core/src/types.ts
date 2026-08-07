@@ -1,6 +1,7 @@
 export type PlayerIndex = 0 | 1;
 
-/** Player 1's setup head-start spell (surge already granted; see Game constructor). */
+/** The Coin: player 1's one-shot 0-cost "Gain 1 Mana" spell, dealt to hand at
+ *  setup and gated to a single use by PlayerState.surged (see Game). */
 export const MANA_SURGE = 'mana-surge';
 
 /** Hard turn limit (Task 22, Phase 3 amendment): a match still running at

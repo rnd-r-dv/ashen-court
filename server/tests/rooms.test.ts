@@ -138,6 +138,50 @@ class TestClient {
   }
 }
 
+/**
+ * Join `code` on a FRESH client, retrying while the server still answers
+ * 'Room is full'.
+ *
+ * A socket close is observed by the server ASYNCHRONOUSLY: ws delivers the
+ * 'close' event, and only then does RoomRegistry.onDisconnect null the slot.
+ * A rejoin issued immediately after close() can therefore legitimately race
+ * ahead of that observation and be told the room is full — which made the
+ * both-players-away test flaky (~2 of 3 under a -t filtered run, where the
+ * lighter event loop lets the rejoin win the race more often).
+ *
+ * Retrying inside a bounded window waits for the observation without weakening
+ * what the test asserts: a slot that never frees still fails the test, on
+ * timeout, and any error OTHER than 'Room is full' fails immediately.
+ */
+async function joinWhenSlotFree(
+  srv: LanServer,
+  code: string,
+  timeoutMs = 3000,
+): Promise<{ client: TestClient; joined: Extract<ServerMessage, { type: 'joined' }> }> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const client = new TestClient(await connect(urlOf(srv)));
+    const settled = client.waitFor(m => m.type === 'joined' || m.type === 'error', 1000);
+    client.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+    let msg: ServerMessage;
+    try {
+      msg = await settled;
+    } catch (err) {
+      client.close();
+      if (Date.now() >= deadline) throw err;
+      continue;
+    }
+    if (msg.type === 'joined') return { client, joined: msg };
+    client.close();
+    // Only the full-room race is retryable; anything else is a real failure.
+    if (msg.type !== 'error' || !/room is full/i.test(msg.message)) {
+      throw new Error(`joinRoom rejected: ${msg.type === 'error' ? msg.message : msg.type}`);
+    }
+    if (Date.now() >= deadline) throw new Error('room never freed a slot within the timeout');
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
+
 async function makeClients(srv: LanServer): Promise<{ host: TestClient; guest: TestClient }> {
   const url = urlOf(srv);
   return {
@@ -509,15 +553,25 @@ describe('LAN rooms', () => {
       // The guest's redraws came from the CHOIR deck: its hand holds a
       // choir-only card (impossible with the host's ember deck).
       expect(mirror.state.players[1].hand).toContain('choir-banish');
-      // Host passes; the guest plays its own hand card (seed-2 hand index 0).
+      // Host passes; the guest plays a card only ITS deck could have supplied.
+      // The index is derived from the mirror hand rather than hard-coded:
+      // audit 02 removed player 1's setup mana head start, so the guest now has
+      // 1 crystal (not 2) on turn 1 and the old fixed index 0 (neutral-scroll,
+      // cost 2) is no longer affordable. choir-acolyte is a 1-cost choir-only
+      // card, so the play itself re-proves the authoritative game used the
+      // guest's deck — and the wire still carries a concrete handIndex, so the
+      // echoed event tree is compared byte-for-byte against the oracle exactly
+      // as before.
       const pass = mirror.submit({ kind: 'endTurn' });
       const passP = host.waitFor(eventsEq(pass));
       host.send({ type: 'intent', intent: { kind: 'endTurn' } });
       expect((await passP).type).toBe('events');
-      const play = mirror.submit({ kind: 'playCard', handIndex: 0 });
+      const handIndex = mirror.state.players[1].hand.indexOf('choir-acolyte');
+      expect(handIndex).toBeGreaterThanOrEqual(0);
+      const play = mirror.submit({ kind: 'playCard', handIndex });
       expect(play.some(e => e.type === 'cardPlayed')).toBe(true);
       const playP = guest.waitFor(eventsEq(play));
-      guest.send({ type: 'intent', intent: { kind: 'playCard', handIndex: 0 } });
+      guest.send({ type: 'intent', intent: { kind: 'playCard', handIndex } });
       expect((await playP).type).toBe('events');
     } finally {
       host?.close();
@@ -668,6 +722,131 @@ describe('LAN rooms', () => {
     }
   });
 
+  it('Bug 6: a reconnect notifies the still-connected peer (opponentReconnected)', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    let re: TestClient | undefined;
+    let code = '';
+    try {
+      ({ host, guest, code } = await startRoom(srv));
+      // Play one intent so the reconnect burst carries a non-empty log.
+      const mirror = mirrorGame([DECK, DECK], SEED);
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = host.waitFor(eventsEq(m1));
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+
+      // The guest drops: the host gets 'Opponent disconnected' (playerLeft).
+      const leftP = host.waitFor(m => m.type === 'playerLeft');
+      guest.close();
+      expect((await leftP).type).toBe('playerLeft');
+
+      // The guest reconnects. The STILL-CONNECTED host must be told, or its
+      // "Opponent disconnected" banner never clears (App.tsx only clears on
+      // its OWN joined). It must NOT be an opponentJoined: the LAN driver
+      // rebuilds its shadow from that payload, and the host — unlike the
+      // reconnecting client — gets no intent-log replay to catch back up.
+      re = new TestClient(await connect(urlOf(srv)));
+      const backP = host.waitFor(m => m.type === 'opponentReconnected');
+      const oppSilence = host.waitFor(m => m.type === 'opponentJoined', 500).then(
+        () => { throw new Error('host must not receive opponentJoined on a peer reconnect'); },
+        () => undefined,
+      );
+      re.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      expect((await backP).type).toBe('opponentReconnected');
+      await oppSilence;
+    } finally {
+      host?.close();
+      guest?.close();
+      re?.close();
+      await srv.close();
+    }
+  });
+
+  it('Bug 8: replayed intents on reconnect are flagged, live ones are not', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    let re: TestClient | undefined;
+    let code = '';
+    try {
+      ({ host, guest, code } = await startRoom(srv));
+      const mirror = mirrorGame([DECK, DECK], SEED);
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const live = host.waitFor(m => m.type === 'intent');
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      const liveMsg = await live;
+      if (liveMsg.type !== 'intent') throw new Error('intent echo never arrived');
+      // A LIVE broadcast is unflagged — the client animates it.
+      expect(liveMsg.replay).toBeUndefined();
+      expect(m1.length).toBeGreaterThan(0);
+
+      const leftP = host.waitFor(m => m.type === 'playerLeft');
+      guest.close();
+      await leftP;
+
+      // The reconnect burst's intents are CATCH-UP, not live: they must be
+      // marked on the wire so the client applies them (determinism) without
+      // re-animating the whole match (Bug 8).
+      re = new TestClient(await connect(urlOf(srv)));
+      const replayP = re.waitFor(m => m.type === 'intent');
+      const startP = re.waitFor(m => m.type === 'gameStart');
+      re.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const replayMsg = await replayP;
+      if (replayMsg.type !== 'intent') throw new Error('replayed intent never arrived');
+      expect(replayMsg.replay).toBe(true);
+      expect((await startP).type).toBe('gameStart');
+    } finally {
+      host?.close();
+      guest?.close();
+      re?.close();
+      await srv.close();
+    }
+  });
+
+  it('Bug 7: a disconnect drops the departing player pending rematch request', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    let re: TestClient | undefined;
+    let code = '';
+    try {
+      ({ host, guest, code } = await startRoom(srv));
+      // Host requests a rematch, then drops. Its request must NOT survive:
+      // otherwise a single click from the guest starts a rematch the host
+      // never re-requested (and may be mid-reconnect for).
+      host.send({ type: 'rematch' });
+      const leftP = guest.waitFor(m => m.type === 'playerLeft');
+      host.close();
+      expect((await leftP).type).toBe('playerLeft');
+
+      const guestSilence = guest.waitFor(m => m.type === 'rematchStart', 500).then(
+        () => { throw new Error('a stale rematch request from the departed player started a rematch'); },
+        () => undefined,
+      );
+      guest.send({ type: 'rematch' });
+      await guestSilence;
+
+      // The room still works: the reconnected host requesting a rematch now
+      // completes the pair (the guest's own request is still pending).
+      re = new TestClient(await connect(urlOf(srv)));
+      const rejoinedP = re.waitFor(m => m.type === 'joined');
+      re.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      expect((await rejoinedP).type).toBe('joined');
+      const reP = re.waitFor(m => m.type === 'rematchStart');
+      const guestP = guest.waitFor(m => m.type === 'rematchStart');
+      re.send({ type: 'rematch' });
+      expect(await reP).toMatchObject({ type: 'rematchStart', seed: SEED + 1 });
+      expect(await guestP).toMatchObject({ type: 'rematchStart', seed: SEED + 1 });
+    } finally {
+      host?.close();
+      guest?.close();
+      re?.close();
+      await srv.close();
+    }
+  });
+
   it('C1: non-object message bodies get an error reply, not a crash', async () => {
     const srv = await makeServer();
     let raw: TestClient | undefined;
@@ -759,19 +938,16 @@ describe('LAN rooms', () => {
       // (player 0) and the second into the guest slot (player 1) — the
       // documented v1 seat-swap contract. The 'joined' payload carries the
       // seat, so clients must remap from it (audit 06 I2).
-      re1 = new TestClient(await connect(urlOf(srv)));
-      const joined1P = re1.waitFor(m => m.type === 'joined');
-      re1.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
-      const j1 = await joined1P;
-      if (j1.type !== 'joined') throw new Error('joined never arrived');
-      expect(j1.player).toBe(0); // first rejoin → host slot
-      expect(j1.seed).toBe(SEED); // the same game persists across the drop
-      re2 = new TestClient(await connect(urlOf(srv)));
-      const joined2P = re2.waitFor(m => m.type === 'joined');
-      re2.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
-      const j2 = await joined2P;
-      if (j2.type !== 'joined') throw new Error('joined never arrived');
-      expect(j2.player).toBe(1); // second rejoin → guest slot
+      // joinWhenSlotFree retries past the close-observation race (see its doc):
+      // the slots free asynchronously, so a rejoin fired straight after close()
+      // could be told 'Room is full'. The seat assertions below are unchanged.
+      const first = await joinWhenSlotFree(srv, code);
+      re1 = first.client;
+      expect(first.joined.player).toBe(0); // first rejoin → host slot
+      expect(first.joined.seed).toBe(SEED); // the same game persists across the drop
+      const second = await joinWhenSlotFree(srv, code);
+      re2 = second.client;
+      expect(second.joined.player).toBe(1); // second rejoin → guest slot
       // The re-attached game is alive: a mulligan through the re-attached
       // host socket resolves exactly as the mirror expects (reconnect replay).
       const mirror = mirrorGame([DECK, DECK], SEED);

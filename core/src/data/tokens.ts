@@ -51,7 +51,13 @@ export const TOKEN_CARDS: Card[] = [
       'From the embers of the fallen, a spark remembers the sky.'), attack: 2, health: 2 },
 ];
 
-/** Player 2's setup head-start spell (surge already granted; see Game constructor). */
+/**
+ * The Coin: player 1's one-shot 0-cost spell (design spec §4 "Mana: ... Second
+ * player receives a 0-cost 'Mana Surge' spell token (the Coin) usable once").
+ * refillMana 1 = "Gain 1 Mana" for THIS turn only — it raises current mana
+ * without adding a crystal, so it never shifts player 1's mana curve. The
+ * one-use gate is PlayerState.surged (engine/intents.ts + engine/game.ts).
+ */
 export const MANA_SURGE_CARD: Card = {
   ...base('mana-surge', 'Mana Surge', 'spell', 0, 'common',
     'A surge of raw mana floods the arena.'),

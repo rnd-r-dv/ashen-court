@@ -6,9 +6,10 @@ import { mulberry32, shapePaths, type Size } from './artShapes.js';
 /**
  * Procedural card art v2 (Task 38).
  *
- * Renders a card's ArtRecipe as a 250×350 layered SVG, every layer derived
- * from a pure seeded PRNG (mulberry32 over recipe.seed) so the same recipe
- * always produces the identical image — no Math.random, no state:
+ * Renders a card's ArtRecipe as a layered SVG composed in a 250×350 space,
+ * every layer derived from a pure seeded PRNG (mulberry32 over recipe.seed)
+ * so the same recipe always produces the identical image — no Math.random,
+ * no state:
  *
  *   1. sky — linear gradient (recipe.palette override, else preset gradient)
  *   2. midground — silhouette shape paths from artShapes.ts (per-shape rng)
@@ -21,12 +22,11 @@ import { mulberry32, shapePaths, type Size } from './artShapes.js';
  * (custom uploads) the whole composition short-circuits to an `<img>` cover.
  *
  * Pure render component: no state, no side effects, props stay
- * `{ recipe, imageUrl?, className? }`.
+ * `{ recipe, className? }`.
  */
 
 export interface CardArtProps {
   recipe: ArtRecipe;
-  imageUrl?: string;
   className?: string;
 }
 
@@ -34,13 +34,32 @@ const WIDTH = 250;
 const HEIGHT = 350;
 const SIZE: Size = { w: WIDTH, h: HEIGHT };
 
+/**
+ * The visible window into the 250×350 composition (UI pass 2026-08-07).
+ *
+ * Shapes and embers are still generated against the full SIZE, so every seed
+ * produces byte-identical geometry to before — only the framing changed. The
+ * card frame needs a LANDSCAPE art panel (a 5:7 art inside a 5:7 card leaves
+ * no room for rules text, which is what made cards grow to ~600px tall), so
+ * the SVG shows the band the silhouettes actually occupy (they are drawn
+ * between y≈42 and y≈290) and lets their bases bleed off the bottom edge.
+ *
+ * VIEW_W/VIEW_H are exported as the panel's aspect ratio: card.css sizes the
+ * art slot to match, so `slice` never has to crop in normal layout.
+ */
+const VIEW_X = 0;
+const VIEW_Y = 44;
+export const VIEW_W = 250;
+export const VIEW_H = 180;
+
+/** Art-panel aspect ratio (width / height) — card.css mirrors this. */
+export const ART_ASPECT = VIEW_W / VIEW_H;
+
 const frameStyle: CSSProperties = {
-  width: WIDTH,
-  height: HEIGHT,
+  width: '100%',
+  height: '100%',
   position: 'relative',
   overflow: 'hidden',
-  borderRadius: 12,
-  flexShrink: 0,
   background: '#101014',
 };
 
@@ -51,7 +70,7 @@ const imgCoverStyle: CSSProperties = {
   display: 'block',
 };
 
-const svgStyle: CSSProperties = { display: 'block', borderRadius: 12, flexShrink: 0 };
+const svgStyle: CSSProperties = { display: 'block', width: '100%', height: '100%' };
 
 /** Per-recipe gradient id — hashes preset + seed + palette so sibling SVGs never collide. */
 function gradientId(recipe: ArtRecipe): string {
@@ -72,13 +91,11 @@ function layerRng(seed: number, salt: number) {
   return mulberry32(seed ^ salt);
 }
 
-export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
-  const src = recipe.imageUrl ?? imageUrl;
-
-  if (src) {
+export default function CardArt({ recipe, className }: CardArtProps) {
+  if (recipe.imageUrl) {
     return (
       <div className={className} style={frameStyle}>
-        <img src={src} alt="" style={imgCoverStyle} />
+        <img src={recipe.imageUrl} alt="" style={imgCoverStyle} />
       </div>
     );
   }
@@ -95,7 +112,11 @@ export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
 
   const shapes = shapePaths(preset.shape, shapeRng, SIZE);
   const tilt = (glyphRng() * 8 - 4); // seeded −4..+4 degrees
-  const glyphY = 312;
+  // The glyph used to sit at y=312, below the silhouettes and outside the
+  // landscape window. It now reads as a corner sigil watermark inside the
+  // window — same seeded tilt, same rng draw order (art stays deterministic).
+  const glyphX = VIEW_X + VIEW_W - 22;
+  const glyphY = VIEW_Y + VIEW_H - 18;
 
   const embers: Array<{ x: number; y: number; r: number; o: number }> = [];
   const emberCount = 9 + Math.floor(emberRng() * 6);
@@ -120,9 +141,8 @@ export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
   return (
     <svg
       className={className}
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      width={WIDTH}
-      height={HEIGHT}
+      viewBox={`${VIEW_X} ${VIEW_Y} ${VIEW_W} ${VIEW_H}`}
+      preserveAspectRatio="xMidYMid slice"
       role="img"
       aria-label={`${preset.shape} art`}
       style={svgStyle}
@@ -138,8 +158,8 @@ export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
         </radialGradient>
       </defs>
 
-      {/* 1. sky */}
-      <rect x="0" y="0" width={WIDTH} height={HEIGHT} rx="12" fill={`url(#${gid})`} />
+      {/* 1. sky — square corners; the art slot supplies the rounding */}
+      <rect x={VIEW_X} y={VIEW_Y} width={VIEW_W} height={VIEW_H} fill={`url(#${gid})`} />
 
       {/* 2. midground silhouette */}
       <g fill={preset.accent} fillRule="evenodd" opacity="0.32">
@@ -150,15 +170,15 @@ export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
 
       {/* 3. runic glyph */}
       <text
-        x={WIDTH / 2}
+        x={glyphX}
         y={glyphY}
-        textAnchor="middle"
+        textAnchor="end"
         fill={preset.accent}
-        fontSize="92"
+        fontSize="54"
         fontFamily="Georgia, 'Times New Roman', serif"
-        letterSpacing="8"
-        opacity="0.95"
-        transform={`rotate(${tilt.toFixed(1)} ${WIDTH / 2} ${glyphY})`}
+        letterSpacing="4"
+        opacity="0.6"
+        transform={`rotate(${tilt.toFixed(1)} ${glyphX} ${glyphY})`}
       >
         {glyph}
       </text>
@@ -169,7 +189,7 @@ export default function CardArt({ recipe, imageUrl, className }: CardArtProps) {
       ))}
 
       {/* 5. vignette */}
-      <rect x="0" y="0" width={WIDTH} height={HEIGHT} rx="12" fill={`url(#${gid}-vig)`} />
+      <rect x={VIEW_X} y={VIEW_Y} width={VIEW_W} height={VIEW_H} fill={`url(#${gid}-vig)`} />
     </svg>
   );
 }

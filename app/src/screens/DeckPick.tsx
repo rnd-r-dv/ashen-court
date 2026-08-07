@@ -7,11 +7,16 @@
 // Player 2). Final selection reports through onComplete — App stores it as the
 // pending match and routes to the Task 30 match placeholder.
 import { useMemo, useState } from 'react';
-import { DECK_DEFS, HEROES, expandDeck } from '@ashen/core';
-import type { ArchetypeId } from '@ashen/core';
 import { useNav } from '../App.js';
 import type { BotLevel, Mode } from '../types.js';
-import { deckSlug, loadCustomCards, loadDecks } from '../storage.js';
+import { loadCustomCards } from '../storage.js';
+// Audit 07 bug 18: the deck-source builders live in ONE module. DeckPick used
+// to carry a near-verbatim copy of CURATED_INFO/buildCurated/buildCustom and
+// the two copies had already drifted (the LAN one rendered raw 'custom:<slug>'
+// keys). The module keeps its lanDecks name — LanHost/LanJoin/LanDeckGrid
+// import it and those files are not part of this fix.
+import { buildCurated, buildCustom } from '../game/lanDecks.js';
+import type { DeckCard } from '../game/lanDecks.js';
 import './shell.css';
 
 /** What a deck-pick flow reports back to App. */
@@ -19,60 +24,6 @@ export interface DeckPickResult {
   mode: Mode;
   difficulty?: BotLevel;
   decks: { slug: string; name: string }[]; // pick order: player 0 first
-}
-
-interface DeckCard {
-  slug: string;
-  name: string;
-  hero?: string;
-  tag: string;
-  cards: number;
-  custom: boolean;
-}
-
-/** Display names + archetype tags for the 12 curated decks (spec table). */
-const CURATED_INFO: Record<ArchetypeId, { name: string; tag: string }> = {
-  ember: { name: 'The Ember Court', tag: 'Burn / Aggro' },
-  choir: { name: 'The Hollow Choir', tag: 'Control' },
-  vermin: { name: 'The Vermin Swarm', tag: 'Zoo' },
-  dragon: { name: 'The Dragonflight', tag: 'Midrange tribal' },
-  roots: { name: 'The Elder Roots', tag: 'Ramp' },
-  dance: { name: 'The Shadow Dancers', tag: 'Combo' },
-  bone: { name: 'The Bone Horde', tag: 'Token swarm' },
-  pact: { name: 'The Grave Pact', tag: 'Self-damage / life-swap' },
-  coven: { name: 'The Night Coven', tag: 'Debuff control' },
-  star: { name: 'The Starforged', tag: 'Big-mana cheat' },
-  vigil: { name: 'The Eternal Vigil', tag: 'Sustain grind' },
-  storm: { name: 'The Stormwrought', tag: 'Tempo spells' },
-};
-
-function buildCurated(): DeckCard[] {
-  // DECK_DEFS and HEROES share archetype order, so the zip is positional.
-  return (Object.keys(DECK_DEFS) as ArchetypeId[]).map((slug, i) => {
-    const hero = HEROES[i];
-    return {
-      slug,
-      name: CURATED_INFO[slug].name,
-      hero: hero ? hero.name : 'Unknown hero',
-      tag: CURATED_INFO[slug].tag,
-      cards: expandDeck(DECK_DEFS[slug]).length,
-      custom: false,
-    };
-  });
-}
-
-function buildCustom(): DeckCard[] {
-  // Overlays are stored under namespaced 'custom:<slug>' keys (audit 05 I4);
-  // the namespaced key IS the deck's slug downstream (deckCardIds resolves it
-  // before DECK_DEFS), so a custom deck can never resolve to a curated deck.
-  const overlays = loadDecks();
-  return Object.entries(overlays).map(([key, cardIds]) => ({
-    slug: key,
-    name: deckSlug(key) ?? key,
-    tag: 'Custom deck',
-    cards: cardIds.length,
-    custom: true,
-  }));
 }
 
 export default function DeckPick({
@@ -121,9 +72,15 @@ export default function DeckPick({
     return difficulty ? `Choose your deck — ${difficulty}` : 'Choose your deck';
   }
 
-  function renderDeckCard(deck: DeckCard, index: number) {
+  function renderDeckCard(deck: DeckCard) {
+    // Audit 07 bug 17: the highlight means "this deck is one of the picks
+    // already locked in". It used to index `picks` (at most 2 entries) by the
+    // deck's GRID position, so a deck chosen anywhere past grid position 1
+    // checked an always-undefined slot and never lit up. Match by content
+    // instead; the `.custom` comparison keeps the curated and custom grids
+    // from cross-highlighting each other.
     const selected = hotseat
-      ? picks[index]?.slug === deck.slug && picks[index]?.custom === deck.custom
+      ? picks.some((p) => p.slug === deck.slug && p.custom === deck.custom)
       : picked?.slug === deck.slug && picked?.custom === deck.custom;
     return (
       <button
@@ -160,7 +117,7 @@ export default function DeckPick({
 
       <section className="shell-section">
         <h2 className="shell-section-title">Curated decks</h2>
-        <div className="shell-grid">{curated.map(renderDeckCard)}</div>
+        <div className="shell-grid">{curated.map((d) => renderDeckCard(d))}</div>
       </section>
 
       <section className="shell-section">
@@ -172,7 +129,7 @@ export default function DeckPick({
             {loadCustomCards().length === 1 ? '' : 's'} in the Forge.
           </p>
         ) : (
-          <div className="shell-grid">{custom.map((d, i) => renderDeckCard(d, i))}</div>
+          <div className="shell-grid">{custom.map((d) => renderDeckCard(d))}</div>
         )}
       </section>
 

@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, EffectSpec, EffectTarget, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, buff, destroy, dmg, draw, heal } from './builders.js';
 
 /**
  * Night Coven (Task 16): Morwenna Hex's debuff/curse deck. Signature cards
@@ -9,46 +10,10 @@ import type { DeckDef } from './index.js';
  */
 const COVEN_PALETTE = ['#1a1609', '#d9c94f'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+const { artifact, creature, spell } = archetypeCards('curse', COVEN_PALETTE, 'coven');
 
-const art = (id: string): Card['art'] => ({ preset: 'curse', palette: COVEN_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [],
-  flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'coven',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'coven',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
-  id, name, type: 'artifact', cost,
-  keywords: [], effects: [], triggers, rarity, archetype: 'coven',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const heal = (value: number): EffectSpec => ({ kind: 'heal', value, target: 'hero' });
-const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
-const buff = (value: number, value2: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'buff', value, value2, target });
-const freeze = (target: EffectSpec['target']): EffectSpec => ({ kind: 'freeze', target });
-const destroy = (target: EffectSpec['target']): EffectSpec => ({ kind: 'destroy', target });
+/** Coven is the only archetype that freezes, so this stays local. */
+const freeze = (target: EffectTarget): EffectSpec => ({ kind: 'freeze', target });
 
 export const HERO: HeroSpec = {
   name: 'Morwenna Hex',

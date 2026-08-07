@@ -14,7 +14,7 @@
 // and replays the intent log so it catches up to the live state.
 import { describe, expect, it, vi } from 'vitest';
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@ashen/core';
-import type { HeroSpec, Intent, PlayerIndex } from '@ashen/core';
+import type { GameEvent, HeroSpec, Intent, PlayerIndex } from '@ashen/core';
 import type { ClientMessage, ServerMessage } from '@ashen/server/protocol';
 import type { AddressInfo } from 'ws';
 import { startServer } from '../../server/src/index.js';
@@ -205,6 +205,60 @@ describe('createLanDriver owns echo application', () => {
     expect(driver.resyncRequested).toBe(false); // rebuild cleared the flag
   });
 
+  it('Bug 8: catch-up replay applies to the shadow but forwards no animation trees', () => {
+    const client = new FakeLanClient();
+    const driver = createLanDriver(client as unknown as LanClient, makeShadow());
+    const batches: GameEvent[][] = [];
+    driver.onEvents(t => batches.push(t));
+
+    // Live play forwards its resolution tree (animation).
+    client.receive({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+    expect(batches.length).toBe(1);
+    expect(batches[0]!.length).toBeGreaterThan(0);
+
+    // Reconnect burst: joined (rebuild) → N flagged intents (catch-up) →
+    // gameStart (live). The flagged intents MUST still be applied — the
+    // shadow's determinism depends on every intent landing — but must NOT be
+    // forwarded, or the player watches the whole match replay in animation.
+    client.receive({
+      type: 'joined', player: 0, seed: SEED, opponentName: 'Hosty',
+      decks: [DECK, DECK], heroes: [HERO.name, HERO.name], cards: [],
+    });
+    batches.length = 0;
+    client.receive({ type: 'intent', intent: { kind: 'mulligan', keep: [] }, replay: true });
+    client.receive({ type: 'intent', intent: { kind: 'mulligan', keep: [] }, replay: true });
+    expect(driver.game().state.phase).toBe('main'); // applied
+    expect(batches).toEqual([]);                    // but never animated
+    expect(driver.resyncRequested).toBe(false);
+
+    // gameStart closes the catch-up with ONE empty batch: no animation, but
+    // useMatch's step() refreshes its state mirror from the caught-up shadow,
+    // so the UI lands on the current board.
+    client.receive({ type: 'gameStart' });
+    expect(batches).toEqual([[]]);
+
+    // Live play afterwards forwards trees again.
+    client.receive({ type: 'intent', intent: { kind: 'endTurn' } });
+    expect(batches.length).toBe(2);
+    expect(batches[1]!.length).toBeGreaterThan(0);
+  });
+
+  it('Bug 6: opponentReconnected never rebuilds the still-connected shadow', () => {
+    const client = new FakeLanClient();
+    const game = makeShadow();
+    const driver = createLanDriver(client as unknown as LanClient, game);
+    client.receive({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+    const before = driver.game().serialize();
+
+    // The peer-reconnect notice is informational ONLY. Reusing opponentJoined
+    // here would rebuild this (still-connected) client's shadow from a fresh
+    // seed — wiping a mid-match game that, unlike the reconnecting client,
+    // receives NO intent-log replay to catch back up.
+    client.receive({ type: 'opponentReconnected' });
+    expect(driver.game()).toBe(game);
+    expect(driver.game().serialize()).toBe(before);
+  });
+
   it('rebuilds the shadow on an opponentJoined payload (host path, Task 45)', () => {
     const client = new FakeLanClient();
     const game = makeShadow();
@@ -371,10 +425,16 @@ describe('LAN full mirroring (real server)', () => {
       expect(hostDriver.game().serialize()).toBe(guestDriver.game().serialize());
       expect(hostDriver.game().serialize()).toBe(mirror.serialize());
 
-      // Mulligan phase: keep [] for p0 then p1 (the engine's mulligansDone
-      // order — each mulligan is driven through its actor's own socket).
+      // Mulligan phase: p0 keeps nothing, p1 keeps the Coin (the engine's
+      // mulligansDone order — each mulligan is driven through its actor's own
+      // socket). audit 02 removed p1's setup mana head start, so p1 now opens
+      // turn 1 on 1 crystal like p0 and must SPEND the Coin to reach the
+      // 2-mana hero power below. Keeping it also stops the keep-[] mulligan
+      // from discarding it (mulliganed cards leave the game entirely).
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
-      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
+      const coinKeep = mirror.state.players[1].hand.indexOf('mana-surge');
+      expect(coinKeep).toBeGreaterThanOrEqual(0);
+      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [coinKeep] });
       expect(mirror.state.phase).toBe('main');
 
       // p0 turn 0: play the 1-cost creature (seed-2 deterministic hand).
@@ -383,7 +443,14 @@ describe('LAN full mirroring (real server)', () => {
       await drive(host, guest, mirror, hostDriver, guestDriver, p0play!);
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'endTurn' });
 
-      // p1 turn 1: hero power (Pyra, 2-cost dealDamage; p1 has 2 mana).
+      // p1 turn 1: spend the Coin (0-cost, +1 mana for this turn only), which
+      // pays for the 2-cost hero power (Pyra, dealDamage 1). This also puts the
+      // newly-playable Coin on the wire — it mirrors like any other intent.
+      const coinIndex = mirror.state.players[1].hand.indexOf('mana-surge');
+      expect(coinIndex).toBeGreaterThanOrEqual(0);
+      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'playCard', handIndex: coinIndex });
+      expect(mirror.state.players[1].mana).toBe(2);
+      expect(mirror.state.players[1].maxMana).toBe(1);   // temporary crystal only
       const hp = mirror.legalIntents(1).find(i => i.kind === 'heroPower');
       expect(hp).toBeDefined();
       await drive(host, guest, mirror, hostDriver, guestDriver, hp!);
@@ -407,7 +474,7 @@ describe('LAN full mirroring (real server)', () => {
       expect(mirror.state.players[0].hero.hp).toBe(29); // boar dealt 1 (hero power cost 2 hit p0)
       expect(mirror.state.players[1].hero.hp).toBe(28); // hero power dealt 2
       expect(hostDriver.game().state.players[0].board.length).toBe(1); // the boar
-      expect(hostBatches).toBe(9); // one forwarded tree per driven intent (C1)
+      expect(hostBatches).toBe(10); // one forwarded tree per driven intent (C1) — 10 since the Coin joined the script
     } finally {
       host.client.close();
       guest.client.close();
@@ -456,11 +523,19 @@ describe('LAN full mirroring (real server)', () => {
       // Play a scripted prefix, each intent through its actor's own socket;
       // both shadows mirror the live state exactly.
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
-      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
+      // p1 keeps the Coin and spends it on turn 1 to afford the 2-cost hero
+      // power — p1 no longer starts a crystal ahead (audit 02), so the old
+      // keep-[] + straight-to-hero-power prefix is not legal any more.
+      const coinKeep = mirror.state.players[1].hand.indexOf('mana-surge');
+      expect(coinKeep).toBeGreaterThanOrEqual(0);
+      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [coinKeep] });
       const p0play = mirror.legalIntents(0).find(i => i.kind === 'playCard');
       expect(p0play).toBeDefined();
       await drive(host, guest, mirror, hostDriver, guestDriver, p0play!);
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'endTurn' });
+      const coinIndex = mirror.state.players[1].hand.indexOf('mana-surge');
+      expect(coinIndex).toBeGreaterThanOrEqual(0);
+      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'playCard', handIndex: coinIndex });
       const hp = mirror.legalIntents(1).find(i => i.kind === 'heroPower');
       expect(hp).toBeDefined();
       await drive(host, guest, mirror, hostDriver, guestDriver, hp!);
@@ -478,6 +553,12 @@ describe('LAN full mirroring (real server)', () => {
       // to the rebuilt shadow — the same path useLanMatch's match phase uses.
       re = new LanHarness(url);
       const rd = wire(re, makeShadow());
+      // Bug 8 (end-to-end): the catch-up must not animate. Every historical
+      // resolution tree used to be forwarded into useMatch → useAnimationQueue,
+      // so the player watched the whole match replay before reaching the live
+      // board. Only the single empty state-sync batch may be forwarded.
+      const reBatches: GameEvent[][] = [];
+      rd.onEvents(t => reBatches.push(t));
       const joinedP = re.waitFor(m => m.type === 'joined');
       const startP = re.waitFor(m => m.type === 'gameStart');
       re.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO.name });
@@ -492,6 +573,10 @@ describe('LAN full mirroring (real server)', () => {
       // The rebuilt shadow + replayed log reached the live state.
       expect(rd.game().serialize()).toBe(hostDriver.game().serialize());
       expect(rd.game().serialize()).toBe(mirror.serialize());
+      // …without animating a single historical batch (Bug 8): the seven
+      // replayed intents produced no forwarded trees, only the one empty state
+      // sync.
+      expect(reBatches).toEqual([[]]);
     } finally {
       host.client.close();
       guest.client.close();

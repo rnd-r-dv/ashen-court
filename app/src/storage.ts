@@ -84,8 +84,12 @@ export function saveCustomCard(card: Card): boolean {
  * Delete a custom card. Throws when the card is referenced elsewhere: another
  * custom card's summon/copyCard effect resolves it (deleting it would crash
  * the engine mid-match — audit 05 C2), or a saved deck overlay contains it.
+ *
+ * Returns false when localStorage rejects the write, exactly like
+ * saveCustomCard (I1/I9). A discarded return here is a silent no-op: the UI
+ * would report "deleted" while the card survives the next reload.
  */
-export function deleteCustomCard(id: string): void {
+export function deleteCustomCard(id: string): boolean {
   const cards = loadCustomCards();
   const referencers: string[] = [];
   for (const c of cards) {
@@ -102,7 +106,7 @@ export function deleteCustomCard(id: string): void {
   if (referencers.length > 0) {
     throw new Error(`Cannot delete ${id}: referenced by ${referencers.join(', ')}`);
   }
-  write(KEY_CARDS, cards.filter((c) => c.id !== id));
+  return write(KEY_CARDS, cards.filter((c) => c.id !== id));
 }
 
 // ---- deck overlay (custom:<slug> → 60 card ids) ----
@@ -131,10 +135,11 @@ export function saveDeck(slug: string, cardIds: string[]): boolean {
   return write(KEY_DECKS, decks);
 }
 
-export function deleteDeck(slug: string): void {
+/** Returns false when localStorage rejects the write, like saveDeck (I1/I9). */
+export function deleteDeck(slug: string): boolean {
   const decks = loadDecks();
   delete decks[deckKey(slug)];
-  write(KEY_DECKS, decks);
+  return write(KEY_DECKS, decks);
 }
 
 // ---- settings ----

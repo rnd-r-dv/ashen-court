@@ -119,11 +119,17 @@ export default function App() {
       const entry = buildMatchEntry(pendingMatch);
       setMatchEntry(entry);
       navigate({ name: 'match', setup: entry.setup });
-    } catch {
-      // A saved deck can reference custom cards that were later deleted —
-      // Game's constructor validates and throws; send the player back rather
-      // than crashing the router.
-      window.alert('That deck contains cards that are no longer available. Please pick again.');
+    } catch (err) {
+      // Game's constructor runs validateDeck and throws on ANY error, carrying
+      // the real detail ("Deck 0 invalid: Deck must be exactly 60 cards (has
+      // 12)."). Audit 07 bug 19: this used to hardcode "cards that are no
+      // longer available", which names only one of several possible causes —
+      // an undersized saved deck reported a missing-card problem that did not
+      // exist. Surface the engine's own reason, stripped of the "Deck N
+      // invalid:" seat prefix that means nothing to a player.
+      const raw = err instanceof Error ? err.message : String(err);
+      const detail = raw.replace(/^Deck \d+ invalid:\s*/, '');
+      window.alert(`That deck can't be played.\n\n${detail}\n\nPlease pick again.`);
     }
   }
 
@@ -195,6 +201,15 @@ export default function App() {
         return;
       }
       if (m.type === 'opponentJoined') { setLanNotice(null); return; }
+      if (m.type === 'opponentReconnected') {
+        // Bug 6: the opponent dropped and came back. The 'left' banner was set
+        // by its playerLeft and nothing retracted it before — this player is
+        // still connected, so it never receives its OWN 'joined'. Clear only
+        // the stale disconnect banner: an unrelated error/seat-remap notice
+        // must survive.
+        setLanNotice(prev => (prev?.kind === 'left' ? null : prev));
+        return;
+      }
     };
     s.client.addMessageHandler(handler);
     return () => s.client.removeMessageHandler(handler);

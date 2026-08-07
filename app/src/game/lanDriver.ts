@@ -102,6 +102,12 @@ export function createLanDriver(
   let current = game;
   let resyncRequested = false;
   let seat = initialSeat;
+  /** Bug 8: armed by 'joined' (the start of the server's reconnect burst) and
+   *  disarmed by 'gameStart' (the burst's terminator). Only used to emit ONE
+   *  empty state-sync batch at the end of a catch-up; the per-intent animation
+   *  suppression is driven by the wire's explicit `replay` flag, not by this
+   *  window, so an interleaved live broadcast still animates correctly. */
+  let catchingUp = false;
   const listeners = new Set<(events: GameEvent[]) => void>();
 
   client.addMessageHandler((m) => {
@@ -120,6 +126,10 @@ export function createLanDriver(
       // SEAT (the first rejoin after a dual disconnect reclaims the host
       // slot) — remap so the UI never submits the wrong seat's intents.
       if (m.type === 'joined') seat = m.player;
+      // Bug 8: 'joined' opens the server's catch-up burst (joined → replayed
+      // intents → gameStart). Arm the window so gameStart can emit the single
+      // empty state-sync batch that lands the UI on the caught-up board.
+      catchingUp = true;
       const heroes = m.heroes.map(name => HEROES.find(h => h.name === name) ?? HEROES[0]!);
       current = Game.create(
         { decks: m.decks, heroes: heroes as [HeroSpec, HeroSpec], seed: m.seed },
@@ -131,7 +141,13 @@ export function createLanDriver(
     if (m.type === 'intent') {
       try {
         const tree = current.submit(m.intent); // deterministic mirror — same as the server
-        for (const cb of [...listeners]) cb(tree);
+        // Bug 8: a replayed intent (reconnect catch-up) is APPLIED like any
+        // other — the shadow's determinism depends on every logged intent
+        // landing — but its resolution tree is NOT forwarded. Forwarding it
+        // pushed every historical batch into useMatch → useAnimationQueue, so
+        // the rejoining player sat through the whole match in animation before
+        // reaching the live board.
+        if (!m.replay) for (const cb of [...listeners]) cb(tree);
       } catch (err) {
         // Shadow divergence: unreachable while both sides replay the same
         // intent script on the same seed. Flag it for the hook to surface;
@@ -142,9 +158,22 @@ export function createLanDriver(
       }
       return;
     }
+    if (m.type === 'gameStart') {
+      // Bug 8: end of the catch-up burst. Forward ONE empty batch: useMatch's
+      // step() queues nothing for animation when the batch is empty but always
+      // refreshes its state mirror from driver.game(), so the UI jumps
+      // straight to the caught-up board instead of showing the pre-reconnect
+      // (or freshly-rebuilt) shadow.
+      if (catchingUp) {
+        catchingUp = false;
+        for (const cb of [...listeners]) cb([]);
+      }
+      return;
+    }
     // {type:'events'} drives nothing client-side (the forwarded tree IS the
-    // events); gameStart / rematchStart / playerLeft are the screens' +
-    // App's business.
+    // events); opponentReconnected is App's business (it clears the stale
+    // "Opponent disconnected" banner — deliberately NOT a shadow rebuild, see
+    // protocol.ts); rematchStart / playerLeft are the screens' + App's.
   });
 
   return {

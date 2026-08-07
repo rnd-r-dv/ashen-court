@@ -65,7 +65,7 @@ export default function Card({
       faceDown={faceDown}
       onClick={onClick ? () => onClick(card) : undefined}
     >
-      <CardArt recipe={card.art} imageUrl={card.art.imageUrl} />
+      <CardArt recipe={card.art} />
     </CardFrame>
   );
 }

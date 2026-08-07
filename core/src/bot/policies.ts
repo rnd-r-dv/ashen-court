@@ -7,21 +7,41 @@ export interface BotPolicy {
   chooseIntent(game: Game, me: PlayerIndex): Intent;
 }
 
-/** Grandmaster turn budget (depth-2 search): total wall-clock cap per chooseIntent.
- *  Approximate, per-iteration-granular: checked BETWEEN iterations, so one heavy
- *  iteration (submit + full enemy-turn sim) may overrun it by one iteration's
- *  cost. The deterministic hard cap below (MAX_EVAL) keeps the evaluated set a
- *  pure function of state when this budget does not bind (audit 03 I1/I3). */
-const GRANDMASTER_BUDGET_MS = 1000;
-/** Grandmaster enemy-turn budget: cap for the full-enemy-turn simulation that
- *  follows an endTurn intent (audit 03 C1). Same 200ms sub-budget as the
- *  retired single-reply search. */
-const ENEMY_TURN_BUDGET_MS = 200;
 /**
- * Grandmaster deterministic fallback cap: at most this many own intents are
- * evaluated, in stable enumeration order (hand/board order), so the evaluated
- * set is a pure function of state — never of wall time (audit 03 I1/I3). */
+ * Grandmaster search bounds — ALL DETERMINISTIC (issue 11).
+ *
+ * These were wall-clock budgets (a 1000ms cap per chooseIntent and a 200ms cap
+ * on the enemy-turn simulation). That made bot decisions a function of machine
+ * load, which is the one hole in the engine's "same seed + same intent sequence
+ * ⇒ byte-identical state" invariant: under load the same seed played a
+ * different match, so seeded regression tests could flake. The budgets are now
+ * replaced by pure state-derived caps, so the evaluated set depends only on the
+ * position. See core/tests/bot/determinism.test.ts, which drives a hostile
+ * clock to pin this down.
+ *
+ * Sizing, measured over 12 full Grandmaster matches on the curated pool with
+ * both caps instrumented: they bound the worst case, they do not shape normal
+ * decisions. Widest own enumeration 44, widest enemy-reply enumeration 56 (cap
+ * 64); longest simulated enemy turn 9 intents (cap 32). Both caps bound ZERO
+ * times across ~864 decisions, so play strength is unchanged by this fix.
+ *
+ * Cost after the change: mean 2.5ms, p50 1.7ms, p95 7.9ms, p99 15ms, max 26ms
+ * per decision (before: mean 2.7ms, p99 16ms, max 40ms) — the wall-clock budget
+ * was dead weight, never once binding, and the search sits ~40x under the
+ * 1000ms cap it used to enforce.
+ */
+
+/** At most this many own intents are evaluated, in stable enumeration order
+ *  (hand/board order). Widest position observed: 62. */
 const MAX_EVAL = 64;
+/**
+ * Cap on intents simulated inside ONE enemy-turn simulation. Bounds the depth-2
+ * reply model: the sim stops after this many enemy intents even if the enemy
+ * has not ended its turn, and the partial turn is scored as-is (approximate,
+ * exactly as the old 200ms cut was — but reproducibly so). Longest real greedy
+ * turn observed: 11.
+ */
+const MAX_ENEMY_TURN_INTENTS = 32;
 
 /**
  * One-time mulligan policy: keep every card that costs >= 4, redraw the rest.
@@ -66,19 +86,20 @@ export const Recruit: BotPolicy = {
  * under the same seed. Intents that throw on submit are skipped defensively
  * (log-free); an empty legal set returns null (Veteran falls back to endTurn,
  * Grandmaster treats it as 'no reply'). Mulligan delegates to mulliganPolicy.
- * With budgetMs set (Grandmaster's enemy-turn simulation) the loop stops once
- * the wall-clock cap is exceeded; without a budget the loop always exhausts
- * every intent, so Veteran's behavior is unchanged by the extraction.
+ * With maxEval set (Grandmaster's enemy-turn simulation) the loop stops after
+ * that many candidates in stable enumeration order; without it the loop always
+ * exhausts every intent, so Veteran's behavior is unchanged by the extraction.
+ * maxEval replaced a wall-clock sub-budget (issue 11) — a count is a pure
+ * function of the position, elapsed time is not.
  */
-function greedyBest(game: Game, me: PlayerIndex, budgetMs?: number): Intent | null {
+function greedyBest(game: Game, me: PlayerIndex, maxEval?: number): Intent | null {
   if (game.state.phase === 'mulligan') return mulliganPolicy(game, me);
   const legal = game.legalIntents(me);
   if (legal.length === 0) return null;
-  const start = performance.now();
   let best = legal[0]!;
   let bestScore = -Infinity;
   for (let i = 0; i < legal.length; i++) {
-    if (budgetMs !== undefined && performance.now() - start > budgetMs) break;
+    if (maxEval !== undefined && i >= maxEval) break;
     const intent = legal[i]!;
     let score: number;
     try {
@@ -118,21 +139,20 @@ export const Veteran: BotPolicy = {
  * pick its Veteran-style greedy argmax (greedyBest — same evaluate + i*1e-9
  * tiebreak convention, shared code), submit the pick to the working clone, and
  * repeat until the enemy ends its turn (current player returns to me) or the
- * game ends. The whole simulation is bounded by ENEMY_TURN_BUDGET_MS: checked
- * at loop top, and the remaining time is passed into each greedyBest so no
- * single reply search can overrun the cap by more than one iteration. The final
- * state — my next turn after the enemy's endTurn (ready board, fresh mana,
- * drawn card), or the terminal state — is scored from my perspective. A
- * budgeted mid-turn cut leaves the partial enemy turn scored: approximate, and
- * only reachable when the 200ms cap binds (never observed in practice).
+ * game ends. The simulation is bounded deterministically (issue 11): at most
+ * MAX_ENEMY_TURN_INTENTS iterations, and each reply search is itself capped at
+ * MAX_EVAL candidates. The final state — my next turn after the enemy's endTurn
+ * (ready board, fresh mana, drawn card), or the terminal state — is scored from
+ * my perspective. A capped mid-turn cut leaves the partial enemy turn scored:
+ * approximate, and unreachable in real play (longest greedy turn observed: 11
+ * of the 32 allowed).
  */
 function scoreAfterEnemyTurn(g: Game, me: PlayerIndex): number {
   const enemy = (1 - me) as PlayerIndex;
-  const start = performance.now();
+  let steps = 0;
   while (g.state.phase !== 'gameOver' && g.currentPlayer() === enemy) {
-    if (performance.now() - start > ENEMY_TURN_BUDGET_MS) break;
-    const remaining = Math.max(0, ENEMY_TURN_BUDGET_MS - (performance.now() - start));
-    const reply = greedyBest(g, enemy, remaining);
+    if (steps++ >= MAX_ENEMY_TURN_INTENTS) break;
+    const reply = greedyBest(g, enemy, MAX_EVAL);
     if (reply === null) break; // defensive: no legal intents (endTurn is always legal in main)
     try {
       g.submit(reply);
@@ -151,27 +171,24 @@ function scoreAfterEnemyTurn(g: Game, me: PlayerIndex): number {
  * identical to Veteran. endTurn intents are scored AFTER a full simulation of
  * the enemy's entire greedy turn (scoreAfterEnemyTurn), so passing into a
  * punishing enemy turn is seen and avoided. Strict > argmax over the
- * deterministic enumeration. Bounds (audit 03 I1/I3): a 1000ms wall-clock
- * budget, checked between iterations and therefore approximate / per-
- * iteration-granular, PLUS a deterministic hard cap of MAX_EVAL own intents
- * evaluated in enumeration order — the evaluated set is a pure function of
- * state whenever the wall-clock budget does not bind (today it never does).
- * Intents that throw on submit are skipped; an empty legal set degrades to
- * endTurn. Mulligan is delegated to mulliganPolicy.
+ * deterministic enumeration. Bounds (issue 11): MAX_EVAL own intents evaluated
+ * in enumeration order, and each endTurn's enemy simulation bounded by
+ * MAX_ENEMY_TURN_INTENTS — no wall clock anywhere on the decision path, so the
+ * evaluated set is a pure function of state and a seeded match replays
+ * identically no matter how loaded the machine is. Intents that throw on submit
+ * are skipped; an empty legal set degrades to endTurn. Mulligan is delegated to
+ * mulliganPolicy.
  */
 export const Grandmaster: BotPolicy = {
   chooseIntent(game, me) {
     if (game.state.phase === 'mulligan') return mulliganPolicy(game, me);
     const legal = game.legalIntents(me);
     if (legal.length === 0) return { kind: 'endTurn' };
-    const start = performance.now();
     let best = legal[0]!;
     let bestScore = -Infinity;
     for (let i = 0; i < legal.length; i++) {
-      // Budget check BEFORE the iteration (audit 03 I1/I3): the previous
-      // iteration's full cost (submit + enemy-turn sim) counts against the
-      // 1000ms cap, and MAX_EVAL caps the evaluated set deterministically.
-      if (performance.now() - start > GRANDMASTER_BUDGET_MS) break;
+      // Deterministic cap only (issue 11): the wall-clock budget that used to
+      // sit here made the evaluated set depend on machine load.
       if (i >= MAX_EVAL) break;
       const intent = legal[i]!;
       let score: number;

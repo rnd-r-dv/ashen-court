@@ -135,7 +135,15 @@ export default function DeckBuilder() {
   function onDelete() {
     if (!activeDeckId) return;
     if (!window.confirm(`Delete deck "${activeDeckId}"? This cannot be undone.`)) return;
-    deleteDeck(activeDeckId);
+    // Audit 07 bug 21: deleteDeck returns false when localStorage rejects the
+    // write (I1/I9). Discarding that reported "Deleted deck" AND wiped the
+    // working list while the overlay was still on disk — a reload brought the
+    // "deleted" deck straight back, and the player's in-progress list was gone
+    // for nothing. Keep every bit of state on a failed delete.
+    if (!deleteDeck(activeDeckId)) {
+      showToast('Storage full — the deck could not be deleted.');
+      return;
+    }
     setActiveDeckId(null);
     setDeck([]);
     setDeckName('');

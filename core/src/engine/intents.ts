@@ -1,6 +1,6 @@
 import { MANA_SURGE } from '../types.js';
 import type { Card, EffectSpec, EffectTarget, Intent, PlayerIndex, TargetRef } from '../types.js';
-import { findCreature, isDragon, resolveTargets, SINGLE_TARGET_TARGETS, BOARD_CAP } from './effects.js';
+import { findCreature, isChoiceTarget, isDragon, resolveTargets, BOARD_CAP } from './effects.js';
 import { canAttack, effectiveKeywords, tauntPresent } from './keywords.js';
 import type { Game } from './game.js';
 
@@ -19,8 +19,10 @@ import type { Game } from './game.js';
  *    { type: 'creature', id } — the owner is inferred from the board. Side
  *    checks: enemyCreature → enemy board, friendlyCreature/friendlyDragon →
  *    own board, anyCreature/any → anywhere, hero/self → own hero ref.
- *  - Mana Surge (refillMana 1): the `surged` flag gates it — validation
- *    rejects when surged is true (the head start was already granted).
+ *  - Mana Surge / the Coin (refillMana 1): the `surged` flag gates it to ONE
+ *    use per match — validation rejects once surged is true. `surged` starts
+ *    false and is set when the card is played (audit 02: setup used to pre-set
+ *    it, which made the card permanently unplayable).
  */
 
 /** Cost the player would actually pay to play `card`, with discounts applied. */
@@ -87,8 +89,8 @@ function battlecryEffects(card: Card): EffectSpec[] {
  */
 export function validateEffectTargets(game: Game, me: PlayerIndex, effects: readonly EffectSpec[], target: TargetRef | undefined): string | null {
   for (const spec of effects) {
-    if (spec.target === undefined || !SINGLE_TARGET_TARGETS.has(spec.target) || spec.target === 'hero' || spec.target === 'self') continue;
-    const err = validateTarget(game, me, spec.target, target);
+    if (!isChoiceTarget(spec.target)) continue;
+    const err = validateTarget(game, me, spec.target!, target);
     if (err) return err;
   }
   return null;
@@ -158,7 +160,11 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
     // mirror how unaffordable cards are skipped (validatePlayCard rejects).
     if (card.type === 'creature' && p.board.length >= BOARD_CAP) continue;
     if (p.mana < playEffectiveCost(game, card, player)) continue;
-    const variants = targetVariants(game, player, card.type === 'creature' ? battlecryEffects(card) : card.effects);
+    // Same effect list validatePlayCard validates against — spell effects AND
+    // battlecry effects — so enumeration and validation cannot disagree. (No
+    // curated creature carries `effects`, but a Forge one may, and it would
+    // otherwise be enumerated without the target validation demands.)
+    const variants = targetVariants(game, player, [...card.effects, ...battlecryEffects(card)]);
     if (!variants) continue;   // single-target effect with no legal ref → unplayable
     for (const t of variants) out.push({ kind: 'playCard', handIndex: i, target: t });
   }
@@ -198,18 +204,23 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
  * one intent per legal ref via resolveTargets; hero/self auto-resolve to the
  * caster's own hero and are never enumerated as choices. Effects with no
  * single-target choice (AoE/random/no-target, or only hero/self) yield a
- * single no-target variant. Returns null when a choice kind has no legal refs
- * (the card/power is unplayable).
+ * single no-target variant. Returns null when no ref is legal (the card/power
+ * is unplayable).
+ *
+ * An intent carries ONE target ref, and validateEffectTargets checks that ref
+ * against EVERY choice spec — so enumeration must do the same and yield the
+ * INTERSECTION. Enumerating only the first choice spec's refs (audit 02) let
+ * legalIntents emit intents validatePlayCard rejects whenever a card mixed two
+ * different choice targets (e.g. dmg(enemyCreature) + buff(friendlyCreature),
+ * whose intersection is always empty). Filtering the candidate refs through
+ * validateTarget — the very function validation uses — is what keeps the two
+ * from drifting apart again.
  */
 function targetVariants(game: Game, me: PlayerIndex, effects: readonly EffectSpec[]): (TargetRef | undefined)[] | null {
-  let choice: EffectTarget | undefined;
-  for (const spec of effects) {
-    if (spec.target === undefined || !SINGLE_TARGET_TARGETS.has(spec.target)) continue;
-    if (spec.target === 'hero' || spec.target === 'self') continue;
-    choice = spec.target;
-    break;
-  }
-  if (!choice) return [undefined];
-  const refs = resolveTargets(game, me, choice);
+  const choices: EffectTarget[] = [];
+  for (const spec of effects) if (isChoiceTarget(spec.target)) choices.push(spec.target!);
+  if (choices.length === 0) return [undefined];
+  const refs = resolveTargets(game, me, choices[0]!)
+    .filter(ref => choices.every(kind => validateTarget(game, me, kind, ref) === null));
   return refs.length > 0 ? refs : null;
 }

@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, EffectSpec, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, dmg, draw, gainMana } from './builders.js';
 
 /**
  * Starforged (Task 17): Archon Stellara's star-tempo deck. Signature cards
@@ -9,37 +10,9 @@ import type { DeckDef } from './index.js';
  */
 const STAR_PALETTE = ['#141430', '#ffe9a8'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+const { creature, spell } = archetypeCards('star', STAR_PALETTE, 'star');
 
-const art = (id: string): Card['art'] => ({ preset: 'star', palette: STAR_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [],
-  flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'star',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'star',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
-const gainMana = (value: number): EffectSpec => ({ kind: 'gainMana', value });
+/** Starforged is the only archetype that discounts creatures, so this stays local. */
 const discCheap = (value: number): EffectSpec => ({ kind: 'discountMostExpensive', value });
 
 export const HERO: HeroSpec = {

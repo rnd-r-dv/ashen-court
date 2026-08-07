@@ -15,7 +15,7 @@ import DamagePopup from '../components/DamagePopup.js';
 import type { DamageEntry } from '../components/DamagePopup.js';
 import Hand from '../components/Hand.js';
 import PassDevice from '../components/PassDevice.js';
-import Projectile from '../components/Projectile.js';
+import Projectile, { aoeFlightTime, flightTime } from '../components/Projectile.js';
 import type { ProjectileEntry, ProjectileKind } from '../components/Projectile.js';
 import TurnBanner from '../components/TurnBanner.js';
 import type { TurnBannerEntry } from '../components/TurnBanner.js';
@@ -161,6 +161,14 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // Delayed popup/shake timers for spell damage (land on projectile impact);
   // cleared by skip() and on unmount.
   const pendingFxRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Spell-damage popups awaiting their projectile's impact. An effect's
+  // damageDealt events precede its effectResolved, but the projectile — and
+  // therefore the flight budget the popup has to match — only exists at
+  // effectResolved, where the from/to geometry is resolved. Collect the
+  // popups per sourceCardId here and fire them there, so the delay IS the
+  // launched projectile's own flight time instead of a second, independently
+  // drifting guess. Same lifetime as dmgTargetsRef (which pairs with it).
+  const pendingPopupsRef = useRef<Record<string, { amount: number; side: 'top' | 'bottom' }[]>>({});
   // Win-navigation timer (cleared on unmount so rematch/menu never double-fire).
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -355,25 +363,66 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     );
   }
 
-  /** Launch a single-target projectile from the caster's hand/hero. */
-  function launchProjectile(kind: ProjectileKind, from: 'hand' | 'hero', caster: PlayerIndex, ref: TargetRef) {
+  /**
+   * Launch a single-target projectile from the caster's hand/hero. Returns
+   * the orb's flight budget in seconds — the impact moment the damage popup
+   * must wait for — or null when a position lookup failed (jsdom, unmounted
+   * element), where no orb flies and so there is no impact to wait for.
+   */
+  function launchProjectile(
+    kind: ProjectileKind,
+    from: 'hand' | 'hero',
+    caster: PlayerIndex,
+    ref: TargetRef,
+  ): number | null {
     const fromPt = from === 'hero' ? heroCircle(caster) : handArea(caster);
     const toPt = targetPoint(ref);
-    if (!fromPt || !toPt) return;
+    if (!fromPt || !toPt) return null;
     setProjectiles((prev) => [
       ...prev,
       { id: ++fxIdRef.current, kind, from: fromPt, to: toPt, side: targetSide(ref) },
     ]);
+    // Same two points the entry carries → Projectile computes the identical
+    // duration for the orb (bug 26: this used to be a hardcoded 0.55s guess).
+    return flightTime(fromPt, toPt, animScale);
   }
 
-  /** Launch an AoE ring + tint flash from the target zone's center. */
-  function launchAoe(kind: ProjectileKind, side: 'top' | 'bottom') {
+  /**
+   * Launch an AoE ring + tint flash from the target zone's center. Returns the
+   * ring's own impact budget (no traveller — see aoeFlightTime), or null when
+   * the zone could not be located.
+   */
+  function launchAoe(kind: ProjectileKind, side: 'top' | 'bottom'): number | null {
     const center = zoneCenter(side);
-    if (!center) return;
+    if (!center) return null;
     setProjectiles((prev) => [
       ...prev,
       { id: ++fxIdRef.current, kind, from: center, to: center, aoe: true, side },
     ]);
+    return aoeFlightTime(animScale);
+  }
+
+  /**
+   * Fire the spell popups queued for `sourceCardId`, `delaySec` after the
+   * launch that just happened. delaySec <= 0 (no FX could be placed) pops
+   * immediately — a missing projectile must never swallow the damage number.
+   */
+  function flushSpellPopups(sourceCardId: string, delaySec: number) {
+    const pending = pendingPopupsRef.current[sourceCardId] ?? [];
+    pendingPopupsRef.current[sourceCardId] = [];
+    for (const p of pending) {
+      if (delaySec <= 0) {
+        setShakeSeq((n) => n + 1);
+        addPopup(p.amount, 'damage', p.side);
+        continue;
+      }
+      const timer = setTimeout(() => {
+        pendingFxRef.current.delete(timer);
+        setShakeSeq((n) => n + 1);
+        addPopup(p.amount, 'damage', p.side);
+      }, delaySec * 1000);
+      pendingFxRef.current.add(timer);
+    }
   }
 
   /**
@@ -415,13 +464,13 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
           if (e.amount <= 0) return;
           const side = e.target.type === 'hero' ? sideOf(e.target.player) : creatureSideOf(e.target.id);
           if (isSpellDamage(e.sourceCardId)) {
-            const delayMs = (aoeFor(e.sourceCardId) ? 0.75 : 0.55) * animScale * 1000;
-            const timer = setTimeout(() => {
-              pendingFxRef.current.delete(timer);
-              setShakeSeq((n) => n + 1);
-              addPopup(e.amount, 'damage', side);
-            }, delayMs);
-            pendingFxRef.current.add(timer);
+            // Hold it: this effect's effectResolved (next in the queue)
+            // launches the projectile and knows its real flight budget, so
+            // the popup is scheduled there (flushSpellPopups) rather than
+            // from a duplicated constant here.
+            const queued = pendingPopupsRef.current[e.sourceCardId] ?? [];
+            queued.push({ amount: e.amount, side });
+            pendingPopupsRef.current[e.sourceCardId] = queued;
           } else {
             setShakeSeq((n) => n + 1);
             addPopup(e.amount, 'damage', side);
@@ -470,13 +519,17 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
                 : card
                   ? projectileKindFor(card)
                   : 'starbeam';
+            // The launch reports its own impact budget; the damage popups
+            // held since damageDealt are timed to exactly that (bug 26).
+            let budget: number | null;
             if (aoeFor(e.sourceCardId)) {
-              launchAoe(kind, targets.length > 0 ? targetSide(targets[0]!) : sideOf(foe));
+              budget = launchAoe(kind, targets.length > 0 ? targetSide(targets[0]!) : sideOf(foe));
             } else {
               const ref = targets[targets.length - 1] ?? ({ type: 'hero', player: foe } as TargetRef);
               const from = e.sourceCardId === 'hero-power' ? 'hero' : 'hand';
-              launchProjectile(kind, from, e.player, ref);
+              budget = launchProjectile(kind, from, e.player, ref);
             }
+            flushSpellPopups(e.sourceCardId, budget ?? 0);
           }
         }
         break;
@@ -551,9 +604,12 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     setTokenBursts([]);
     setDims([]);
     setGameOverFx(0);
-    // Cancel spell-damage popups that were delayed to the projectile impact.
+    // Cancel spell-damage popups that were delayed to the projectile impact,
+    // and drop the ones still waiting for a launch whose effectResolved this
+    // skip just discarded (they must not leak onto the next spell).
     for (const t of pendingFxRef.current) clearTimeout(t);
     pendingFxRef.current.clear();
+    pendingPopupsRef.current = {};
   }
 
   // Unmount safety: never navigate or popup after teardown (rematch/menu).
@@ -673,10 +729,13 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     if (!targeting) return;
     const t = targeting;
     setTargeting(null);
+    // BoardTargeting is a discriminated union, so each branch's payload is
+    // guaranteed present — no `?? 0` / `?? ''` defaults (the old `handIndex
+    // ?? 0` quietly played hand slot 0 instead of failing).
     if (t.kind === 'play') {
-      submitOnce({ kind: 'playCard', handIndex: t.handIndex ?? 0, target: ref });
+      submitOnce({ kind: 'playCard', handIndex: t.handIndex, target: ref });
     } else if (t.kind === 'attack') {
-      submitOnce({ kind: 'attack', attackerId: t.attackerId ?? '', target: ref });
+      submitOnce({ kind: 'attack', attackerId: t.attackerId, target: ref });
     } else {
       submitOnce({ kind: 'heroPower', target: ref });
     }
@@ -902,6 +961,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
             interactive={myTurn}
             targeting={inTargeting}
             onCardClick={onHandCardClick}
+            animScale={animScale}
           />
         )}
       </div>

@@ -7,18 +7,18 @@
   cursor: pointer;
 }
 
-/* ---- muting: unplayable / not your turn / waiting during targeting ---- */
+/* ---- muting: unplayable / not your turn / waiting during targeting ----
+   Dim by DARKENING, never by opacity (UI pass 2026-08-07): a translucent
+   card let the battlefield and the cards behind it bleed through its face,
+   which read as washed-out and made overlapping hand cards hard to parse.
+   The card stays fully opaque and simply sits in shadow. */
 .cardview--muted {
-  opacity: 0.5;
-  filter: saturate(0.6);
+  filter: brightness(0.62) saturate(0.55);
 }
 
 /* ---- exhausted board creatures (already acted / summoning sickness) ---- */
-.cardview--exhausted {
-  opacity: 0.72;
-}
 .cardview--exhausted .card {
-  filter: grayscale(0.55);
+  filter: grayscale(0.55) brightness(0.78);
 }
 
 /* ---- frozen: cold tint over the frame ---- */

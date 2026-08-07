@@ -1,4 +1,5 @@
-/* Hand (Task 31) — fanned hand. Slots overlap via inline negative margins;
+/* Hand (Task 31) — straight ordered row. Spacing comes from Hand.tsx's
+ * per-slot margin (a gap when the row fits, an overlap when it doesn't);
  * the hover lift lives on Card's `card--hand` state (card.css, Task 37). */
 
 .hand {
@@ -8,6 +9,10 @@
   /* Task 41: track the (shrinking) card height instead of a fixed 300px. */
   min-height: clamp(170px, 24vh, 300px);
   padding: 0 clamp(24px, 5vw, 48px);
+  /* UI pass 2026-08-07: hold the row clear of the viewport's bottom edge.
+     Cards used to sit flush against it (and the outer fan cards dipped past
+     it), so the bottom of every card was clipped by the window. */
+  padding-bottom: clamp(14px, 2.2vh, 28px);
   pointer-events: none; /* slots re-enable it so empty gaps don't eat clicks */
 }
 
@@ -15,6 +20,14 @@
    stay off here — the slot inside re-enables them so gaps don't eat clicks. */
 .hand-slot-anim {
   pointer-events: none;
+  /* Ascending stack order (Hand.tsx sets --z from the hand index) so an
+     overlapped row still reads left-to-right. */
+  z-index: var(--z, 0);
+}
+
+/* The hovered card lifts; it has to clear the cards stacked on top of it. */
+.hand-slot-anim:hover {
+  z-index: 200;
 }
 
 .hand-slot {

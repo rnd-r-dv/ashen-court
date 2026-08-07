@@ -36,6 +36,30 @@ const MAX_MANA = 15;
 export const SINGLE_TARGET_TARGETS: ReadonlySet<EffectTarget> = new Set([
   'any', 'hero', 'self', 'anyCreature', 'enemyCreature', 'friendlyCreature', 'friendlyDragon',
 ]);
+/**
+ * True for the single-target kinds that take a PLAYER-CHOSEN ref: the
+ * single-target set minus hero/self, which auto-resolve to the caster's own
+ * hero (Task 6 ruling) and therefore must never receive the chosen ref.
+ *
+ * Every place that decides "does this spec get the intent's target?" routes
+ * through here — spell resolution, hero powers, battlecry/trigger firing
+ * (game.ts), validation and legal-intent enumeration (intents.ts). The three
+ * resolution paths each carried their own copy of this predicate and drifted:
+ * fireTriggers had none at all, so it passed the chosen ref to EVERY spec in a
+ * trigger group and a mixed battlecry like pact-morticia's
+ * dmg(3,'self')+dmg(3,'allEnemies') aimed its self-damage at the enemy hero
+ * (audit 02). One predicate, one behaviour.
+ */
+export function isChoiceTarget(target: EffectTarget | undefined): boolean {
+  return target !== undefined && SINGLE_TARGET_TARGETS.has(target) && target !== 'hero' && target !== 'self';
+}
+
+/** The explicit ref one spec should receive from a chosen intent target:
+ *  the ref for choice kinds, undefined for everything that resolves itself. */
+export function specTargetRef(spec: EffectSpec, chosen: TargetRef | undefined): TargetRef | undefined {
+  return isChoiceTarget(spec.target) ? chosen : undefined;
+}
+
 /** Targets that resolve to all legal refs (or a seeded pick for random kinds)
  *  and are therefore resolved internally by the effect. */
 const MULTI_TARGET_TARGETS: ReadonlySet<EffectTarget> = new Set([
@@ -109,14 +133,30 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
     case 'summon':
       summonTokens(game, ctx, spec);
       break;
-    case 'gainMana':
+    // The two mana kinds are DISTINCT and are deliberately not folded into one
+    // case (audit 02: they shared a `maxMana + v` line, so refillMana handed
+    // out permanent crystals as well as the mana — a 4-crystal ramp on
+    // pact-bargain, and a permanent head start on the Coin). cardtext.ts is the
+    // spec here, and it is the side that was right:
+    //   gainMana   → "Gain N empty mana crystals." — maxMana grows, mana unchanged
+    //   refillMana → "Gain N Mana."                — mana grows, maxMana unchanged
+    // manaChanged is a real dispatch handler; it applies both values, so each
+    // branch must restate the field it is NOT changing.
+    case 'gainMana': {
+      const p = game.state.players[ctx.player];
+      const maxMana = Math.min(MAX_MANA, p.maxMana + (spec.value ?? 0));
+      push(game, { type: 'manaChanged', player: ctx.player, mana: p.mana, maxMana });
+      break;
+    }
     case 'refillMana': {
       const p = game.state.players[ctx.player];
-      const v = spec.value ?? 0;
-      const maxMana = Math.min(MAX_MANA, p.maxMana + v);
-      const mana = Math.min(maxMana, p.mana + (spec.kind === 'refillMana' ? v : 0));
-      // manaChanged is a real dispatch handler; it applies these values.
-      push(game, { type: 'manaChanged', player: ctx.player, mana, maxMana });
+      // Capped at MAX_MANA, NOT at maxMana: a refill may leave the player above
+      // their crystal count for the rest of the turn. That surplus is the whole
+      // point of the Coin (MANA_SURGE) — a player is always at full mana on
+      // their own turn, so a maxMana-capped refill would be a guaranteed no-op.
+      // beginTurn re-sets mana = maxMana, so the surplus expires with the turn.
+      const mana = Math.min(MAX_MANA, p.mana + (spec.value ?? 0));
+      push(game, { type: 'manaChanged', player: ctx.player, mana, maxMana: p.maxMana });
       break;
     }
     case 'freeze': {

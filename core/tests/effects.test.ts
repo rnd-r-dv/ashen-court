@@ -83,6 +83,41 @@ describe('heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
     applyEffect(game, ctx, { kind: 'refillMana', value: 1 });
     expect(game.state.players[0].mana).toBe(1);
   });
+  // The two mana kinds are distinct and must never share a formula again
+  // (audit 02: they did, so refillMana handed out permanent crystals):
+  //   gainMana   "Gain N empty mana crystals." → maxMana += N, mana unchanged
+  //   refillMana "Gain N Mana."                → mana += N (capped at maxMana), maxMana unchanged
+  it('refillMana refills current mana only — maxMana is untouched', () => {
+    const game = g(); game.state.phase = 'main';
+    const p = game.state.players[0];
+    p.maxMana = 5; p.mana = 1;
+    applyEffect(game, ctx, { kind: 'refillMana', value: 3 });
+    expect(p.mana).toBe(4);
+    expect(p.maxMana).toBe(5);        // no permanent crystals from a refill
+  });
+  // A refill MAY leave the player above their crystal count for the turn — the
+  // Coin depends on it (a player is always at full mana on their own turn), and
+  // beginTurn's mana = maxMana expires the surplus. Only the hard 15 cap holds.
+  it('refillMana may exceed maxMana for the turn but never the 15 cap', () => {
+    const game = g(); game.state.phase = 'main';
+    const p = game.state.players[0];
+    p.maxMana = 3; p.mana = 3;
+    applyEffect(game, ctx, { kind: 'refillMana', value: 4 });
+    expect(p.mana).toBe(7);
+    expect(p.maxMana).toBe(3);
+    p.mana = 14;
+    applyEffect(game, ctx, { kind: 'refillMana', value: 4 });
+    expect(p.mana).toBe(15);
+    expect(p.maxMana).toBe(3);
+  });
+  it('gainMana adds empty crystals only — current mana is untouched', () => {
+    const game = g(); game.state.phase = 'main';
+    const p = game.state.players[0];
+    p.maxMana = 2; p.mana = 2;
+    applyEffect(game, ctx, { kind: 'gainMana', value: 2 });
+    expect(p.maxMana).toBe(4);
+    expect(p.mana).toBe(2);           // the new crystals arrive empty
+  });
   it('freeze sets frozen, destroy removes without damage events', () => {
     const game = g(); game.state.phase = 'main';
     const c = game.state.players[0];

@@ -4,7 +4,7 @@
 // positional zip of DECK_DEFS/HEROES DeckPick uses).
 import { DECK_DEFS, HEROES, expandDeck } from '@ashen/core';
 import type { ArchetypeId } from '@ashen/core';
-import { loadDecks } from '../storage.js';
+import { deckSlug, loadDecks } from '../storage.js';
 
 export interface DeckCard {
   slug: string;
@@ -47,10 +47,21 @@ export function buildCurated(): DeckCard[] {
 }
 
 export function buildCustom(): DeckCard[] {
-  const overlays = loadDecks(); // slug → card ids (deck builder overlays)
-  return Object.entries(overlays).map(([slug, cardIds]) => ({
-    slug,
-    name: slug in CURATED_INFO ? CURATED_INFO[slug as ArchetypeId].name : slug,
+  // loadDecks() is keyed by the NAMESPACED overlay key ('custom:<slug>', audit
+  // 05 I4). That key stays as `slug` — LanHost.roomParamsFor and
+  // LanJoin.pickDeck both resolve a deck with loadDecks()[deck.slug], and
+  // matchSetup's deckCardIds relies on the namespace to keep a custom deck
+  // called "ember" from resolving to the curated Ember Court.
+  //
+  // Audit 07 bug 18: only the DISPLAY name changes. Both LAN screens used to
+  // render the raw key ("custom:mydeck"). The old `slug in CURATED_INFO`
+  // branch was dead code besides — a namespaced key can never equal a curated
+  // archetype id — and would have mislabelled a custom deck as a curated one
+  // if it ever had fired.
+  const overlays = loadDecks();
+  return Object.entries(overlays).map(([key, cardIds]) => ({
+    slug: key,
+    name: deckSlug(key) ?? key,
     tag: 'Custom deck',
     cards: cardIds.length,
     custom: true,

@@ -52,12 +52,12 @@ const TOKEN_NAMES = new Map(TOKEN_CARDS.map((t) => [t.id, t.name]));
 /** Negative numbers render as U+2212 (typographic minus); positives keep +. */
 const signed = (n: number): string => (n < 0 ? `\u2212${-n}` : `+${n}`);
 
+/** Simple append pluralization; both callers' nouns (mana crystals, pool token
+ *  names) fit it, so an irregular `pluralForm` override has no user yet. */
 const plural = (n: number, singular: string, pluralForm = `${singular}s`): string =>
   n === 1 ? singular : pluralForm;
 
-/** Pluralize a summoned token's display name (simple append; pool names fit). */
 const tokenName = (cardId: string): string => TOKEN_NAMES.get(cardId) ?? cardId;
-const pluralToken = (n: number, name: string): string => (n === 1 ? name : `${name}s`);
 
 const target = (t?: EffectTarget): string => (t ? TARGET_NAMES[t] : '');
 
@@ -78,7 +78,7 @@ export function effectText(effect: EffectSpec): string {
     case 'summon': {
       const n = effect.value ?? 1;
       const name = tokenName(effect.cardId ?? '');
-      return `Summon ${n} ${pluralToken(n, name)}.`;
+      return `Summon ${n} ${plural(n, name)}.`;
     }
     case 'gainMana':
       return `Gain ${v} ${plural(v, 'empty mana crystal')}.`;

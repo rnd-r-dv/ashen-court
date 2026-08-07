@@ -43,13 +43,24 @@ const SIGIL = '\u2726'; // four-pointed star (matches the card back sigil)
  * (setTimeout) so it works identically under fake timers in tests and at ~60fps
  * in the browser. Completes by snapping to the target and remembering it as
  * the next tween's start.
+ *
+ * An INTERRUPTED tween resumes from the number actually on screen. The
+ * cleanup used to store `value` — the target of the tween being cancelled,
+ * not what the counter had reached — so a second HP change arriving inside
+ * the 340ms budget restarted from a number that was never displayed and the
+ * readout visibly snapped. Two damage events landing inside one tween is
+ * routine: the animation queue paces events ~180ms apart.
  */
 function useTween(value: number, ms: number): number {
   const [display, setDisplay] = useState(value);
+  // The number currently on screen — the resume point for an interruption.
+  const displayRef = useRef(value);
+  // Where the next tween starts from.
   const prevRef = useRef(value);
   useEffect(() => {
     const from = prevRef.current;
     if (from === value) {
+      displayRef.current = value;
       setDisplay(value);
       return;
     }
@@ -60,14 +71,18 @@ function useTween(value: number, ms: number): number {
       i += 1;
       const p = Math.min(1, i / ticks);
       const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
-      setDisplay(Math.round(from + (value - from) * eased));
+      const next = Math.round(from + (value - from) * eased);
+      displayRef.current = next;
+      setDisplay(next);
       if (i < ticks) timer = setTimeout(step, 16);
       else prevRef.current = value;
     };
     timer = setTimeout(step, 16);
     return () => {
       if (timer !== undefined) clearTimeout(timer);
-      prevRef.current = value;
+      // Mid-flight cancel: hand the live displayed number to the next tween
+      // (on normal completion this is already the target).
+      prevRef.current = displayRef.current;
     };
   }, [value, ms]);
   return display;

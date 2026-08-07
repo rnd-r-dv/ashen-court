@@ -5,7 +5,7 @@ import type { Rng } from '../rng.js';
 import type { Card, CreatureState, GameEvent, GameState, HeroSpec, Intent, PlayerIndex, PlayerState, TargetRef, Trigger, TriggerSpec } from '../types.js';
 import { MANA_SURGE, MAX_TURNS } from '../types.js';
 import { validateDeck } from '../validate.js';
-import { applyEffect, findCreature, makeCreature, removeCreature, SINGLE_TARGET_TARGETS } from './effects.js';
+import { applyEffect, findCreature, isChoiceTarget, makeCreature, removeCreature, specTargetRef } from './effects.js';
 import type { EffectCtx } from './effects.js';
 import { runQueue } from './events.js';
 import type { Resolver } from './events.js';
@@ -60,13 +60,16 @@ export class Game implements Resolver {
     ];
     // deal starting hands
     for (const p of players) for (let i = 0; i < STARTING_HAND; i++) p.hand.push(p.deck.pop()!);
-    // player 1 gets Mana Surge (+1 maxMana/+1 mana head start, surge card in
-    // hand). The turn-flow test requires players[1].maxMana === 2 on turn 1,
-    // so the surge bonus must grant +1 maxMana at setup (see task-4-report).
+    // Player 1 receives the Coin (Mana Surge) as a PLAYABLE card in hand — the
+    // design spec's "second player receives a 0-cost Mana Surge spell token
+    // usable once". Setup grants no mana of its own (audit 02): the old code
+    // pre-set surged/maxMana/mana here, which both made the card permanently
+    // unplayable (validatePlayCard's `surged` gate) and left player 1 one
+    // crystal ahead of player 0 for the WHOLE match, since beginTurn's +1
+    // compounds off the head start. Both players now follow the same
+    // "start 1 crystal, +1 each turn" curve; `surged` flips only when the card
+    // is actually played (see resolveIntent/playCard).
     players[1].hand.push(MANA_SURGE);
-    players[1].surged = true;
-    players[1].maxMana = 1;
-    players[1].mana = 1;
     this.state = {
       players, turn: 0, phase: 'mulligan', seed: setup.seed,
       mulligansDone: [false, false],
@@ -134,6 +137,13 @@ export class Game implements Resolver {
       if (new Set(intent.keep).size !== intent.keep.length || intent.keep.length > p.hand.length) {
         throw new Error('Bad keep index');
       }
+      // Opening hand size is per-player, NOT the STARTING_HAND constant:
+      // player 1 opens on STARTING_HAND + 1 because the Coin occupies a slot
+      // (audit 02 — refilling to the constant silently cost player 1 a card
+      // whenever they kept 2 or fewer). Reading it off the live hand BEFORE
+      // the splice needs no extra state, so it survives a mid-mulligan
+      // serialize/deserialize (Task 12) for free.
+      const openingHand = p.hand.length;
       const kept = [...intent.keep].sort((a, b) => b - a);
       for (const idx of kept) { if (idx < 0 || idx >= p.hand.length) throw new Error('Bad keep index'); }
       const keptCards = intent.keep.map(i => p.hand[i]!);
@@ -142,7 +152,7 @@ export class Game implements Resolver {
       // Redraws are events: pre-view the top card(s), enqueue cardDrawn, and
       // let dispatch pop+push. Hand/deck only change when dispatch runs, so
       // the redraw count is computed up front (no live loop condition).
-      const needed = Math.min(STARTING_HAND - p.hand.length, p.deck.length);
+      const needed = Math.min(openingHand - p.hand.length, p.deck.length);
       for (let i = 0; i < needed; i++) {
         const cardId = p.deck[p.deck.length - 1 - i]!;
         this.emit({ type: 'cardDrawn', player: mp, cardId });
@@ -220,7 +230,7 @@ export class Game implements Resolver {
           // before the warded spec must not land. Multi-target spells
           // (allEnemies etc.) are unaffected. The spell is still paid and
           // already removed from hand above.
-          const hasSingleTarget = card.effects.some(spec => spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) && spec.target !== 'hero' && spec.target !== 'self');
+          const hasSingleTarget = card.effects.some(spec => isChoiceTarget(spec.target));
           const wardRef = hasSingleTarget ? intent.target : undefined;
           let fizzled = false;
           if (wardRef && wardRef.type === 'creature') {
@@ -236,8 +246,7 @@ export class Game implements Resolver {
               // Single-target effects pass the resolved intent.target as the
               // explicit ref; hero/self (own-hero auto-resolve, Task 14
               // mixed-card ruling) and AoE/random kinds resolve internally.
-              const specRef = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) && spec.target !== 'hero' && spec.target !== 'self' ? intent.target : undefined;
-              applyEffect(this, { player: me, cardId: card.id }, spec, specRef);
+              applyEffect(this, { player: me, cardId: card.id }, spec, specTargetRef(spec, intent.target));
             }
           }
           break;
@@ -262,8 +271,7 @@ export class Game implements Resolver {
         // single-target kinds take the chosen ref; hero/self (own-hero
         // auto-resolve) and AoE/random kinds resolve internally (Task 14
         // mixed-card ruling — a supplied ref is ignored for hero/self).
-        const ref = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) && spec.target !== 'hero' && spec.target !== 'self' ? intent.target : undefined;
-        applyEffect(this, { player: me, cardId: 'hero-power' }, spec, ref);
+        applyEffect(this, { player: me, cardId: 'hero-power' }, spec, specTargetRef(spec, intent.target));
       }
       p.hero.usedPower = true;
       this.emit({ type: 'heroPowerUsed', player: me });
@@ -428,11 +436,19 @@ export class Game implements Resolver {
    * Apply every effect of every `when` trigger group of `cardId`, in group
    * then effect order, with the trigger context (player = owner/player, and
    * creatureId = the dying/damaged/played creature's id where available).
+   *
+   * `explicitRef` (the playCard target riding on cardPlayed, Task 15 ruling) is
+   * filtered PER SPEC by specTargetRef, exactly like the spell and hero-power
+   * paths: only choice targets receive it. Passing it to every spec in the
+   * group (audit 02) redirected self/AoE specs at the chosen target — a
+   * playCard intent on pact-morticia carrying the enemy hero moved its
+   * dmg(3,'self') drawback onto the enemy face. Validation cannot catch that,
+   * because validateEffectTargets skips self/AoE specs by design.
    */
   private fireTriggers(when: Trigger, player: PlayerIndex, cardId: string, creatureId?: string, explicitRef?: TargetRef): void {
     for (const group of this.triggerGroups(cardId, when)) {
       for (const spec of group.effects) {
-        applyEffect(this, { player, cardId, creatureId }, spec, explicitRef);
+        applyEffect(this, { player, cardId, creatureId }, spec, specTargetRef(spec, explicitRef));
       }
     }
   }
@@ -459,10 +475,30 @@ export class Game implements Resolver {
     return arr[Math.floor(this.rng() * arr.length)] as T;
   }
 
+  /**
+   * Search clone: the same state MINUS the event log (audit 02 bug 16).
+   *
+   * clone() exists for the bot's lookahead (bot/policies.ts clones per
+   * candidate intent, up to MAX_EVAL per decision plus the enemy-turn
+   * simulation), and the search only ever reads state.players — evaluate()
+   * never consults state.log. But the log is append-only for the whole match,
+   * so round-tripping it through JSON made every search node pay for the
+   * entire match history: measured 3.1KB/0.027ms per clone at turn 0 vs
+   * 19.1KB/0.155ms at turn 40, still climbing.
+   *
+   * Dropping the log here is safe precisely because it is the SEARCH path;
+   * serialize()/deserialize() stay lossless (below), since they are the public
+   * replay/persistence surface where the log IS part of the saved state.
+   * Determinism is unaffected: rngState (seed + call count) is carried exactly
+   * as serialize() carries it, so a clone reproduces byte-identical results for
+   * the same intent sequence — the clone simply starts a fresh log of its own.
+   */
   clone(): Game {
-    return Game.deserialize(this.serialize(), this.registry);
+    this.state.rngState = { seed: this.state.seed, calls: this.rngCalls };
+    return Game.deserialize(serializeState({ ...this.state, log: [] }), this.registry);
   }
 
+  /** Lossless full-state snapshot (log included) — replay/persistence/LAN. */
   serialize(): string {
     this.state.rngState = { seed: this.state.seed, calls: this.rngCalls };
     return serializeState(this.state);

@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, dmg, heal, summon } from './builders.js';
 
 /**
  * Ember Court (Task 14): Pyra Emberveil's burn-tempo deck. Signature cards use
@@ -9,42 +10,7 @@ import type { DeckDef } from './index.js';
  */
 const EMBER_PALETTE = ['#3b0d0d', '#ff6b35'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-const art = (id: string): Card['art'] => ({ preset: 'ember', palette: EMBER_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [], flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'ember',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'ember',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
-  id, name, type: 'artifact', cost,
-  keywords: [], effects: [], triggers, rarity, archetype: 'ember',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const heal = (value: number): EffectSpec => ({ kind: 'heal', value, target: 'hero' });
-const summon = (cardId: string): EffectSpec => ({ kind: 'summon', cardId });
+const { artifact, creature, spell } = archetypeCards('ember', EMBER_PALETTE, 'ember');
 
 export const HERO: HeroSpec = {
   name: 'Pyra Emberveil',

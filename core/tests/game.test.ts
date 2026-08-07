@@ -57,11 +57,80 @@ describe('Mulligan', () => {
     expect(game.state.players[0].hand).toEqual(hand0);
     expect(game.state.phase).toBe('mulligan');
   });
+  it('refills to the opening hand size — mulliganing never costs a card (audit 02)', () => {
+    const game = Game.create(makeTestSetup());
+    // player 0 opens on 3; player 1 opens on 4 (3 dealt + the Coin). Refilling
+    // to the STARTING_HAND constant silently cost player 1 a card.
+    game.submit({ kind: 'mulligan', keep: [] });
+    expect(game.state.players[0].hand).toHaveLength(3);
+    game.submit({ kind: 'mulligan', keep: [] });
+    expect(game.state.players[1].hand).toHaveLength(4);
+  });
+  it('partial keeps refill to the opening hand size too', () => {
+    const game = Game.create(makeTestSetup());
+    game.submit({ kind: 'mulligan', keep: [0] });
+    expect(game.state.players[0].hand).toHaveLength(3);
+    game.submit({ kind: 'mulligan', keep: [0, 1] });
+    expect(game.state.players[1].hand).toHaveLength(4);
+  });
   it('a mulligan after the mulligan phase is rejected', () => {
     const game = Game.create(makeTestSetup());
     game.submit({ kind: 'mulligan', keep: [] });   // player 0
     game.submit({ kind: 'mulligan', keep: [] });   // player 1 → startMain
     expect(() => game.submit({ kind: 'mulligan', keep: [] })).toThrow();
+  });
+});
+
+describe('Mana Surge (the Coin)', () => {
+  /** Mulligan both players (keep everything), then pass to player 1's turn. */
+  const toPlayer1Turn = (game: Game) => {
+    game.submit({ kind: 'mulligan', keep: [0, 1, 2] });
+    game.submit({ kind: 'mulligan', keep: [0, 1, 2, 3] });
+    game.submit({ kind: 'endTurn' });
+  };
+
+  it('player 1 has no setup head start — same crystal curve as player 0', () => {
+    const game = Game.create(makeTestSetup());
+    expect(game.state.players[1].maxMana).toBe(0);
+    expect(game.state.players[1].mana).toBe(0);
+    expect(game.state.players[1].surged).toBe(false);   // the Coin has not been spent yet
+    toPlayer1Turn(game);
+    expect(game.state.players[1].maxMana).toBe(1);
+    expect(game.state.players[1].mana).toBe(1);
+  });
+
+  it('the Coin is playable and grants +1 mana WITHOUT a permanent crystal', () => {
+    const game = Game.create(makeTestSetup());
+    toPlayer1Turn(game);
+    const p1 = game.state.players[1];
+    const idx = p1.hand.indexOf('mana-surge');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    game.submit({ kind: 'playCard', handIndex: idx });
+    expect(p1.mana).toBe(2);        // one extra crystal available this turn
+    expect(p1.maxMana).toBe(1);     // ...but the curve is untouched
+    expect(p1.surged).toBe(true);
+    expect(p1.hand).not.toContain('mana-surge');
+  });
+
+  it('the Coin is one-shot: a second copy is rejected once surged', () => {
+    const game = Game.create(makeTestSetup());
+    toPlayer1Turn(game);
+    const p1 = game.state.players[1];
+    game.submit({ kind: 'playCard', handIndex: p1.hand.indexOf('mana-surge') });
+    p1.hand.push('mana-surge');
+    expect(() => game.submit({ kind: 'playCard', handIndex: p1.hand.length - 1 })).toThrow('already surged');
+    expect(game.legalIntents(1).some(i => i.kind === 'playCard' && p1.hand[i.handIndex] === 'mana-surge')).toBe(false);
+  });
+
+  it('the extra crystal expires with the turn', () => {
+    const game = Game.create(makeTestSetup());
+    toPlayer1Turn(game);
+    const p1 = game.state.players[1];
+    game.submit({ kind: 'playCard', handIndex: p1.hand.indexOf('mana-surge') });
+    game.submit({ kind: 'endTurn' });   // → player 0
+    game.submit({ kind: 'endTurn' });   // → player 1 again
+    expect(p1.maxMana).toBe(2);
+    expect(p1.mana).toBe(2);
   });
 });
 
@@ -71,9 +140,15 @@ describe('Turn flow', () => {
     game.submit({ kind: 'mulligan', keep: [] }); game.submit({ kind: 'mulligan', keep: [] });
     game.submit({ kind: 'endTurn' });
     expect(game.state.turn).toBe(1);
-    expect(game.state.players[1].maxMana).toBe(2);   // +1 from start, capped at 15
-    expect(game.state.players[1].mana).toBe(2);
-    expect(game.state.players[1].hand).toHaveLength(4); // 3 from mulligan redraw + 1 drawn this turn
+    // Both players share one curve: turn 1 is 1 crystal for player 1 too.
+    // (This used to expect 2 — it encoded the setup head start that made the
+    // Coin unplayable and left player 1 permanently a crystal ahead; audit 02.)
+    expect(game.state.players[1].maxMana).toBe(1);
+    expect(game.state.players[1].mana).toBe(1);
+    // 4 from the mulligan redraw (player 1's opening hand is 3 + the Coin) plus
+    // 1 drawn this turn. Was 4 while the redraw refilled to STARTING_HAND and
+    // quietly ate a card (audit 02).
+    expect(game.state.players[1].hand).toHaveLength(5);
   });
   it('mana never exceeds 15', () => {
     const game = Game.create(makeTestSetup());

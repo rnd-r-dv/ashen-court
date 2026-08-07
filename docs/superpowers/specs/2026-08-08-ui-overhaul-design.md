@@ -1,4 +1,4 @@
-# Ashen Court — UI overhaul: generated art, full-bleed cards, readable match screen
+# Ashen Court — UI overhaul: generated art, card frame proportions, readable match screen
 
 **Date:** 2026-08-08
 **Status:** design approved, ready for planning
@@ -95,7 +95,19 @@ Three layers:
 
 3. **Global suffix** — fixed, enforces house style and stops the model drawing card
    furniture: `"dark fantasy illustration, painterly, dramatic chiaroscuro, single
-   centred subject, no text, no lettering, no border, no frame"`.
+   centred subject, wide landscape composition, no text, no lettering, no watermark,
+   no border, no frame"`.
+
+**Never put pixel dimensions in the prompt.** Output size comes from the sampler's
+latent grid, which the API derives from `aspect_ratio`; prompt text cannot change it.
+FLUX.2 renders legible text unusually well — that is the headline capability in the
+model's own example prompt — so a string like `"480x320"` in the prompt is a live risk
+of being painted into the illustration. This is also why the `no text, no lettering,
+no watermark` clause is load-bearing on this model rather than boilerplate.
+
+*Composition* language is different and does help: `"wide landscape composition"`,
+`"subject centred with headroom"` steer how the model fills a frame it has already
+been given. Worth A/B-ing in the smoke batch.
 
 **Neutral cards get their own block, not an archetype's.** Neutrals and tokens
 currently share the `arcane` preset, which is why `Bulwark Knight` reads as though it
@@ -133,8 +145,23 @@ Per `https://openrouter.ai/black-forest-labs/flux.2-klein-4b/llms.txt`:
   Output resolution is therefore provider-chosen and cannot be requested; stating
   dimensions in the prompt does not work either, and risks the model rendering those
   characters into the image.
-- `aspect_ratio: "3:4"` — the listed value closest to the card's 5:7 (0.75 vs 0.714).
-  Full-bleed art fills the whole portrait card, so this is portrait, not landscape.
+- **`aspect_ratio` is chosen per asset, from the treatment that asset will receive
+  (§4.1).** This is not one global constant:
+
+  | Asset | Treatment | `aspect_ratio` | Why |
+  |---|---|---|---|
+  | Card, rarity ≥ `epic` | full-bleed | **`"3:4"`** | art fills the portrait 240×336 box |
+  | Card, rarity < `epic` | banded | **`"3:2"`** | art fills the landscape panel at the top |
+  | Hero | circular portrait | **`"1:1"`** | 92px circle mask (`heroportrait.css:15`) |
+
+  The script derives this from `card.rarity`; it must never be a flag the operator
+  sets, or the two will drift.
+
+- **Crop is zero, by construction.** For banded cards the art panel's height is a CSS
+  variable set to exactly 3:2 of its own width — the panel is fitted to the art, not
+  the art to the panel. For full-bleed the 3:4 source covers the 5:7 box with a 4.8%
+  trim off the sides, which lands on background rather than on the subject. Do not
+  pick a ratio and then crop to fit; derive `--card-art-h` from the ratio.
 - `output_format: "jpeg"`, `n: 1`
 - Response: `data[0].b64_json` + `media_type`; `usage.cost` is the USD charge
 - Errors are `{error: {code, message}}` — 400 malformed/moderation, 401 key, 402
@@ -146,8 +173,10 @@ Per `https://openrouter.ai/black-forest-labs/flux.2-klein-4b/llms.txt`:
 Pricing is **$0.014/megapixel**. Since resolution cannot be requested, per-image cost
 cannot be computed in advance — only measured. The published example returns
 `usage.cost: 0.04` for one 16:9 image, which back-solves to ≈2.86 MP (~2256×1269). If
-3:4 lands at a comparable megapixel count, a full pass over 285 cards + 12 heroes is
-**≈$11.90**.
+3:2 lands at a comparable megapixel count, a full pass over 285 cards + 12 heroes is
+**≈$11.90**. Aspect ratio is probably not a cost lever — providers generally target a
+megapixel budget and vary dimensions to hit the requested ratio — but that is an
+assumption Stage 0 should confirm, not a fact to plan around.
 
 **Stage 0 is a hard gate.** `--limit 3` against three deliberately unlike cards (a
 Hollow Choir spell, an Ember Court creature, a neutral). It writes the images and
@@ -156,13 +185,24 @@ extrapolated full-pool total. **Then it stops.** Nothing further runs until a hu
 looked at the three images and approved the number.
 
 Coverage is deliberately undecided until after Stage 0 — the script supports every
-mode, so deferring costs nothing:
+mode, so deferring costs nothing. Verified counts (`buildPool()`, 2026-08-08:
+common=151, rare=68, epic=40, legendary=26):
 
-| Mode | Cards | Est. |
-|---|---|---|
-| Full pool | 285 + 12 heroes | ~$12 |
-| Rares and up | ~100 | ~$4 |
-| Single archetype pilot | ~24 | ~$1 |
+| Mode | Images (incl. 12 heroes) | Est. @ $0.04 | `--coverage` value |
+|---|---|---|---|
+| Full pool | 297 | ~$11.90 | `all` |
+| Rare and up | 146 | ~$5.80 | `rare+` |
+| **Epic and up** | **78** | **~$3.10** | `epic+` |
+| Single archetype pilot | ~21 + heroes | ~$1 | `--only <archetype>` |
+
+**`epic+` is the designated fallback if Stage 0 reports a cost that makes the full pool
+unattractive.** At 78 images it is roughly a quarter of the full spend, and epics and
+legendaries are the cards a player actually stops to look at. Commons and rares keep
+procedural art, which as a side effect gives rarity a visual weight it does not
+currently carry.
+
+`--coverage` must be implemented as a first-class flag taking `all` | `rare+` |
+`epic+`, not left as something the operator filters by hand.
 
 If per-image cost comes back high, the levers in order are: (1) pin a cheaper
 `provider` if one serves smaller output at the same aspect ratio — which is why the
@@ -183,10 +223,17 @@ Under `src/`, **not** `public/`, so Vite's `import.meta.glob` enumerates them at
 time with content hashing. This gives a build-time answer to "does this card have art"
 rather than probing for 404s at runtime.
 
-The script **downscales before writing**: the card never renders larger than 240×336
-CSS px, so 480×672 covers 2× DPR. Re-encoded at JPEG q80 that is ~45KB per image,
-~13MB for the full pool — versus ~45MB if raw ~2.9MP output were committed.
-Downscaling does not reduce spend, only repo size.
+The script **downscales before writing**. Target sizes come from what the UI actually
+renders at 2× DPR:
+
+| Asset | Rendered size | Written size | Ratio | ~JPEG q80 |
+|---|---|---|---|---|
+| Banded card art (< epic) | 220×147 CSS | **480×320** | 3:2 | ~30KB |
+| Full-bleed card art (epic+) | 240×336 CSS | **528×704** | 3:4 | ~70KB |
+| Hero portrait | 92×92 CSS | **256×256** | 1:1 | ~20KB |
+
+Full pool ≈ **11MB** committed (219 banded + 66 full-bleed + 12 heroes), versus ~45MB
+if raw ~2.9MP output were stored. Downscaling does not reduce spend, only repo size.
 
 This requires **`sharp` as a devDependency**, used only by the script and never
 reachable from the app bundle. Called out explicitly as a dependency addition; the
@@ -217,34 +264,128 @@ with painted cards and procedural cards side by side.
 
 ---
 
-## 4. Sub-project 2 — full-bleed card frame
+## 4. Sub-project 2 — card frame
 
-### 4.1 Layout
+### 4.1 Two treatments, selected by rarity
 
-Art fills the entire 240×336 box. Two scrims float over it:
+The card has **two layouts**, and which one a card gets is derived, never authored:
 
-- **Top scrim** — cost gem, name plate
-- **Bottom scrim** — type/rarity line, keyword chips, rules text
+| Treatment | Applies to | Layout |
+|---|---|---|
+| **Banded** (default) | everything else | portrait card, landscape art panel on top, text below |
+| **Full-bleed** | rarity ≥ `epic` **and** generated art exists | art fills the box, text on scrims |
 
-Stat pips become bottom-corner ornaments over the bottom scrim. **This is also the
-collision fix**: the bottom scrim reserves horizontal inset for the pips, so the type
-line can no longer run underneath them.
+**Both conditions are required for full-bleed.** A legendary whose art has not been
+generated falls back to banded. Without that rule, scrim text would float over a
+two-stop procedural SVG gradient and read as broken rather than premium — full-bleed
+must never gamble on art it does not have.
 
-Board minis render art + cost + name only, no bottom scrim — at 0.5 zoom the rules
-copy is ~6px and is noise.
+This coupling is deliberate. It gives rarity visual weight it currently lacks beyond a
+border colour, and it lines up exactly with the `epic+` coverage fallback in §3.5: the
+66 cards that get the full-bleed treatment are the same 66 that get generated art first
+if cost forces a cut.
 
-### 4.2 Legibility is a hard requirement
+The card box stays 240×336 under both treatments — the fixed-box invariant (§2) is not
+type- or rarity-dependent and is not reopened here.
 
-Today's rules text sits on a flat `#1a1a21` panel. Over illustration it must stay
-readable against the **brightest** generated art, not the dark procedural SVG. The
-scrim is an opaque-enough gradient plus text-shadow, and it is verified against real
-generated output — not against placeholder art, which would pass trivially.
+### 4.2 The height budget
 
-### 4.3 Sequencing risk
+Card box stays 240×336. Inner height after 8px padding and 2px border is **316px**:
 
-Full-bleed means bad art is unavoidable, where the current banded layout quarantines it
-to a panel. Sub-project 1 ships first and real cards get reviewed before full-bleed is
-committed everywhere.
+```
+ 240 x 336 card
++----------------------------+
+| (6) [ Seraph of Lament   ] |   38px   cost gem + name plate  (32 + 6 margin)
++----------------------------+
+|                            |
+|      LANDSCAPE ART         |  147px   art panel, exactly 3:2 of its 220px width
+|            3:2             |
+|  (4)                  (6)  |          stat pips, INSIDE the panel's lower corners
++----------------------------+
+| * CREATURE          RARE   |   27px   type ribbon           (21 + 6 margin)
++----------------------------+
+|        [ lifesteal ]       |
+|  Rules text, up to 4 lines |  104px   text well, flex: 1
+|  and room for one flavor   |
+|  line underneath it.       |
++----------------------------+
+```
+
+Inner width is 220px (240 − 16 padding − 4 border), so a 3:2 panel is
+220 / 1.5 = **146.67 ≈ 147px**. Fixed chrome is 38 + 27 = 65px, leaving 251px for art
+and text; art takes 147, the well takes the remaining **104px**.
+
+Today's well is 93px. The extra 11px plus tighter line spacing is what restores a line
+of flavor text to hand cards, which currently hide it.
+
+### 4.3 Full-bleed layout (epic and legendary, with art)
+
+Art covers the whole 240×336 box. Two gradient scrims float over it:
+
+```
+ 240 x 336 card, rarity >= epic, generated art present
++----------------------------+
+| (9) [ Ashen Sovereign    ] |  <- top scrim: dark gradient, 0.85 -> 0
+|                            |
+|                            |
+|        FULL-BLEED ART      |
+|             3:4            |
+|                            |
+|  ........................  |  <- bottom scrim starts, 0 -> 0.9
+| * LEGENDARY       [ taunt ]|
+|  Rules text over the art,  |
+|  shadowed for legibility.  |
+| (7)                   (9)  |  <- pips over the scrim, inset reserved
++----------------------------+
+```
+
+The scrims are gradients, not panels: art at the top and bottom is dimmed, still
+visible. The bottom scrim is the denser of the two because it carries rules text.
+
+**Legibility is a hard acceptance criterion, not a nice-to-have.** Rules text must
+remain readable against the *brightest* image in the generated set — verify against
+real output, never against procedural SVG, which would pass trivially because it is
+uniformly dark. Scrim opacity plus `text-shadow` are the levers. If a generated image
+defeats the scrim, the fix is to regenerate that card via `overrides.ts` + `--force`,
+not to darken the scrim until the art is invisible everywhere.
+
+The composition instruction in the prompt suffix (`subject centred with headroom`)
+exists partly to serve this: it keeps faces out of the lower third where the text sits.
+
+### 4.4 The pip collision fix
+
+Current bug: `.card__stats` is `bottom: -13px` on the art wrapper, which assumed
+nothing sat beneath the art. The type ribbon does, so on every creature the pips
+overlap the ribbon's crossed-swords icon and its rarity label.
+
+**Fix: in the banded layout the pips move fully inside the art panel's lower corners.**
+No overlap with the ribbon is possible, so no conditional padding or per-type
+special-casing is needed. In the full-bleed layout they sit over the bottom scrim,
+which reserves horizontal inset for them.
+
+Do **not** implement the banded fix as "keep the pips straddling the edge and add
+horizontal padding to the ribbon on creature cards" — that reintroduces a
+type-dependent layout, which is the class of bug the fixed-box work eliminated.
+
+### 4.5 Zero crop
+
+For banded cards, `--card-art-h` is derived from the art ratio (`width / 1.5`), not
+chosen independently. Because the generated art is also 3:2, panel and image agree
+exactly and nothing is cropped. If the art ratio ever changes, `--card-art-h` changes
+with it — these two numbers are one decision, and a comment in `card.css` must say so.
+
+### 4.6 Board minis
+
+Minis follow the same treatment split as full cards, because the alternative is worse:
+forcing an epic's 3:4 portrait art through a 3:2 landscape panel would crop ~50% of its
+height.
+
+- **Banded minis** (common/rare, or any card without art): unchanged from today — art +
+  cost gem + name, ribbon and text well hidden, card height reduced accordingly. At 0.5
+  zoom the rules copy is ~6px and is noise. The reduced height must be recomputed from
+  the new panel height (38 + 147 + 20 chrome).
+- **Full-bleed minis** (epic+ with art): art fills the mini, scrims carry cost and name
+  only. No rules text, same as banded minis.
 
 ---
 
@@ -294,9 +435,14 @@ Existing suite is 402 tests across 50 files and must stay green throughout.
 
 1. **Sub-project 1, Stage 0** — script + prompt builder + 3-image smoke batch. **Stop
    for human review of images and cost.**
-2. Coverage decision, then bulk generation and a review pass over the contact sheet.
-3. **Sub-project 2** — full-bleed frame, validated against real art.
+2. Coverage decision (`all` / `rare+` / `epic+`), then bulk generation and a review
+   pass over the contact sheet.
+3. **Sub-project 2** — card frame proportions, pip fix, art wiring.
 4. **Sub-project 3** — match screen.
+
+Sub-project 2 does **not** block on art existing: the panel resize, the pip fix and the
+flavor restoration are all valid against procedural art, and the resolver falls back
+cleanly. It can start as soon as the 3:2 ratio is locked, which it now is.
 
 Sub-project 3 is independent of 1 and 2 apart from hero portraits, so it can run in
 parallel if desired.

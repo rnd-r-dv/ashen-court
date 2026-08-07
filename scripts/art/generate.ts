@@ -1,5 +1,5 @@
 // scripts/art/generate.ts
-import { mkdir, writeFile, access } from 'node:fs/promises';
+import { mkdir, writeFile, access, rename } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import sharp from 'sharp';
 import { buildPool, DECK_DEFS, HEROES } from '@ashen/core';
@@ -209,13 +209,21 @@ async function main(): Promise<void> {
     const meta = await sharp(res.bytes).metadata();
     const target = TARGET_SIZE[job.built.aspectRatio]!;
     await mkdir(dirname(job.outPath), { recursive: true });
+    // Write to a .tmp sibling and rename into place: rename is atomic on
+    // POSIX, so a SIGINT/SIGKILL mid-write can only leave a truncated .tmp,
+    // never a truncated final file. The skip check tests job.outPath only,
+    // so a crashed run resumes without permanently skipping a card — the
+    // exact interruption the resume feature is for. A stale .tmp left by an
+    // interrupted run is harmless: the next writeFile overwrites it.
+    const tmpPath = `${job.outPath}.tmp`;
     await writeFile(
-      job.outPath,
+      tmpPath,
       await sharp(res.bytes)
         .resize(target.width, target.height, { fit: 'cover' })
         .jpeg({ quality: 80 })
         .toBuffer(),
     );
+    await rename(tmpPath, job.outPath);
 
     const mp = ((meta.width ?? 0) * (meta.height ?? 0)) / 1e6;
     console.log(

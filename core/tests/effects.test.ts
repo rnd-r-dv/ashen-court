@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Game } from '../src/engine/game.js';
 import { applyEffect } from '../src/engine/effects.js';
 import type { EffectCtx } from '../src/engine/effects.js';
+import { summarize } from '../src/engine/stats.js';
 import { makeTestSetup } from './helpers.js';
 
 const g = () => Game.create(makeTestSetup());
@@ -24,6 +25,17 @@ describe('dealDamage', () => {
     applyEffect(game, ctx, { kind: 'dealDamage', value: 3, target: 'allEnemies' });   // allEnemies hits the enemy hero (enemy board empty)
     expect(game.state.phase).toBe('gameOver');
     expect(game.state.log.some(e => e.type === 'gameOver')).toBe(true);
+  });
+  it('hero damage emits heroDamaged and summarize counts it on a real log (audit 01 I1)', () => {
+    const game = g();
+    game.state.phase = 'main';
+    game.state.players[0].mana = 10;
+    game.state.players[0].hand.unshift('bc-2dmg');   // battlecry: deal 2 to allEnemies
+    const evts = game.submit({ kind: 'playCard', handIndex: 0 });   // enemy board empty → hero hit
+    expect(evts.some(e => e.type === 'heroDamaged' && e.player === 1 && e.amount === 2)).toBe(true);
+    expect(evts.some(e => e.type === 'damageDealt' && e.target.type === 'hero' && e.amount === 2)).toBe(true);
+    expect(game.state.players[1].hero.hp).toBe(28);
+    expect(summarize(game.state.log).damageDealt).toEqual([0, 2]);
   });
 });
 

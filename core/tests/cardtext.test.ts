@@ -70,8 +70,8 @@ describe('effectText — one template per EffectKind (Task 43)', () => {
   it('giveKeyword', () => {
     expect(effectText({ kind: 'giveKeyword', keyword: 'shield', target: 'friendlyCreature' })).toBe('Give a friendly creature Shield.');
   });
-  it('discountCheapest', () => {
-    expect(effectText({ kind: 'discountCheapest', value: 1 })).toBe('Your cheapest card costs 1 less this turn.');
+  it('discountMostExpensive', () => {
+    expect(effectText({ kind: 'discountMostExpensive', value: 1 })).toBe('Your most expensive creature costs 1 less this turn.');
   });
   it('discountNextSpell', () => {
     expect(effectText({ kind: 'discountNextSpell', value: 2 })).toBe('Your next spell costs 2 less this turn.');

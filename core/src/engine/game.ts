@@ -86,7 +86,7 @@ export class Game implements Resolver {
       hero: {
         name: heroSpec.name, hp: 30, maxHp: 30, shields: 0,
         power: heroSpec.power, usedPower: false,
-        discountCheapest: 0, discountNextSpell: 0,
+        discountMostExpensive: 0, discountNextSpell: 0,
       },
       deck, hand: [], board: [], artifacts: [],
       mana: 0, maxMana: 0, surged: false,
@@ -128,7 +128,12 @@ export class Game implements Resolver {
       // progress lives in state so serialize/deserialize survives mid-mulligan (Task 12)
       const mp = (this.state.mulligansDone[0] ? 1 : 0) as PlayerIndex;
       const p = this.state.players[mp];
-      // keep set must be valid indices
+      // keep set must be valid indices; duplicate/oversized lists would
+      // corrupt the hand (a duplicated keep silently discards another card —
+      // audit 01 I2), so reject them with the same style of error.
+      if (new Set(intent.keep).size !== intent.keep.length || intent.keep.length > p.hand.length) {
+        throw new Error('Bad keep index');
+      }
       const kept = [...intent.keep].sort((a, b) => b - a);
       for (const idx of kept) { if (idx < 0 || idx >= p.hand.length) throw new Error('Bad keep index'); }
       const keptCards = intent.keep.map(i => p.hand[i]!);
@@ -160,13 +165,21 @@ export class Game implements Resolver {
       const enemy = (1 - me) as PlayerIndex;
       const enemyBoard = this.state.players[enemy].board;
       if (tauntPresent(enemyBoard)) {
-        if (target.type === 'hero' || target.type !== 'creature' ||
-            !effectiveKeywords(enemyBoard.find(c => c.id === target.id)!).has('taunt')) {
+        if (target.type === 'hero' || target.type !== 'creature') {
           throw new Error('Taunt creature in the way');
         }
+        // audit 01 I4: the target may not be on the enemy board (own creature,
+        // already-removed creature, stale/garbage id) — reject cleanly before
+        // the keyword test instead of crashing on an undefined find.
+        const d = enemyBoard.find(c => c.id === target.id);
+        if (!d) throw new Error('Defender not found');
+        if (!effectiveKeywords(d).has('taunt')) throw new Error('Taunt creature in the way');
       }
-      // resolve
-      attacker.exhausted = true; attacker.attacksLeft -= 1;
+      // resolve: attacksLeft is the swing counter (windfury 2 / normal 1).
+      // exhausted stays summoning-sickness-only (set at summon, cleared in
+      // beginTurn) — attacking does NOT exhaust, so a windfury creature can
+      // swing twice (audit 01 C1).
+      attacker.attacksLeft -= 1;
       if (target.type === 'creature') {
         const defender = enemyBoard.find(c => c.id === target.id);
         if (!defender) throw new Error('Defender not found');
@@ -186,7 +199,7 @@ export class Game implements Resolver {
       // then consume the discounts on use — even when the effective cost is 0.
       p.mana -= playEffectiveCost(this, card, me);
       if (card.type === 'spell') p.hero.discountNextSpell = 0;
-      if (card.type === 'creature' && isMostExpensiveCreatureInHand(this, me, card)) p.hero.discountCheapest = 0;
+      if (card.type === 'creature' && isMostExpensiveCreatureInHand(this, me, card)) p.hero.discountMostExpensive = 0;
       if (card.id === MANA_SURGE) p.surged = true;   // surge consumed after its one use
       p.hand.splice(intent.handIndex, 1);            // the card leaves the hand for every type
       switch (card.type) {
@@ -201,23 +214,31 @@ export class Game implements Resolver {
         }
         case 'spell': {
           this.emit({ type: 'cardPlayed', player: me, cardId: card.id });
-          // Apply each effect in order. Single-target effects pass the resolved
-          // intent.target as the explicit ref; hero/self (own-hero auto-resolve,
-          // Task 14 mixed-card ruling) and AoE/random kinds resolve internally.
-          for (const spec of card.effects) {
-            const ref = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) && spec.target !== 'hero' && spec.target !== 'self' ? intent.target : undefined;
-            // Ward: a single-target creature ref on a warded creature consumes
-            // the ward, fizzles the whole spell (effects skipped) — but the
-            // spell is still paid and already removed from hand above.
-            if (ref && ref.type === 'creature') {
-              const warded = findCreature(this, ref.id);
-              if (warded && warded.warded) {
-                warded.warded = false;
-                this.emit({ type: 'spellFizzled', player: me, cardId: card.id, creatureId: warded.id });
-                break;
-              }
+          // Ward (audit 01 I3): resolve ONCE before the effect loop. A spell
+          // with a single-target ref that resolves to a WARDED ENEMY creature
+          // consumes the ward and fizzles the WHOLE spell — effects listed
+          // before the warded spec must not land. Multi-target spells
+          // (allEnemies etc.) are unaffected. The spell is still paid and
+          // already removed from hand above.
+          const hasSingleTarget = card.effects.some(spec => spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) && spec.target !== 'hero' && spec.target !== 'self');
+          const wardRef = hasSingleTarget ? intent.target : undefined;
+          let fizzled = false;
+          if (wardRef && wardRef.type === 'creature') {
+            const warded = findCreature(this, wardRef.id);
+            if (warded && warded.warded && warded.owner === (1 - me) as PlayerIndex) {
+              warded.warded = false;
+              this.emit({ type: 'spellFizzled', player: me, cardId: card.id, creatureId: warded.id });
+              fizzled = true;
             }
-            applyEffect(this, { player: me, cardId: card.id }, spec, ref);
+          }
+          if (!fizzled) {
+            for (const spec of card.effects) {
+              // Single-target effects pass the resolved intent.target as the
+              // explicit ref; hero/self (own-hero auto-resolve, Task 14
+              // mixed-card ruling) and AoE/random kinds resolve internally.
+              const specRef = spec.target !== undefined && SINGLE_TARGET_TARGETS.has(spec.target) && spec.target !== 'hero' && spec.target !== 'self' ? intent.target : undefined;
+              applyEffect(this, { player: me, cardId: card.id }, spec, specRef);
+            }
           }
           break;
         }
@@ -375,16 +396,21 @@ export class Game implements Resolver {
       }
       case 'spellFizzled':
       case 'heroHealed':
+      case 'heroDamaged':   // log-only marker (hero hp already applied inline in damageTarget)
       case 'buffApplied':
       case 'cardDrawnExtra':
       case 'tokenSummoned':
       case 'creatureSummoned':
       case 'frozen':
+      case 'thawed':
       case 'effectResolved':
       case 'heroPowerUsed':   // log-only marker (state already applied inline)
         break;
       default:
-        throw new Error('Unhandled event: ' + evt.type);
+        // The switch is exhaustive today (TS narrows evt to never here); the
+        // guard stays for future event types added to the union without a
+        // dispatch case.
+        throw new Error('Unhandled event: ' + (evt as GameEvent).type);
     }
   }
 
@@ -483,15 +509,19 @@ export class Game implements Resolver {
     // (state maintenance, not events).
     const maxMana = Math.min(MAX_MANA, p.maxMana + 1);
     p.hero.usedPower = false;
-    p.hero.discountCheapest = 0;
+    p.hero.discountMostExpensive = 0;
     p.hero.discountNextSpell = 0;
-    // thaw frozen creatures, ready the active player's creatures (summoning
-    // sickness ends at the start of the owner's next turn; rush/charge
-    // creatures are already un-exhausted from summon), restore attacks
-    // (attacksLeft = windfury ? 2 : 1). Exhausted creatures stay exhausted
-    // only within the turn they were summoned.
+    // thaw frozen creatures (emitting thawed — audit 01 M1 symmetry with
+    // frozen), ready the active player's creatures (summoning sickness ends
+    // at the start of the owner's next turn; rush/charge creatures are
+    // already un-exhausted from summon), restore attacks (attacksLeft =
+    // windfury ? 2 : 1). Exhausted creatures stay exhausted only within the
+    // turn they were summoned.
     for (const c of p.board) {
-      if (c.frozen) c.frozen = false;
+      if (c.frozen) {
+        c.frozen = false;
+        this.emit({ type: 'thawed', creatureId: c.id });
+      }
       c.exhausted = false;
       c.attacksLeft = c.keywords.includes('windfury') ? 2 : 1;
     }

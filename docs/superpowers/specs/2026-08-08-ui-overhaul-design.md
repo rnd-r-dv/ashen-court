@@ -402,7 +402,14 @@ height.
   ok/hurt/critical thresholds.
 - **Enemy hand.** A real card-back design and a tighter row, so it reads as "cards in
   hand" at a glance.
-- **Deck and discard counts.** New. Both are currently invisible.
+- **Deck count.** New. Card advantage and fatigue are currently invisible.
+- **Discard count — cut during planning, and it is not coming back cheaply.**
+  `PlayerState` is `{hero, deck, hand, board, artifacts, mana, maxMana, surged}`
+  (`core/src/types.ts:53`). There is no discard pile, graveyard or played-card list
+  anywhere in the engine — a resolved spell simply ceases to exist. Adding one means a
+  new `PlayerState` field, new `dispatch` handling and a serialization change, all of
+  which §2 rules out. If a discard pile is wanted, it is a gameplay feature with its own
+  spec, not a UI task.
 
 ---
 

@@ -20,9 +20,15 @@
   --card-h: 336px;   /* 5:7, the standard TCG proportion */
   --card-pad: 8px;
   --card-top-h: 32px;
-  /* Matches CardArt's VIEW_W/VIEW_H aspect (250/180) at the inner
-     width, so the art panel never has to crop in normal layout. */
-  --card-art-h: 158px;
+  /* ---- art panel geometry -------------------------------------
+     ONE decision expressed twice would drift, so the panel height
+     is DERIVED from the ratio, never typed in. Generated card art
+     is requested at exactly this ratio (scripts/art/prompt.ts,
+     aspectForRarity), so panel and image agree and nothing crops.
+     Change --card-art-ratio and the panel follows.                */
+  --card-art-w: calc(var(--card-w) - 2 * var(--card-pad) - 4px);  /* 220px */
+  --card-art-ratio: 1.5;                                          /* 3:2   */
+  --card-art-h: calc(var(--card-art-w) / var(--card-art-ratio));  /* 147px */
 
   --rarity-color: #8a8a8a;
   position: relative;
@@ -419,7 +425,9 @@
    row + art panel, so board rows stay compact instead of reserving a text
    well nothing renders into. */
 .card--board {
-  --card-h: 216px;   /* pad/border 20 + top 38 + art 158 */
+  /* chrome 20 (pad 16 + border 4) + top row 38 + art panel.
+     Derived, so it tracks --card-art-h automatically. */
+  --card-h: calc(20px + 38px + var(--card-art-h));   /* 205px at 3:2 */
 }
 .card--board .card__ribbon,
 .card--board .card__body {

@@ -1,6 +1,6 @@
 import { MANA_SURGE } from '../types.js';
 import type { Card, EffectSpec, EffectTarget, Intent, PlayerIndex, TargetRef } from '../types.js';
-import { findCreature, isDragon, resolveTargets, SINGLE_TARGET_TARGETS } from './effects.js';
+import { findCreature, isDragon, resolveTargets, SINGLE_TARGET_TARGETS, BOARD_CAP } from './effects.js';
 import { canAttack, effectiveKeywords, tauntPresent } from './keywords.js';
 import type { Game } from './game.js';
 
@@ -13,7 +13,7 @@ import type { Game } from './game.js';
  *
  * Rulings encoded here (task brief 17d659a):
  *  - effective cost = registry cost minus discountNextSpell (spells) or minus
- *    discountCheapest (only for the most expensive creature in hand, via
+ *    discountMostExpensive (only for the most expensive creature in hand, via
  *    registry cost lookup); discounts are consumed on use even at effective 0.
  *  - single-target effects require a valid target ref: creature refs carry only
  *    { type: 'creature', id } — the owner is inferred from the board. Side
@@ -30,7 +30,7 @@ export function playEffectiveCost(game: Game, card: Card, me: PlayerIndex): numb
   if (card.type === 'spell') {
     eff -= p.hero.discountNextSpell;
   } else if (card.type === 'creature' && isMostExpensiveCreatureInHand(game, me, card)) {
-    eff -= p.hero.discountCheapest;
+    eff -= p.hero.discountMostExpensive;
   }
   return Math.max(0, eff);
 }
@@ -58,6 +58,9 @@ export function validatePlayCard(
   if (!card) return `Unknown card id: ${cardId}`;
   if (cardId === MANA_SURGE && p.surged) return 'Mana Surge already surged';
   if (p.mana < playEffectiveCost(game, card, me)) return 'Not enough mana';
+  // Board cap (audit 01 C2): a full board (BOARD_CAP creatures) cannot play
+  // more creatures — effect summons cap too, so the invariant holds for both.
+  if (card.type === 'creature' && p.board.length >= BOARD_CAP) return 'Board is full';
   // Single-target effects require a valid target ref; every single-target
   // effect must accept the supplied ref (multi-target / no-target effects
   // resolve internally and need no target). hero/self effects auto-resolve to
@@ -136,7 +139,7 @@ function safeCard(game: Game, id: string): Card | undefined {
  * Discount consistency: affordability uses the same playEffectiveCost that
  * validatePlayCard and the playCard payment use, so validation/enumeration/
  * payment never disagree. (Discounts are turn-scoped: beginTurn zeroes
- * discountCheapest/discountNextSpell at every turn start.)
+ * discountMostExpensive/discountNextSpell at every turn start.)
  */
 export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
   if (game.state.phase !== 'main' || game.currentPlayer() !== player) return [];
@@ -151,6 +154,9 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
     // Mana Surge is unplayable once surged (validatePlayCard's gate) — never
     // enumerate an intent submit would reject.
     if (card.id === MANA_SURGE && p.surged) continue;
+    // Board cap (audit 01 C2): creatures at a full board are unplayable —
+    // mirror how unaffordable cards are skipped (validatePlayCard rejects).
+    if (card.type === 'creature' && p.board.length >= BOARD_CAP) continue;
     if (p.mana < playEffectiveCost(game, card, player)) continue;
     const variants = targetVariants(game, player, card.type === 'creature' ? battlecryEffects(card) : card.effects);
     if (!variants) continue;   // single-target effect with no legal ref → unplayable

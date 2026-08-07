@@ -97,8 +97,10 @@ export function effectText(effect: EffectSpec): string {
       // charAt(0): noUncheckedIndexedAccess makes kw[0] possibly-undefined
       return `Give ${target(effect.target)} ${kw ? kw.charAt(0).toUpperCase() + kw.slice(1) : ''}.`;
     }
-    case 'discountCheapest':
-      return `Your cheapest card costs ${v} less this turn.`;
+    case 'discountMostExpensive':
+      // engine discounts only the most expensive CREATURE in hand (intents.ts
+      // playEffectiveCost) — the text must say creature, not card (audit 02 I-1).
+      return `Your most expensive creature costs ${v} less this turn.`;
     case 'discountNextSpell':
       return `Your next spell costs ${v} less this turn.`;
   }

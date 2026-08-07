@@ -6,6 +6,9 @@
 //   - damageDealt = sum of heroDamaged amounts per damaged player index, so
 //                   damageDealt[i] = total hero damage dealt TO player i
 //   - cardsPlayed = count of cardPlayed events per player index
+// heroDamaged is emitted by the engine (effects.ts damageTarget) alongside
+// every damageDealt that lands on a hero — real-game logs carry these events
+// (audit 01 I1 fix), so the summarize contract matches engine behavior.
 import type { GameEvent, MatchStats } from '../types.js';
 
 export function summarize(log: GameEvent[]): MatchStats {

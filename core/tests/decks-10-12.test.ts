@@ -54,7 +54,7 @@ describe('decks 10-12 (Starforged, Eternal Vigil, Stormwrought)', () => {
           target.health = 2;   // heal 1 must bring it back to maxHealth 3
         }
         game.submit({ kind: 'heroPower' });
-        if (name === 'starforged') expect(game.state.players[0].hero.discountCheapest).toBe(1);       // Star Rite discCheap1
+        if (name === 'starforged') expect(game.state.players[0].hero.discountMostExpensive).toBe(1);       // Star Rite discCheap1
         if (name === 'eternal vigil') expect(game.state.players[0].board[0]!.health).toBe(3);          // Renewal heal1(afc)
         if (name === 'stormwrought') expect(game.state.players[0].hero.discountNextSpell).toBe(1);     // Static discSpell1
       });

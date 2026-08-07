@@ -40,7 +40,7 @@ const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: 
 const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
 const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
 const gainMana = (value: number): EffectSpec => ({ kind: 'gainMana', value });
-const discCheap = (value: number): EffectSpec => ({ kind: 'discountCheapest', value });
+const discCheap = (value: number): EffectSpec => ({ kind: 'discountMostExpensive', value });
 
 export const HERO: HeroSpec = {
   name: 'Archon Stellara',

@@ -7,7 +7,7 @@ import type { Resolver } from './events.js';
  * Effect-resolution library.
  *
  * Every EffectKind (dealDamage, draw, heal, buff, summon, gainMana,
- * refillMana, freeze, destroy, copyCard, giveKeyword, discountCheapest,
+ * refillMana, freeze, destroy, copyCard, giveKeyword, discountMostExpensive,
  * discountNextSpell) applies its state mutation and dispatches concrete
  * events through the resolver's queue so runQueue applies them.
  *
@@ -26,7 +26,7 @@ export interface EffectCtx {
   creatureId?: string;
 }
 
-const BOARD_CAP = 7;
+export const BOARD_CAP = 7;
 const MAX_MANA = 15;
 
 /** Targets that resolve to one ref (caller supplies an explicit ref via the
@@ -156,8 +156,8 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
       }
       break;
     }
-    case 'discountCheapest':
-      game.state.players[ctx.player].hero.discountCheapest += spec.value ?? 0;
+    case 'discountMostExpensive':
+      game.state.players[ctx.player].hero.discountMostExpensive += spec.value ?? 0;
       break;
     case 'discountNextSpell':
       game.state.players[ctx.player].hero.discountNextSpell += spec.value ?? 0;
@@ -243,6 +243,10 @@ export function damageTarget(game: Resolver, ctx: EffectCtx, ref: TargetRef, amo
   if (hero.shields > 0) { hero.shields -= 1; dmg = 0; }
   hero.hp -= dmg;
   push(game, { type: 'damageDealt', target: ref, amount: dmg, sourceCardId: ctx.cardId });
+  // audit 01 I1: hero damage also emits heroDamaged (the declared event the
+  // engine never produced — summarize/app read it for stats + hero flash).
+  // Mirror heroHealed: emit only when damage actually landed (shields absorb).
+  if (dmg > 0) push(game, { type: 'heroDamaged', player: ref.player, amount: dmg, hp: hero.hp });
   return dmg;
 }
 

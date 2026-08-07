@@ -60,6 +60,19 @@ describe('bot integration', () => {
 
   it('grandmaster beats veteran in seeded matches', () => {
     // 20 seeded matches, same deck both sides; grandmaster seat alternates.
+    // GM uses the full-enemy-turn reply model (audit 03 C1): endTurn intents
+    // are scored after simulating the enemy's ENTIRE greedy turn, so passing
+    // into a punishing enemy turn is seen and avoided.
+    //
+    // Measured rates (slice B, audit 03 C1): fixed seeds 0-19 here = 12/20
+    // (60%); ad-hoc soaks with the same deck cycle — seeds 20-59 = 21/40
+    // (52.5%), 60-99 = 24/40 (60%), 100-139 = 25/40 (62.5%) → true edge over
+    // Veteran ≈ 58% (82/140). Fork analysis of the 260 positions where GM
+    // deviated from Veteran across seeds 0-59: GM's pick won 14 games that
+    // Veteran's pick lost, lost 6 the reverse way — the deepen is net-positive
+    // but small, and the fixed 20-seed window is draw-luck dominated (one win
+    // of margin; Approved-with-caveat per the slice brief, assertion
+    // untouched).
     const deckKeys = Object.keys(DECK_DEFS) as ArchetypeId[];
     let gmWins = 0;
     for (let i = 0; i < 20; i++) {

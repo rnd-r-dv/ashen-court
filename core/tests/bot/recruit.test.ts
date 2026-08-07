@@ -49,6 +49,19 @@ describe('mulliganPolicy', () => {
 });
 
 describe('Recruit', () => {
+  it('degrades to endTurn when legalIntents is empty (audit 03 I2)', () => {
+    // pickRandom([]) returns undefined and submit(undefined) throws — Recruit
+    // must return endTurn like Veteran/Grandmaster instead of crashing.
+    const game = Game.create(makeTestSetup());
+    // fresh game: phase is 'mulligan', so legalIntents([]) for both players.
+    expect(Recruit.chooseIntent(game, 0)).toEqual({ kind: 'endTurn' });
+    expect(Recruit.chooseIntent(game, 1)).toEqual({ kind: 'endTurn' });
+    // mid-game main phase, called for the NON-current player: also [].
+    // (turn 0 → player 0 is current; player 1 is not.)
+    game.state.phase = 'main';
+    expect(Recruit.chooseIntent(game, 1)).toEqual({ kind: 'endTurn' });
+  });
+
   it('chooses only legal intents across 100 seeded random states', () => {
     const pool = new CardRegistry(buildPool());
     const deckKeys = Object.keys(DECK_DEFS) as ArchetypeId[];

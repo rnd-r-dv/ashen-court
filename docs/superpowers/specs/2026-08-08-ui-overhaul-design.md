@@ -183,10 +183,10 @@ OpenRouter's rate-limit docs, 2026-08-08):
 | Requests / day, under $10 lifetime credits | **50** |
 | Requests / day, $10+ lifetime credits | **1000** |
 
-The cap is on *lifetime credits purchased*, not current balance. At 50/day a full 297-image
-pass takes six days; at 1000/day it is a single run. **The resume-by-file-existence
-behaviour in §3.7 is what makes a multi-day run painless** — re-running the same command
-tomorrow picks up exactly where the cap cut it off.
+The cap is on *lifetime credits purchased*, not current balance — see the coverage table
+below for what that means for this account. The resume-by-file-existence behaviour in
+§3.7 covers the lower tier: re-running the same command picks up exactly where a cap cut
+it off.
 
 The generator must therefore throttle to stay under 20/min, and treat a 429 that
 survives its retries as "daily cap reached" — exit cleanly telling the operator to
@@ -211,12 +211,19 @@ Coverage is deliberately undecided until after Stage 0 — the script supports e
 mode, so deferring costs nothing. Verified counts (`buildPool()`, 2026-08-08:
 common=151, rare=68, epic=40, legendary=26):
 
-| Mode | Images (incl. 12 heroes) | Days @ 50/day | Days @ 1000/day | `--coverage` |
-|---|---|---|---|---|
-| Full pool | 297 | 6 | 1 | `all` |
-| Rare and up | 146 | 3 | 1 | `rare+` |
-| **Epic and up** | **78** | **2** | **1** | `epic+` |
-| Single archetype pilot | ~21 + heroes | 1 | 1 | `--only <archetype>` |
+**This account is on the 1000/day tier** (confirmed 2026-08-08 — $10+ of credits
+purchased historically). Every coverage mode therefore fits in a single run, and the
+binding constraint is the 20/minute rate, not the daily cap:
+
+| Mode | Images (incl. 12 heroes) | Wall time @ 20/min | `--coverage` |
+|---|---|---|---|
+| Full pool | 297 | ~16 min | `all` |
+| Rare and up | 146 | ~8 min | `rare+` |
+| **Epic and up** | **78** | **~4 min** | `epic+` |
+| Single archetype pilot | ~21 + heroes | ~2 min | `--only <archetype>` |
+
+The daily-cap handling stays in the generator as a safety net — it should never fire on
+this account, but a 50/day account would otherwise silently fail two thirds of a run.
 
 **`epic+` is the designated fallback.** On the free variant what it saves is *days
 against the daily cap*, not dollars; on the paid variant it saves roughly

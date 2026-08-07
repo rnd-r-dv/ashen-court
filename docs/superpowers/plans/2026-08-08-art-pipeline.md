@@ -6,7 +6,7 @@
 
 **Architecture:** Four pure, unit-tested modules (`styles`, `prompt`, `coverage`, `paths`) and one impure CLI (`generate`) that composes them with `fetch` and `sharp`. The app consumes the output through a single resolver backed by Vite's `import.meta.glob`, so "does this card have art" is answered at build time, never by probing for 404s.
 
-**Tech Stack:** TypeScript (ESM), tsx, vitest, sharp, OpenRouter Images API (`black-forest-labs/flux.2-klein-4b`).
+**Tech Stack:** TypeScript (ESM), tsx, vitest, sharp, OpenRouter Images API (`black-forest-labs/flux.2-klein-4b:free`; the contract doc lives at the non-`:free` path).
 
 ## Global Constraints
 
@@ -18,7 +18,7 @@ Copied verbatim from `docs/superpowers/specs/2026-08-08-ui-overhaul-design.md`. 
 - **Never put pixel dimensions in the prompt.** Output size comes from the sampler's latent grid via `aspect_ratio`; prompt text cannot change it. FLUX.2 renders legible text unusually well, so `"480x320"` in a prompt risks being painted into the illustration.
 - **`aspect_ratio` is derived from `card.rarity`, never operator-set:** `3:4` for rarity ≥ epic (full-bleed), `3:2` below it (banded), `1:1` for heroes.
 - **`OPENROUTER_API_KEY` comes from the environment.** Never committed, never written to a file, never logged.
-- **Default to the free model variant `black-forest-labs/flux.2-klein-4b:free`** (verified 2026-08-08). Free tier is capped at **20 requests/minute** and **50/day** under $10 lifetime credits, **1000/day** above. Requests must be spaced, and a daily-cap 429 must stop the run cleanly rather than grinding through failures.
+- **Default to the free model variant `black-forest-labs/flux.2-klein-4b:free`** (verified 2026-08-08). Free tier is capped at **20 requests/minute** and **50/day** under $10 lifetime credits, **1000/day** above. **This account is on the 1000/day tier**, so a full 297-image pass fits in one run of roughly 16 minutes and the 20/minute rate is the only real constraint. Requests must still be spaced, and a daily-cap 429 must stop the run cleanly rather than grinding through failures — it should never fire here, but it is what keeps the script correct on a 50/day account.
 - **`--model` is only safe across FLUX-schema models.** `recraft/recraft-v3:free` takes an `image_config` object instead and does not document `aspect_ratio`; using it is client work, not a flag.
 - **Existing suite is 402 tests across 50 files and must stay green.** Run `npm test` before every commit.
 - **Do not commit generated images in the same commit as code.** Images are reviewed separately.
@@ -1216,6 +1216,7 @@ import sharp from 'sharp';
 import { buildPool, DECK_DEFS, HEROES } from '@ashen/core';
 import { inCoverage, parseCoverage, type Coverage } from './coverage.js';
 import { DEFAULT_MODEL, generateImage, RateLimitedError } from './openrouter.js';
+import type { GenerateResult } from './openrouter.js';
 import { cardArtPath, heroArtPath } from './paths.js';
 import { buildCardPrompt, buildHeroPrompt, type BuiltPrompt } from './prompt.js';
 
@@ -1231,9 +1232,10 @@ import { buildCardPrompt, buildHeroPrompt, type BuiltPrompt } from './prompt.js'
  * a paid model require an explicit flag.
  *
  * Free tier is capped at 20 requests/minute and 50/day (1000/day once $10 of
- * credits has ever been purchased). Requests are spaced automatically, and a
- * daily-cap 429 stops the run cleanly — re-running the same command tomorrow
- * resumes, because anything already written is skipped.
+ * credits has ever been purchased). Requests are spaced automatically, so a
+ * full 297-image pass takes ~16 minutes on the 1000/day tier. A daily-cap 429
+ * stops the run cleanly — re-running the same command later resumes, because
+ * anything already written is skipped.
  */
 
 /** Written size per aspect — derived from what the UI renders at 2x DPR. */
@@ -1379,7 +1381,9 @@ async function main(): Promise<void> {
     // eat 429s; the first request is not delayed.
     if (i > 0) await new Promise((r) => setTimeout(r, MIN_REQUEST_SPACING_MS));
 
-    let res;
+    // Annotated, not `let res;` — the latter is an implicit any that leans on
+    // control-flow inference to recover a type, which is fragile under strict.
+    let res: GenerateResult;
     try {
       res = await generateImage({
         prompt: job.built.prompt,

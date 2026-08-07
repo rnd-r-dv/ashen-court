@@ -18,6 +18,8 @@ Copied verbatim from `docs/superpowers/specs/2026-08-08-ui-overhaul-design.md`. 
 - **Never put pixel dimensions in the prompt.** Output size comes from the sampler's latent grid via `aspect_ratio`; prompt text cannot change it. FLUX.2 renders legible text unusually well, so `"480x320"` in a prompt risks being painted into the illustration.
 - **`aspect_ratio` is derived from `card.rarity`, never operator-set:** `3:4` for rarity ≥ epic (full-bleed), `3:2` below it (banded), `1:1` for heroes.
 - **`OPENROUTER_API_KEY` comes from the environment.** Never committed, never written to a file, never logged.
+- **Default to the free model variant `black-forest-labs/flux.2-klein-4b:free`** (verified 2026-08-08). Free tier is capped at **20 requests/minute** and **50/day** under $10 lifetime credits, **1000/day** above. Requests must be spaced, and a daily-cap 429 must stop the run cleanly rather than grinding through failures.
+- **`--model` is only safe across FLUX-schema models.** `recraft/recraft-v3:free` takes an `image_config` object instead and does not document `aspect_ratio`; using it is client work, not a flag.
 - **Existing suite is 402 tests across 50 files and must stay green.** Run `npm test` before every commit.
 - **Do not commit generated images in the same commit as code.** Images are reviewed separately.
 
@@ -370,7 +372,8 @@ describe('coverage', () => {
   });
 
   it('rejects an unknown value loudly rather than defaulting', () => {
-    // Silently defaulting to 'all' on a typo would spend ~$12 by accident.
+    // Silently defaulting to 'all' on a typo would burn the whole daily
+    // request allowance — or, on a paid model, real money — by accident.
     expect(() => parseCoverage('epic')).toThrow(/coverage/i);
     expect(() => parseCoverage('')).toThrow(/coverage/i);
   });
@@ -821,7 +824,7 @@ git commit -m "feat(art): pure three-layer prompt builder with rarity-derived as
 ```ts
 // scripts/tests/openrouter.test.ts
 import { describe, expect, it, vi } from 'vitest';
-import { generateImage } from '../art/openrouter.js';
+import { generateImage, RateLimitedError } from '../art/openrouter.js';
 
 const PNG_B64 = Buffer.from('fake-image-bytes').toString('base64');
 
@@ -862,7 +865,7 @@ describe('generateImage', () => {
     expect(Object.keys(body).sort()).toEqual(
       ['aspect_ratio', 'model', 'n', 'output_format', 'prompt'].sort(),
     );
-    expect(body.model).toBe('black-forest-labs/flux.2-klein-4b');
+    expect(body.model).toBe('black-forest-labs/flux.2-klein-4b:free');
     expect(body.aspect_ratio).toBe('3:2');
     expect(body.n).toBe(1);
     expect(body.output_format).toBe('jpeg');
@@ -917,6 +920,38 @@ describe('generateImage', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3); // initial + 2 retries
   });
 
+  it('reports a surviving 429 as RateLimitedError — the free daily cap', async () => {
+    // The free tier allows 50 requests/day under $10 lifetime credits. A 429
+    // that outlives seconds of backoff is that cap, and no amount of further
+    // waiting inside one run will clear it.
+    const fetchImpl = vi.fn().mockResolvedValue(errResponse(429, 'daily limit'));
+    await expect(
+      generateImage({ ...base, fetchImpl: fetchImpl as unknown as typeof fetch, maxRetries: 1 }),
+    ).rejects.toBeInstanceOf(RateLimitedError);
+  });
+
+  it('does not label a 502 as rate limited', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(errResponse(502, 'upstream'));
+    await expect(
+      generateImage({ ...base, fetchImpl: fetchImpl as unknown as typeof fetch, maxRetries: 1 }),
+    ).rejects.not.toBeInstanceOf(RateLimitedError);
+  });
+
+  it('defaults to the free model and lets --model override it', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse());
+    await generateImage({ ...base, fetchImpl: fetchImpl as unknown as typeof fetch });
+    let body = JSON.parse((fetchImpl.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.model).toBe('black-forest-labs/flux.2-klein-4b:free');
+
+    fetchImpl.mockClear();
+    await generateImage({
+      ...base, model: 'black-forest-labs/flux.2-max:free',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    body = JSON.parse((fetchImpl.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.model).toBe('black-forest-labs/flux.2-max:free');
+  });
+
   it('throws a clear error when the response carries no image', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ data: [], usage: { cost: 0 } }), { status: 200 }),
@@ -944,7 +979,19 @@ Expected: FAIL — cannot resolve `../art/openrouter.js`.
  */
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/images';
-const MODEL = 'black-forest-labs/flux.2-klein-4b';
+
+/**
+ * Default to the FREE variant (verified 2026-08-08). It takes the same request
+ * fields as the paid model, so nothing else changes.
+ *
+ * Swappable via --model, but only across models sharing THIS request schema —
+ * the other BFL variants (flux.2-klein-4b, flux.2-pro:free, flux.2-max:free)
+ * do. Non-FLUX models do not: recraft/recraft-v3:free, for instance, takes an
+ * `image_config` object with style/strength/rgb_colors and does not document
+ * aspect_ratio at all. Pointing --model at one of those is schema work, not a
+ * flag change.
+ */
+export const DEFAULT_MODEL = 'black-forest-labs/flux.2-klein-4b:free';
 
 /**
  * Only 429 (rate limited) and 502 (upstream failure, not billed) are worth
@@ -966,12 +1013,19 @@ export interface GenerateOptions {
   prompt: string;
   aspectRatio: string;
   apiKey: string;
+  /** Defaults to DEFAULT_MODEL (the free variant). */
+  model?: string;
   /** Injected by tests only. Production omits it. */
   fetchImpl?: typeof fetch;
   maxRetries?: number;
   /** Injected by tests only, to skip real backoff delays. */
   sleep?: (ms: number) => Promise<void>;
 }
+
+/** Thrown when a 429 outlives its retries. On the free tier that almost
+ *  always means the DAILY cap, not the per-minute one — backing off further
+ *  cannot help, so the caller should stop the run and resume tomorrow. */
+export class RateLimitedError extends Error {}
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -983,7 +1037,7 @@ export async function generateImage(opts: GenerateOptions): Promise<GenerateResu
   // Exactly the documented fields. An unlisted field is rejected with 400 —
   // in particular there is NO width/height/size parameter, so do not add one.
   const body = {
-    model: MODEL,
+    model: opts.model ?? DEFAULT_MODEL,
     prompt: opts.prompt,
     aspect_ratio: opts.aspectRatio,
     output_format: 'jpeg',
@@ -991,6 +1045,7 @@ export async function generateImage(opts: GenerateOptions): Promise<GenerateResu
   };
 
   let lastError = new Error('no attempt made');
+  let lastStatus = 0;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await doFetch(ENDPOINT, {
@@ -1021,12 +1076,17 @@ export async function generateImage(opts: GenerateOptions): Promise<GenerateResu
     }
 
     const message = await readErrorMessage(res);
+    lastStatus = res.status;
     lastError = new Error(`OpenRouter ${res.status}: ${message}`);
     if (!RETRYABLE.has(res.status)) throw lastError;
     // Exponential backoff: 1s, 2s, 4s.
     if (attempt < maxRetries) await sleep(1000 * 2 ** attempt);
   }
 
+  // A 429 that outlived seconds of backoff is the daily cap, not the
+  // per-minute one. Distinguished so the CLI can stop cleanly and tell the
+  // operator to resume tomorrow instead of grinding through 200 more failures.
+  if (lastStatus === 429) throw new RateLimitedError(lastError.message);
   throw lastError;
 }
 
@@ -1078,13 +1138,22 @@ import { parseArgs } from '../art/generate.js';
 describe('parseArgs', () => {
   it('defaults to the safest possible run', () => {
     const a = parseArgs([]);
-    // Safe means: spends nothing until explicitly told to.
+    // Safe means: spends nothing until explicitly told to, on the free model.
     expect(a.dryRun).toBe(true);
     expect(a.coverage).toBe('all');
     expect(a.only).toBeNull();
     expect(a.limit).toBeNull();
     expect(a.force).toEqual([]);
     expect(a.heroes).toBe(true);
+    expect(a.model).toBe('black-forest-labs/flux.2-klein-4b:free');
+  });
+
+  it('accepts --model for the other FLUX variants', () => {
+    // Only across models sharing the FLUX request schema. Non-FLUX models
+    // (e.g. recraft/recraft-v3:free, which takes an image_config object) need
+    // schema work in openrouter.ts, not just this flag.
+    expect(parseArgs(['--model', 'black-forest-labs/flux.2-max:free']).model)
+      .toBe('black-forest-labs/flux.2-max:free');
   });
 
   it('turns off dry-run only when --commit is passed explicitly', () => {
@@ -1146,7 +1215,7 @@ import { dirname, resolve } from 'node:path';
 import sharp from 'sharp';
 import { buildPool, DECK_DEFS, HEROES } from '@ashen/core';
 import { inCoverage, parseCoverage, type Coverage } from './coverage.js';
-import { generateImage } from './openrouter.js';
+import { DEFAULT_MODEL, generateImage, RateLimitedError } from './openrouter.js';
 import { cardArtPath, heroArtPath } from './paths.js';
 import { buildCardPrompt, buildHeroPrompt, type BuiltPrompt } from './prompt.js';
 
@@ -1154,11 +1223,17 @@ import { buildCardPrompt, buildHeroPrompt, type BuiltPrompt } from './prompt.js'
  * Offline art generation CLI. Run from the repo root:
  *
  *   npm run art:generate -- --dry-run
- *   npm run art:generate -- --commit --limit 3          # the Stage 0 smoke batch
+ *   npm run art:generate -- --commit --force a --force b --force c   # Stage 0
  *   npm run art:generate -- --commit --coverage epic+
- *   npm run art:generate -- --commit --force choir-seraph
+ *   npm run art:generate -- --commit --model black-forest-labs/flux.2-max:free
  *
- * DEFAULTS TO --dry-run. Spending money requires --commit, explicitly.
+ * DEFAULTS TO --dry-run and to the FREE model variant. Both a real request and
+ * a paid model require an explicit flag.
+ *
+ * Free tier is capped at 20 requests/minute and 50/day (1000/day once $10 of
+ * credits has ever been purchased). Requests are spaced automatically, and a
+ * daily-cap 429 stops the run cleanly — re-running the same command tomorrow
+ * resumes, because anything already written is skipped.
  */
 
 /** Written size per aspect — derived from what the UI renders at 2x DPR. */
@@ -1168,6 +1243,13 @@ const TARGET_SIZE: Record<string, { width: number; height: number }> = {
   '1:1': { width: 256, height: 256 },   // hero circle,         92x92  CSS
 };
 
+/**
+ * Free-tier limit is 20 requests/minute, so requests are spaced at least this
+ * far apart. 3.2s leaves headroom against clock skew and request duration.
+ * Harmless on the paid variant, which is why it is unconditional.
+ */
+const MIN_REQUEST_SPACING_MS = 3200;
+
 export interface Args {
   dryRun: boolean;
   coverage: Coverage;
@@ -1175,11 +1257,13 @@ export interface Args {
   limit: number | null;
   force: string[];
   heroes: boolean;
+  model: string;
 }
 
 export function parseArgs(argv: string[]): Args {
   const args: Args = {
-    dryRun: true, coverage: 'all', only: null, limit: null, force: [], heroes: true,
+    dryRun: true, coverage: 'all', only: null, limit: null, force: [],
+    heroes: true, model: DEFAULT_MODEL,
   };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]!;
@@ -1190,6 +1274,7 @@ export function parseArgs(argv: string[]): Args {
       case '--coverage': args.coverage = parseCoverage(argv[++i] ?? ''); break;
       case '--only': args.only = argv[++i] ?? null; break;
       case '--force': args.force.push(argv[++i] ?? ''); break;
+      case '--model': args.model = argv[++i] ?? DEFAULT_MODEL; break;
       case '--limit': {
         const n = Number(argv[++i]);
         if (!Number.isInteger(n) || n < 1) {
@@ -1285,13 +1370,40 @@ async function main(): Promise<void> {
     return;
   }
 
+  console.log(`model: ${args.model}`);
+
   let total = 0;
+  let done = 0;
   for (const [i, job] of jobs.entries()) {
-    const res = await generateImage({
-      prompt: job.built.prompt,
-      aspectRatio: job.built.aspectRatio,
-      apiKey: apiKey!,
-    });
+    // Free tier allows 20 requests/minute. Space them rather than burst and
+    // eat 429s; the first request is not delayed.
+    if (i > 0) await new Promise((r) => setTimeout(r, MIN_REQUEST_SPACING_MS));
+
+    let res;
+    try {
+      res = await generateImage({
+        prompt: job.built.prompt,
+        aspectRatio: job.built.aspectRatio,
+        apiKey: apiKey!,
+        model: args.model,
+      });
+    } catch (err) {
+      if (err instanceof RateLimitedError) {
+        // Free tier: 50 requests/day under $10 lifetime credits, 1000 above.
+        // Nothing in this run can clear that, so stop cleanly. Everything
+        // already written is skipped on the next run, so re-running the same
+        // command tomorrow resumes exactly here.
+        console.error(
+          `\nRate limited after ${done} image(s) — this is almost certainly the ` +
+          `free tier's DAILY cap.\nRe-run the same command tomorrow; the ` +
+          `${done} image(s) already written will be skipped.`,
+        );
+        break;
+      }
+      throw err;
+    }
+
+    done++;
     total += res.costUsd;
 
     const meta = await sharp(res.bytes).metadata();
@@ -1314,12 +1426,18 @@ async function main(): Promise<void> {
     );
   }
 
-  const perImage = jobs.length > 0 ? total / jobs.length : 0;
-  console.log(`\nDone. ${jobs.length} image(s), $${total.toFixed(2)} total, ` +
+  const perImage = done > 0 ? total / done : 0;
+  console.log(`\nDone. ${done}/${jobs.length} image(s), $${total.toFixed(2)} total, ` +
     `$${perImage.toFixed(4)}/image.`);
-  console.log(`Extrapolated: all=297 -> $${(perImage * 297).toFixed(2)}  ` +
-    `rare+=146 -> $${(perImage * 146).toFixed(2)}  ` +
-    `epic+=78 -> $${(perImage * 78).toFixed(2)}`);
+  if (perImage > 0) {
+    console.log(`Extrapolated spend: all=297 -> $${(perImage * 297).toFixed(2)}  ` +
+      `rare+=146 -> $${(perImage * 146).toFixed(2)}  ` +
+      `epic+=78 -> $${(perImage * 78).toFixed(2)}`);
+  } else {
+    console.log('$0.00 charged — the free variant. The binding constraint is the ' +
+      'daily request cap (50/day under $10 lifetime credits, 1000/day above), ' +
+      'not money: all=297, rare+=146, epic+=78 requests.');
+  }
 }
 
 // Only run when invoked directly, so the test can import parseArgs safely.
@@ -1408,7 +1526,9 @@ Expected: `66 image(s) to generate` and `285 image(s) to generate` respectively.
 
 **Files:** creates 3 images under `app/src/assets/art/`.
 
-> **STOP HERE AFTER THIS TASK.** This is the cost gate from spec §3.5. Do not proceed to bulk generation without explicit human approval of both the images and the measured cost.
+> **STOP HERE AFTER THIS TASK.** This is the gate from spec §3.5. Do not proceed to bulk generation without explicit human approval of the images.
+>
+> On the free variant this is primarily a **quality** gate — three images cost $0.00 and 3 of the day's request allowance. It remains a cost gate whenever `--model` points at a paid variant.
 
 - [ ] **Step 1: Generate exactly three images**
 
@@ -1427,7 +1547,9 @@ npm run art:generate -- --commit \
 
 - [ ] **Step 2: Record the measurements**
 
-From the output, write down: source resolution, megapixels, serving provider, per-image cost, and the three extrapolated totals.
+From the output, write down: source resolution, megapixels, serving provider, per-image cost (expected `$0.0000` on the free variant), and whether the run reported extrapolated spend or the request-cap note.
+
+**If per-image cost is not $0.00 on a `:free` model, stop and report it** — that means the `:free` suffix did not take effect and the paid variant is being billed.
 
 - [ ] **Step 3: Look at the images**
 

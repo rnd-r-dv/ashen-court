@@ -170,13 +170,36 @@ Per `https://openrouter.ai/black-forest-labs/flux.2-klein-4b/llms.txt`:
 
 ### 3.5 Cost, and why the smoke batch is a gate
 
-Pricing is **$0.014/megapixel**. Since resolution cannot be requested, per-image cost
-cannot be computed in advance — only measured. The published example returns
-`usage.cost: 0.04` for one 16:9 image, which back-solves to ≈2.86 MP (~2256×1269). If
-3:2 lands at a comparable megapixel count, a full pass over 285 cards + 12 heroes is
-**≈$11.90**. Aspect ratio is probably not a cost lever — providers generally target a
-megapixel budget and vary dimensions to hit the requested ratio — but that is an
-assumption Stage 0 should confirm, not a fact to plan around.
+**Default to the free model variant: `black-forest-labs/flux.2-klein-4b:free`.**
+Verified 2026-08-08 — the variant exists and takes the same request fields. The model
+is a `--model` flag so the paid variant can be swapped in if free output disappoints.
+
+**Free-tier rate limits are the real constraint, not money** (verified against
+OpenRouter's rate-limit docs, 2026-08-08):
+
+| Limit | Value |
+|---|---|
+| Requests / minute | 20 |
+| Requests / day, under $10 lifetime credits | **50** |
+| Requests / day, $10+ lifetime credits | **1000** |
+
+The cap is on *lifetime credits purchased*, not current balance. At 50/day a full 297-image
+pass takes six days; at 1000/day it is a single run. **The resume-by-file-existence
+behaviour in §3.7 is what makes a multi-day run painless** — re-running the same command
+tomorrow picks up exactly where the cap cut it off.
+
+The generator must therefore throttle to stay under 20/min, and treat a 429 that
+survives its retries as "daily cap reached" — exit cleanly telling the operator to
+re-run tomorrow, rather than hammering.
+
+**Paid-variant cost cannot be estimated in advance.** Pricing is tiered — *"The first
+generated megapixel is charged $0.014. Each subsequent megapixel is charged $0.001"* —
+and resolution cannot be requested, so per-image cost is unknown until measured. An
+earlier revision of this spec back-solved the published `usage.cost: 0.04` example
+against a flat $0.014/MP to get ≈2.86 MP and ≈$11.90 for the pool. **That estimate is
+withdrawn**: under tiered pricing the same $0.04 implies ~27 MP, so the example figure
+and the pricing text are inconsistent and neither can be planned against. Stage 0
+measures the real number; nothing else should be trusted.
 
 **Stage 0 is a hard gate.** `--limit 3` against three deliberately unlike cards (a
 Hollow Choir spell, an Ember Court creature, a neutral). It writes the images and
@@ -188,18 +211,18 @@ Coverage is deliberately undecided until after Stage 0 — the script supports e
 mode, so deferring costs nothing. Verified counts (`buildPool()`, 2026-08-08:
 common=151, rare=68, epic=40, legendary=26):
 
-| Mode | Images (incl. 12 heroes) | Est. @ $0.04 | `--coverage` value |
-|---|---|---|---|
-| Full pool | 297 | ~$11.90 | `all` |
-| Rare and up | 146 | ~$5.80 | `rare+` |
-| **Epic and up** | **78** | **~$3.10** | `epic+` |
-| Single archetype pilot | ~21 + heroes | ~$1 | `--only <archetype>` |
+| Mode | Images (incl. 12 heroes) | Days @ 50/day | Days @ 1000/day | `--coverage` |
+|---|---|---|---|---|
+| Full pool | 297 | 6 | 1 | `all` |
+| Rare and up | 146 | 3 | 1 | `rare+` |
+| **Epic and up** | **78** | **2** | **1** | `epic+` |
+| Single archetype pilot | ~21 + heroes | 1 | 1 | `--only <archetype>` |
 
-**`epic+` is the designated fallback if Stage 0 reports a cost that makes the full pool
-unattractive.** At 78 images it is roughly a quarter of the full spend, and epics and
-legendaries are the cards a player actually stops to look at. Commons and rares keep
-procedural art, which as a side effect gives rarity a visual weight it does not
-currently carry.
+**`epic+` is the designated fallback.** On the free variant what it saves is *days
+against the daily cap*, not dollars; on the paid variant it saves roughly
+three-quarters of the spend. Either way 78 images covers the cards a player actually
+stops to look at, and commons and rares keeping procedural art gives rarity a visual
+weight it does not currently carry.
 
 `--coverage` must be implemented as a first-class flag taking `all` | `rare+` |
 `epic+`, not left as something the operator filters by hand.
@@ -243,13 +266,28 @@ alternative is committing ~45MB of oversized JPEGs.
 
 | Flag | Effect |
 |---|---|
-| `--dry-run` | print composed prompts, spend nothing |
-| `--limit N` | stop after N images (Stage 0 uses `--limit 3`) |
+| *(none)* | **dry run** — print composed prompts, issue no requests |
+| `--commit` | actually call the API |
+| `--limit N` | stop after N images |
 | `--only <archetype>` | restrict to one archetype, or `neutral` |
-| `--force <cardId>` | regenerate one card that already has a file |
+| `--force <cardId>` | generate **exactly** these cards, ignoring coverage and existing files |
+| `--coverage <mode>` | `all` \| `rare+` \| `epic+` |
+| `--model <id>` | defaults to `black-forest-labs/flux.2-klein-4b:free` |
+
+Dry run is the default and `--commit` is required to issue a request, so no invocation
+spends anything or consumes request allowance by accident.
+
+`--model` is only safe across models sharing the FLUX request schema — the other BFL
+variants (`flux.2-klein-4b`, `flux.2-pro:free`, `flux.2-max:free`) do.
+**`recraft/recraft-v3:free` does not**: it takes an `image_config` object with
+`style`/`strength`/`rgb_colors` and does not document `aspect_ratio`. Pointing `--model`
+at a non-FLUX model is schema work in the client, not a flag change.
 
 Default behaviour **skips any card whose output file already exists**, so a crashed run
-resumes for free and a re-run costs $0. A running cost ledger prints after each call.
+— or one cut off by the daily request cap — resumes for free. Requests are spaced to
+respect the 20/minute limit, and a 429 that survives retries is treated as the daily cap
+and stops the run cleanly with a resume instruction. A running cost ledger prints after
+each call.
 `OPENROUTER_API_KEY` comes from the environment and is never committed. Retry with
 backoff on 429 and 502.
 

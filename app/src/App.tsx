@@ -19,7 +19,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Screen } from './types.js';
 import { HEROES } from '@ashen/core';
-import type { PlayerIndex } from '@ashen/core';
+import type { HeroSpec, PlayerIndex } from '@ashen/core';
 import type { ServerMessage } from '@ashen/server/protocol';
 import type { LanClient } from './game/lanClient.js';
 import type { LanMatchDriver } from './game/lanDriver.js';
@@ -143,10 +143,12 @@ export default function App() {
       const session = lanSessionRef.current;
       if (!session) return;
       const nextSeed = session.driver.game().state.seed + 1; // server does seed += 1 per rematch
-      const hero = HEROES.find(h => h.name === session.room.heroId) ?? HEROES[0]!;
+      // Task 45: both players' real heroes + decks live in the room state
+      // (host's own + the guest's from opponentJoined / joined).
+      const heroes = session.room.heroes.map(name => HEROES.find(h => h.name === name) ?? HEROES[0]!);
       session.driver.reset({
-        decks: [session.room.deckIds, session.room.deckIds],
-        heroes: [hero, hero],
+        decks: session.room.decks,
+        heroes: heroes as [HeroSpec, HeroSpec],
         seed: nextSeed,
       });
       navigate({ name: 'match', setup: { driver: session.driver, myPlayer: session.myPlayer, mode: 'lan' } });

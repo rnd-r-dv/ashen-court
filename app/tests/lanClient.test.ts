@@ -75,8 +75,8 @@ describe('LanClient', () => {
   it('send() serializes the message as JSON once the socket is open', () => {
     const client = new LanClient('ws://test:8080', () => {});
     latest().open();
-    client.send({ type: 'joinRoom', code: 'ABCD' });
-    expect(latest().sent).toEqual(['{"type":"joinRoom","code":"ABCD"}']);
+    client.send({ type: 'joinRoom', code: 'ABCD', deckIds: ['ember-hellhound'], customCards: [], heroId: 'Pyra Emberveil' });
+    expect(latest().sent).toEqual(['{"type":"joinRoom","code":"ABCD","deckIds":["ember-hellhound"],"customCards":[],"heroId":"Pyra Emberveil"}']);
   });
 
   it('dispatches parsed ServerMessages to the onMessage handler', () => {
@@ -108,31 +108,32 @@ describe('LanClient', () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
-  it('re-sends joinRoom on the reconnect re-open so the server re-attaches the room (I1)', () => {
+  it('re-sends the FULL joinRoom payload on the reconnect re-open so the server re-attaches the room (I1, Task 45)', () => {
     const client = new LanClient('ws://test:8080', () => {});
-    client.setRoomCode('ABCD');
+    const payload = { code: 'ABCD', deckIds: ['ember-hellhound'], customCards: [], heroId: 'Pyra Emberveil' };
+    client.setJoinPayload(payload);
     latest().open();
-    client.send({ type: 'joinRoom', code: 'ABCD' }); // original session join
-    expect(latest().sent).toEqual(['{"type":"joinRoom","code":"ABCD"}']);
+    client.send({ type: 'joinRoom', ...payload }); // original session join
+    expect(latest().sent).toEqual([JSON.stringify({ type: 'joinRoom', ...payload })]);
 
     latest().drop(); // unexpected close → reconnect backoff
     vi.advanceTimersByTime(1001);
     const ws2 = latest();
-    ws2.open(); // reconnect re-open → re-sends joinRoom so the slot re-attaches
-    expect(ws2.sent).toEqual(['{"type":"joinRoom","code":"ABCD"}']);
+    ws2.open(); // reconnect re-open → re-sends the full joinRoom so the slot re-attaches
+    expect(ws2.sent).toEqual([JSON.stringify({ type: 'joinRoom', ...payload })]);
     client.close();
 
-    // Without a remembered room code (the host never sends joinRoom) the
+    // Without a remembered payload (the host never sends joinRoom) the
     // reconnect re-open sends nothing extra.
-    const noCode = new LanClient('ws://test:8080', () => {});
+    const noPayload = new LanClient('ws://test:8080', () => {});
     latest().open();
-    noCode.send({ type: 'createRoom', name: 'You', deckIds: [], customCards: [], heroId: 'H', seed: 1 });
+    noPayload.send({ type: 'createRoom', name: 'You', deckIds: [], customCards: [], heroId: 'H', seed: 1 });
     latest().drop();
     vi.advanceTimersByTime(1001);
     const ws3 = latest();
     ws3.open();
     expect(ws3.sent).toEqual([]);
-    noCode.close();
+    noPayload.close();
   });
 
   it('reconnects with exponential backoff after an unexpected close', () => {

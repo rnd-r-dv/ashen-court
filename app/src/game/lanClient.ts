@@ -1,22 +1,27 @@
-// LAN WebSocket client (Task 34 + Task 34 fix round). Thin wrapper over the
-// browser WebSocket: JSON serialization on send, JSON parse + dispatch on
-// message, buffered sends while the socket is connecting, and auto-reconnect
-// with exponential backoff inside the server's reconnect-grace window
-// (5 minutes, RECONNECT_GRACE_MS in server/src/rooms.ts). The server keeps a
-// room alive for the grace window after a socket drops, so the client keeps
-// trying to re-attach until then and gives up afterwards (status 'closed').
+// LAN WebSocket client (Task 34 + Task 34 fix round + Task 45). Thin
+// wrapper over the browser WebSocket: JSON serialization on send, JSON parse +
+// dispatch on message, buffered sends while the socket is connecting, and
+// auto-reconnect with exponential backoff inside the server's reconnect-grace
+// window (5 minutes, RECONNECT_GRACE_MS in server/src/rooms.ts). The server
+// keeps a room alive for the grace window after a socket drops, so the client
+// keeps trying to re-attach until then and gives up afterwards (status
+// 'closed').
 //
-// Reconnect re-attach (fix round 2): the client remembers the room code from
-// the original session (setRoomCode — the screens call it once they learn the
-// code) and re-sends joinRoom on the first re-opened socket after a drop, so
-// the server re-attaches the reconnecting socket to the room (join() re-joins
-// the freed slot) and replays the intent log.
+// Reconnect re-attach (fix round 2 + Task 45): the client remembers the FULL
+// joinRoom payload from the original session (setJoinPayload — the screens
+// call it once they know the code and their deck choice) and re-sends
+// joinRoom on the first re-opened socket after a drop, so the server
+// re-attaches the reconnecting socket to the room (join() re-joins the freed
+// slot) and replays the intent log. Task 45: the payload now carries the
+// guest's deck + hero too, so a guest reconnect re-attaches with a valid
+// joinRoom (deckIds/customCards/heroId), not just a bare code.
 //
 // Wire types come from the server package (NOT duplicated here) — the protocol
 // lives in server/src/protocol.ts and is re-exported through the
 // "@ashen/server/protocol" subpath (server/package.json "exports"). These are
 // type-only imports: they are erased at build time and never enter the browser
 // bundle.
+import type { Card } from '@ashen/core';
 import type { ClientMessage, ServerMessage } from '@ashen/server/protocol';
 
 /** Connection lifecycle status, surfaced via the optional onStatus callback. */
@@ -36,9 +41,10 @@ export class LanClient {
   private closed = false;
   private reconnectAttempts = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Room code from the original session — re-sent on reconnect so the
-   *  re-attached socket re-joins its room (fix round 2). */
-  private roomCode: string | null = null;
+  /** Full joinRoom payload from the original session — re-sent on reconnect
+   *  so the re-attached socket re-joins its room with a valid joinRoom
+   *  (Task 45: the guest's deck/hero ride along; fix round 2 added the code). */
+  private joinPayload: { code: string; deckIds: string[]; customCards: Card[]; heroId: string } | null = null;
   private readonly graceUntil = Date.now() + RECONNECT_GRACE_MS;
   /** Sends made before the socket opened (e.g. createRoom right after connect). */
   private pendingSends: ClientMessage[] = [];
@@ -60,9 +66,10 @@ export class LanClient {
     this.handlers.delete(cb);
   }
 
-  /** Remember the room this session belongs to; re-sent on reconnect re-open. */
-  setRoomCode(code: string): void {
-    this.roomCode = code;
+  /** Remember the full joinRoom payload (code + deck choice); re-sent on
+   *  reconnect re-open so the server re-attaches the room (fix round 2 + 45). */
+  setJoinPayload(payload: { code: string; deckIds: string[]; customCards: Card[]; heroId: string }): void {
+    this.joinPayload = payload;
   }
 
   /** Send one client message as JSON. Buffered until the socket is open. */
@@ -105,12 +112,13 @@ export class LanClient {
       const reconnecting = this.reconnectAttempts > 0;
       this.reconnectAttempts = 0;
       // Reconnect re-attach: the first re-opened socket after a drop re-sends
-      // joinRoom so the server re-attaches it to the room (the slot is free —
-      // it was cleared on disconnect) and replays the intent log. Sent BEFORE
-      // the buffered sends so nothing hits the server un-attached.
-      if (reconnecting && this.roomCode) {
+      // the full joinRoom payload so the server re-attaches it to the room
+      // (the slot is free — it was cleared on disconnect) and replays the
+      // intent log. Sent BEFORE the buffered sends so nothing hits the server
+      // un-attached.
+      if (reconnecting && this.joinPayload) {
         try {
-          ws.send(JSON.stringify({ type: 'joinRoom', code: this.roomCode }));
+          ws.send(JSON.stringify({ type: 'joinRoom', ...this.joinPayload }));
         } catch {
           /* the socket may have closed again mid-send */
         }

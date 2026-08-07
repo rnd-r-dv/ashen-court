@@ -249,11 +249,17 @@ withdrawn**: under tiered pricing the same $0.04 implies ~27 MP, so the example 
 and the pricing text are inconsistent and neither can be planned against. Stage 0
 measures the real number; nothing else should be trusted.
 
-**Stage 0 is a hard gate.** `--limit 3` against three deliberately unlike cards (a
-Hollow Choir spell, an Ember Court creature, a neutral). It writes the images and
+**Stage 0 is a hard gate.** Three deliberately unlike cards — a Hollow Choir spell, a
+neutral, and an Ember Court legendary — plus one hero. It writes the images and
 reports, per call: `usage.cost`, output resolution, serving provider, and the
 extrapolated full-pool total. **Then it stops.** Nothing further runs until a human has
-looked at the three images and approved the number.
+looked at the images and approved the number.
+
+**The batch must cover all three aspect ratios**, or the gate validates only the path
+it happens to sample. A common/rare card exercises `3:2` (banded), an epic/legendary
+exercises `3:4` (full-bleed), and a hero exercises `1:1`. `3:4` is the one worth
+proving early: full-bleed legibility is a hard acceptance criterion (§4.3), and it is
+the only treatment where a bad composition cannot be fixed in CSS.
 
 Coverage is deliberately undecided until after Stage 0 — the script supports every
 mode, so deferring costs nothing. Verified counts (`buildPool()`, 2026-08-08:
@@ -327,13 +333,15 @@ alternative is committing ~45MB of oversized JPEGs.
 | `--only <archetype>` | restrict to one archetype, or `neutral` |
 | `--force <cardId>` | generate **exactly** these cards, ignoring coverage and existing files |
 | `--coverage <mode>` | `all` \| `rare+` \| `epic+` |
-| `--model <id>` | defaults to `black-forest-labs/flux.2-klein-4b:free` |
+| `--no-heroes` | skip the 12 hero portraits, cards only |
+| `--no-cards` | skip cards, heroes only — the only way to exercise the `1:1` path on its own |
+| `--model <id>` | defaults to `black-forest-labs/flux.2-max:free` |
 
 Dry run is the default and `--commit` is required to issue a request, so no invocation
 spends anything or consumes request allowance by accident.
 
 `--model` is only safe across models sharing the FLUX request schema — the other BFL
-variants (`flux.2-klein-4b`, `flux.2-pro:free`, `flux.2-max:free`) do.
+variants (`flux.2-klein-4b:free`, `flux.2-pro:free`, `flux.2-max:free`) do.
 **`recraft/recraft-v3:free` does not**: it takes an `image_config` object with
 `style`/`strength`/`rgb_colors` and does not document `aspect_ratio`. Pointing `--model`
 at a non-FLUX model is schema work in the client, not a flag change.

@@ -1116,7 +1116,7 @@ async function readErrorMessage(res: Response): Promise<string> {
 - [ ] **Step 4: Run the test**
 
 Run: `npx vitest run scripts/tests/openrouter.test.ts`
-Expected: PASS, 9 tests.
+Expected: PASS, 12 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1158,6 +1158,7 @@ describe('parseArgs', () => {
     expect(a.limit).toBeNull();
     expect(a.force).toEqual([]);
     expect(a.heroes).toBe(true);
+    expect(a.cards).toBe(true);
     expect(a.model).toBe('black-forest-labs/flux.2-max:free');
   });
 
@@ -1191,6 +1192,15 @@ describe('parseArgs', () => {
   it('parses --only and --no-heroes', () => {
     expect(parseArgs(['--only', 'choir']).only).toBe('choir');
     expect(parseArgs(['--no-heroes']).heroes).toBe(false);
+  });
+
+  it('parses --no-cards, the only way to generate heroes alone', () => {
+    // Heroes are appended AFTER cards in job order, so --limit can never
+    // reach them. Without this flag the 1:1 aspect path cannot be smoke
+    // -tested on its own, and Stage 0 would validate only 3:2 and 3:4.
+    const a = parseArgs(['--no-cards']);
+    expect(a.cards).toBe(false);
+    expect(a.heroes).toBe(true);
   });
 
   it('collects repeated --force ids', () => {
@@ -1238,7 +1248,8 @@ import { buildCardPrompt, buildHeroPrompt, type BuiltPrompt } from './prompt.js'
  * Offline art generation CLI. Run from the repo root:
  *
  *   npm run art:generate -- --dry-run
- *   npm run art:generate -- --commit --force a --force b --force c   # Stage 0
+ *   npm run art:generate -- --commit --force a --force b --force c   # Stage 0 cards
+ *   npm run art:generate -- --commit --no-cards --only choir         # Stage 0 hero
  *   npm run art:generate -- --commit --coverage epic+
  *   npm run art:generate -- --commit --model black-forest-labs/flux.2-klein-4b:free
  *
@@ -1273,13 +1284,15 @@ export interface Args {
   limit: number | null;
   force: string[];
   heroes: boolean;
+  /** Generate cards. --no-cards clears it, leaving heroes only. */
+  cards: boolean;
   model: string;
 }
 
 export function parseArgs(argv: string[]): Args {
   const args: Args = {
     dryRun: true, coverage: 'all', only: null, limit: null, force: [],
-    heroes: true, model: DEFAULT_MODEL,
+    heroes: true, cards: true, model: DEFAULT_MODEL,
   };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]!;
@@ -1287,6 +1300,10 @@ export function parseArgs(argv: string[]): Args {
       case '--commit': args.dryRun = false; break;
       case '--dry-run': args.dryRun = true; break;
       case '--no-heroes': args.heroes = false; break;
+      // Heroes are appended after cards in job order, so --limit can never
+      // reach them. This is the only way to generate heroes on their own,
+      // which is what makes the 1:1 aspect path smoke-testable.
+      case '--no-cards': args.cards = false; break;
       case '--coverage': args.coverage = parseCoverage(argv[++i] ?? ''); break;
       case '--only': args.only = argv[++i] ?? null; break;
       case '--force': args.force.push(argv[++i] ?? ''); break;
@@ -1318,7 +1335,7 @@ function buildJobs(args: Args): Job[] {
   const forced = new Set(args.force);
   const jobs: Job[] = [];
 
-  for (const card of buildPool()) {
+  for (const card of args.cards ? buildPool() : []) {
     // --force means "exactly these cards". Without this branch, --force merely
     // waived the coverage filter, so `--force a --force b --force c --limit 3`
     // still enumerated the whole pool and then sliced the first three in pool
@@ -1470,7 +1487,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
 - [ ] **Step 4: Run the test**
 
 Run: `npx vitest run scripts/tests/generateArgs.test.ts`
-Expected: PASS, 8 tests.
+Expected: PASS, 11 tests.
 
 The bottom-of-file guard exists so the test can `import { parseArgs }` without `main()` firing. It compares `import.meta.url` against `process.argv[1]`'s basename: under `tsx scripts/art/generate.ts` those match and `main()` runs; under vitest `argv[1]` is the vitest binary, so they do not.
 
@@ -1534,46 +1551,103 @@ Expected: still a dry run — the output must say `DRY RUN, nothing will be spen
 ```bash
 npm run art:generate -- --coverage epic+ --no-heroes | head -1
 npm run art:generate -- --coverage all --no-heroes | head -1
+npm run art:generate -- --no-cards | head -1
 ```
 
-Expected: `66 image(s) to generate` and `285 image(s) to generate` respectively.
+Expected: `66`, `285` and `12 image(s) to generate` respectively (each line also
+carries the ` — DRY RUN` suffix). Counts are exact only before any image has been
+written; afterwards already-generated files are skipped and the numbers drop.
+
+- [ ] **Step 4: Confirm all three aspect ratios are reachable**
+
+```bash
+npm run art:generate -- --coverage epic+ --no-heroes | grep -c '\[3:4\]'
+npm run art:generate -- --no-cards | grep -c '\[1:1\]'
+```
+
+Expected: `66` and `12`. If `[3:4]` never appears, `aspectForRarity` is not wired
+into `buildCardPrompt`, and every epic and legendary would be generated in the wrong
+shape — a full regeneration to fix.
 
 ---
 
 ## Task 10: Stage 0 — the smoke batch (HUMAN GATE)
 
-**Files:** creates 3 images under `app/src/assets/art/`.
+**Files:** creates 4 images under `app/src/assets/art/` — 3 cards and 1 hero.
 
 > **STOP HERE AFTER THIS TASK.** This is the gate from spec §3.5. Do not proceed to bulk generation without explicit human approval of the images.
 >
-> On the free variant this is primarily a **quality** gate — three images cost $0.00 and 3 of the day's request allowance. It remains a cost gate whenever `--model` points at a paid variant.
+> On the free variant this is primarily a **quality** gate — four images cost $0.00 and 4 of the day's request allowance. It remains a cost gate whenever `--model` points at a paid variant.
+>
+> The batch deliberately spans **all three aspect ratios** (`3:2`, `3:4`, `1:1`). A gate that samples only one path validates only that path.
 
-- [ ] **Step 1: Generate exactly three images**
+- [ ] **Step 1: Generate three cards covering BOTH card aspect ratios**
 
 ```bash
 export OPENROUTER_API_KEY=...        # never commit this
 
 # Confirm the exact three first — costs nothing.
-npm run art:generate -- --force choir-smite --force neutral-knight --force star-meteor
+npm run art:generate -- --force choir-smite --force neutral-knight --force ember-emberlord
 
 # Then spend.
 npm run art:generate -- --commit \
-  --force choir-smite --force neutral-knight --force star-meteor
+  --force choir-smite --force neutral-knight --force ember-emberlord
 ```
 
-`--force` selects exactly these three, so `--limit` is unnecessary here. Verify from the dry run that all three ids exist and that the printed cards are what you expect — one Hollow Choir spell, one neutral, one from a third archetype. If an id is wrong the dry run prints fewer than three prompts; fix the ids before adding `--commit`.
+These three ids are verified against `buildPool()` (2026-08-08) and are chosen to be
+unlike each other **and** to cover both card aspects:
 
-- [ ] **Step 2: Record the measurements**
+| id | card | archetype | rarity | aspect | treatment |
+|---|---|---|---|---|---|
+| `choir-smite` | Smite | choir | common | `3:2` | banded |
+| `neutral-knight` | Bulwark Knight | neutral | rare | `3:2` | banded |
+| `ember-emberlord` | Emberlord Vharn | ember | legendary | **`3:4`** | **full-bleed** |
 
-From the output, write down: source resolution, megapixels, serving provider, per-image cost (expected `$0.0000` on the free variant), and whether the run reported extrapolated spend or the request-cap note.
+**The legendary is not optional.** Three commons would smoke-test only the banded
+path, and `3:4` is the one that must be proven early: full-bleed puts rules text over
+the illustration, so a composition with a face in the lower third cannot be fixed in
+CSS — only by regenerating. It also samples the neutral block against two archetype
+blocks, which is the check for "does a neutral look at home next to a themed card".
+
+`--force` selects exactly these three, so `--limit` is unnecessary here. If an id is
+wrong the dry run prints fewer than three prompts; fix the ids before adding
+`--commit`. Confirm the dry run shows `[3:2]` twice and `[3:4]` once.
+
+- [ ] **Step 2: Generate one hero — the `1:1` path**
+
+`--force` is card-only, so heroes need their own invocation. `--only choir` narrows the
+12 heroes to Vespera Dawnlight alone.
+
+```bash
+npm run art:generate -- --no-cards --only choir              # dry run first
+npm run art:generate -- --commit --no-cards --only choir
+```
+
+Expected: `1 image(s) to generate`, aspect `[1:1]`, written to
+`app/src/assets/art/heroes/vespera-dawnlight.jpg` at 256×256.
+
+Check the bust survives a circular crop — heroes render inside a 92px circle
+(`heroportrait.css`), so a composition with the head off-centre loses its subject to
+the mask. This is the whole reason `buildHeroPrompt` pins `portrait bust, head and
+shoulders`.
+
+- [ ] **Step 3: Record the measurements**
+
+From the output, write down per call: source resolution, megapixels, serving provider, per-image cost (expected `$0.0000` on the free variant), and whether the run reported extrapolated spend or the request-cap note.
+
+**Confirm the source resolutions differ by aspect** — a `3:4` request that comes back the same shape as the `3:2` ones means `aspect_ratio` is being ignored by the model, and every full-bleed card would need regenerating later.
 
 **If per-image cost is not $0.00 on a `:free` model, stop and report it** — that means the `:free` suffix did not take effect and the paid variant is being billed.
 
-- [ ] **Step 3: Look at the images**
+- [ ] **Step 4: Look at the images**
 
-Open the three JPEGs. Check for: accidental text or lettering, subject matching the card, composition that survives a crop, and the three reading as the same visual world.
+Open all four JPEGs. Check for: accidental text or lettering, subject matching the card, composition that survives its crop, and the four reading as the same visual world.
 
-- [ ] **Step 4: Report and stop**
+Two crop checks matter more than the others, because neither is fixable in CSS:
+- `ember-emberlord` (`3:4`, full-bleed) — is the lower third clear enough for rules text to sit on top of it?
+- `vespera-dawnlight` (`1:1`) — does the head stay inside a circular mask?
+
+- [ ] **Step 5: Report and stop**
 
 Report the numbers and the images to the human. **Await an explicit coverage decision (`all` / `rare+` / `epic+`) before any further generation.** Do not commit the images yet.
 

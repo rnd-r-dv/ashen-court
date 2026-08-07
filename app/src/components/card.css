@@ -391,11 +391,19 @@
   line-clamp: 2;
   overflow: hidden;
 }
-/* Creature stats already say a lot; give rules text the room instead.
-   The preview (Forge) always shows flavor — that's where it is authored. */
-.card--hand .card__flavor,
+/* Board minis have no text well at all, so flavor cannot show there.
+   Hand cards regained the room for one line when the well grew to
+   104px (see --card-art-h), and every curated card carries flavor —
+   hiding it during play wasted writing that already exists. It is
+   clamped to a single line in hand so it can never crowd rules text,
+   which is the copy that actually affects play. */
 .card--board .card__flavor {
   display: none;
+}
+
+.card--hand .card__flavor {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
 }
 
 /* ---- interaction states ---------------------------------------- */

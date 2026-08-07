@@ -19,5 +19,5 @@ export type ServerMessage =
   | { type: 'events'; events: GameEvent[] }
   | { type: 'intent'; intent: Intent }
   | { type: 'playerLeft'; reason: string }
-  | { type: 'rematchStart' }
+  | { type: 'rematchStart'; seed: number }
   | { type: 'error'; message: string };

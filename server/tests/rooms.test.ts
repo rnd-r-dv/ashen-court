@@ -647,11 +647,13 @@ describe('LAN rooms', () => {
       await hostSilenceP;
       await guestSilenceP;
       // Both players rematch → rematchStart to both, new game with seed + 1.
+      // M5: the message carries the NEW seed (the server's post-increment) so
+      // the client never derives it locally (implicit seed+1 coupling).
       const hostP = host.waitFor(m => m.type === 'rematchStart');
       const guestP = guest.waitFor(m => m.type === 'rematchStart');
       guest.send({ type: 'rematch' });
-      expect((await hostP).type).toBe('rematchStart');
-      expect((await guestP).type).toBe('rematchStart');
+      expect(await hostP).toMatchObject({ type: 'rematchStart', seed: SEED + 1 });
+      expect(await guestP).toMatchObject({ type: 'rematchStart', seed: SEED + 1 });
       // The new game is fresh (mulligan phase) and seeded old + 1: a mulligan
       // intent's broadcast must match a mirror game with seed SEED + 1.
       const mirror = mirrorGame([DECK, DECK], SEED + 1);
@@ -659,6 +661,152 @@ describe('LAN rooms', () => {
       const mullP = host.waitFor(eventsEq(m));
       host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
       expect((await mullP).type).toBe('events');
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('C1: non-object message bodies get an error reply, not a crash', async () => {
+    const srv = await makeServer();
+    let raw: TestClient | undefined;
+    try {
+      raw = new TestClient(await connect(urlOf(srv)));
+      // JSON.parse output was cast straight to ClientMessage and msg.type
+      // dereferenced with no shape check — a body of null/true/42 threw a
+      // TypeError inside the ws listener and killed the whole Node process
+      // (every active room). Each body must get an error reply and the
+      // server must survive.
+      for (const body of ['null', '42', 'true', '"hi"', '[]']) {
+        raw.ws.send(body);
+        const err = await raw.waitFor(m => m.type === 'error' && m.message === 'Invalid message');
+        if (err.type !== 'error') throw new Error('error never arrived');
+        expect(err.message).toBe('Invalid message');
+      }
+      // The server process is still alive: a follow-up createRoom works.
+      const createdP = raw.waitFor(m => m.type === 'roomCreated');
+      raw.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await createdP;
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      expect(created.code).toMatch(/^[A-HJ-NP-Z]{4}$/);
+    } finally {
+      raw?.close();
+      await srv.close();
+    }
+  });
+
+  it('M1: a socket already in a room cannot create or join a second one', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let other: TestClient | undefined;
+    let joiner: TestClient | undefined;
+    try {
+      // Three explicit clients (no discarded extras — every connection must be
+      // closed again or srv.close() waits on it forever).
+      host = new TestClient(await connect(urlOf(srv)));
+      other = new TestClient(await connect(urlOf(srv)));
+      joiner = new TestClient(await connect(urlOf(srv)));
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      other.send({ type: 'createRoom', name: 'Other', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created2 = await other.waitFor(m => m.type === 'roomCreated');
+      if (created2.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      // The seated host tries to create a SECOND room → rejected.
+      const errCreateP = host.waitFor(m => m.type === 'error');
+      host.send({ type: 'createRoom', name: 'Again', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const errCreate = await errCreateP;
+      if (errCreate.type !== 'error') throw new Error('error never arrived');
+      expect(errCreate.message).toMatch(/already in a room/i);
+      // …and tries to JOIN a second room → rejected (the old code silently
+      // returned; the second room's broadcasts then reached the socket and
+      // onDisconnect broke after the first room, leaving a zombie room).
+      const errJoinP = host.waitFor(m => m.type === 'error');
+      host.send({ type: 'joinRoom', code: created2.code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const errJoin = await errJoinP;
+      if (errJoin.type !== 'error') throw new Error('error never arrived');
+      expect(errJoin.message).toMatch(/already in a room/i);
+      // The rejected join left the second room intact: a third client joins
+      // it normally.
+      const joinedP = joiner.waitFor(m => m.type === 'joined');
+      joiner.send({ type: 'joinRoom', code: created2.code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      expect(joined.player).toBe(1);
+    } finally {
+      host?.close();
+      other?.close();
+      joiner?.close();
+      await srv.close();
+    }
+  });
+
+  it('I2: both players away — first rejoin reclaims the host slot, second the guest', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    let re1: TestClient | undefined;
+    let re2: TestClient | undefined;
+    let code: string = '';
+    try {
+      ({ host, guest, code } = await startRoom(srv));
+      // Both sockets drop (network hiccup): both slots free up.
+      host.close();
+      guest.close();
+      // Two fresh clients rejoin by code, ONE AT A TIME (join ordering must be
+      // deterministic). join() seats the first rejoin into the free host slot
+      // (player 0) and the second into the guest slot (player 1) — the
+      // documented v1 seat-swap contract. The 'joined' payload carries the
+      // seat, so clients must remap from it (audit 06 I2).
+      re1 = new TestClient(await connect(urlOf(srv)));
+      const joined1P = re1.waitFor(m => m.type === 'joined');
+      re1.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const j1 = await joined1P;
+      if (j1.type !== 'joined') throw new Error('joined never arrived');
+      expect(j1.player).toBe(0); // first rejoin → host slot
+      expect(j1.seed).toBe(SEED); // the same game persists across the drop
+      re2 = new TestClient(await connect(urlOf(srv)));
+      const joined2P = re2.waitFor(m => m.type === 'joined');
+      re2.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const j2 = await joined2P;
+      if (j2.type !== 'joined') throw new Error('joined never arrived');
+      expect(j2.player).toBe(1); // second rejoin → guest slot
+      // The re-attached game is alive: a mulligan through the re-attached
+      // host socket resolves exactly as the mirror expects (reconnect replay).
+      const mirror = mirrorGame([DECK, DECK], SEED);
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = re1.waitFor(eventsEq(m1));
+      re1.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+    } finally {
+      host?.close();
+      guest?.close();
+      re1?.close();
+      re2?.close();
+      await srv.close();
+    }
+  });
+
+  it('I3: a mid-game disconnect broadcasts playerLeft to the remaining player', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await startRoom(srv));
+      // Play one mulligan so we are genuinely mid-game (in-match feedback
+      // path the audit flags as dead client-side — the broadcast exists).
+      const mirror = mirrorGame([DECK, DECK], SEED);
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = host.waitFor(eventsEq(m1));
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+      // The guest drops mid-game → the host is notified.
+      const leftP = host.waitFor(m => m.type === 'playerLeft');
+      guest.close();
+      const left = await leftP;
+      if (left.type !== 'playerLeft') throw new Error('playerLeft never arrived');
+      expect(left.reason).toMatch(/disconnected/i);
     } finally {
       host?.close();
       guest?.close();

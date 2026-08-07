@@ -112,7 +112,11 @@ export default function LanHost({ onSessionReady }: { onSessionReady: (s: LanSes
   // the session to App (Victory/rematch wiring) → Match.
   useEffect(() => {
     if (started && driver && client && room) {
-      onSessionReady({ mode: 'lanHost', client, room, myPlayer: 0, driver });
+      // I2 (audit 06): the session's seat is LIVE — the getter reads the
+      // driver's wire seat, so a mid-game reconnect seat remap (both players
+      // away → first rejoin reclaims the host slot) reaches Victory/rematch
+      // bookkeeping instead of the gameStart-frozen 0.
+      onSessionReady({ mode: 'lanHost', client, room, driver, get myPlayer() { return driver.seat ?? 0; } });
       navigate({ name: 'match', setup: { driver, myPlayer: 0, mode: 'lan' } });
     }
   }, [started, driver, client, room, onSessionReady, navigate]);

@@ -78,6 +78,14 @@ export class RoomRegistry {
   }
 
   create(hostSocket: WebSocket, msg: Extract<ClientMessage, { type: 'createRoom' }>): void {
+    // M1 (audit 06): a socket already seated in a room must not create a
+    // second one — roomOf returns the first match, the second room's
+    // broadcasts still reach the socket, and onDisconnect breaks after the
+    // first room, leaving a zombie room with a truthy hostSocket forever.
+    if (this.roomOf(hostSocket)) {
+      send(hostSocket, { type: 'error', message: 'Already in a room' });
+      return;
+    }
     let code: string;
     do {
       code = generateCode();
@@ -104,12 +112,19 @@ export class RoomRegistry {
   }
 
   join(msg: Extract<ClientMessage, { type: 'joinRoom' }>, socket: WebSocket): void {
+    // M1 (audit 06): a socket already seated (in ANY room, including this
+    // one) must not join a second room. The old code silently returned only
+    // for the same room; a second room's broadcasts reached the socket and
+    // onDisconnect broke after the first room.
+    if (this.roomOf(socket)) {
+      send(socket, { type: 'error', message: 'Already in a room' });
+      return;
+    }
     const room = this.rooms.get(msg.code);
     if (!room) {
       send(socket, { type: 'error', message: 'Room not found' });
       return;
     }
-    if (room.hostSocket === socket || room.guestSocket === socket) return;  // already in
     if (room.hostSocket && room.guestSocket) {
       send(socket, { type: 'error', message: 'Room is full' });
       return;
@@ -220,7 +235,10 @@ export class RoomRegistry {
     room.seed += 1;                             // deterministic new seed (old + 1)
     room.game = this.makeGame(room);            // same decks/hero, fresh game
     room.intents = [];                          // the old game's log must not replay onto the new one
-    broadcast(room, { type: 'rematchStart' });
+    // M5 (audit 06): the new seed rides on rematchStart so the client never
+    // derives it locally (implicit seed+1 coupling — silently desyncs if the
+    // increment logic ever drifts).
+    broadcast(room, { type: 'rematchStart', seed: room.seed });
   }
 
   onDisconnect(socket: WebSocket): void {

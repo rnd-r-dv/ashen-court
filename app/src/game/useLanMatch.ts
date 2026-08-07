@@ -109,6 +109,7 @@ export function useLanMatch(opts: {
       shadow,
       (msg) => setError(msg),
       (kind) => setError(`connection out of sync (${kind} intent) — rejoin by code`),
+      myPlayer, // I2: the session's seat (a reconnect 'joined' can remap it)
     );
     d.onEvents(listenerRef.current); // the driver now owns application; we mirror
     driverRef.current = d;

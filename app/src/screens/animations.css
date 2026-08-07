@@ -164,3 +164,34 @@
     transform: translate(var(--ember-drift-x, 0px), -38vh) scale(0.35);
   }
 }
+
+/* ---- transient error / persistent resync banners (audit 04) ----
+   Top-center alerts on the match surface: the rejected-intent toast (I1,
+   transient — auto-dismissed) and the LAN divergence banner (I3, persistent
+   until rejoin). Absolutely positioned so they never affect layout. */
+.match-alert {
+  position: absolute;
+  top: calc(var(--space-3) + 34px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(92vw, 640px);
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ember-dim);
+  background: rgba(26, 12, 10, 0.92);
+  color: var(--ember);
+  font-family: var(--font-body);
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-alert--resync {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+  background: rgba(24, 18, 8, 0.92);
+}

@@ -21,18 +21,19 @@
 // state.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CardRegistry, Game, HEROES, buildPool, summarize } from '@ashen/core';
-import type { Card, GameEvent, GameState, Intent, PlayerIndex } from '@ashen/core';
+import type { Card, GameEvent, GameState, HeroSpec, Intent, PlayerIndex } from '@ashen/core';
 import type { MatchResult } from '../types.js';
 import type { LanClient } from './lanClient.js';
 import { createLanDriver } from './lanDriver.js';
 import type { LanMatchDriver } from './lanDriver.js';
 
-/** Everything needed to build the shadow Game. heroId is the hero NAME (the
- *  v1 wire protocol carries no hero id; the server resolves by name). */
+/** Everything needed to build the shadow Game. heroes are hero NAMES (v1 wire
+ *  convention: heroId is a name; the server resolves by name and sends the
+ *  names back). customCards is the FULL merged registry the server sent. */
 export interface LanRoomParams {
-  deckIds: string[];
-  customCards: Card[];
-  heroId: string;
+  decks: [string[], string[]];  // [host, guest]
+  heroes: [string, string];     // hero NAMES
+  customCards: Card[];          // full merged registry (server-sent cards)
   seed: number;
 }
 
@@ -97,10 +98,10 @@ export function useLanMatch(opts: {
   const buildDriver = useCallback((room: LanRoomParams, myPlayer: PlayerIndex) => {
     const client = opts.client;
     if (!client) return;
-    const hero = HEROES.find(h => h.name === room.heroId) ?? HEROES[0]!;
+    const heroes = room.heroes.map(name => HEROES.find(h => h.name === name) ?? HEROES[0]!);
     const registry = new CardRegistry([...buildPool(), ...room.customCards]);
     const shadow = Game.create(
-      { decks: [room.deckIds, room.deckIds], heroes: [hero, hero], seed: room.seed },
+      { decks: room.decks, heroes: heroes as [HeroSpec, HeroSpec], seed: room.seed },
       registry,
     );
     const d = createLanDriver(

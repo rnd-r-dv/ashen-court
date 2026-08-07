@@ -32,7 +32,7 @@
 //     surfaces to the UI (v1 recovery: rejoin by code — the server replays
 //     the intent log to a fresh shadow).
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@ashen/core';
-import type { GameEvent, Intent, MatchSetup } from '@ashen/core';
+import type { GameEvent, HeroSpec, Intent, MatchSetup } from '@ashen/core';
 import type { MatchDriver } from '../types.js';
 import type { LanClient } from './lanClient.js';
 
@@ -70,9 +70,12 @@ export interface LanMatchDriver extends MatchDriver {
  *   - {type:'error'}  → onError (server-side rejection of a submitted intent;
  *                        the shadow never applied it locally, so the states
  *                        stay aligned).
- *   - {type:'joined'} → rebuild the shadow fresh from the reconnect payload
- *                        (seed/deckIds/cards), so the intent-log replay that
- *                        follows applies cleanly.
+ *   - {type:'joined'} or {type:'opponentJoined'} → rebuild the shadow fresh
+ *                        from the setup payload (decks/heroes/seed/cards), so
+ *                        the intent-log replay that follows applies cleanly.
+ *                        The host gets opponentJoined (the guest's deck is now
+ *                        known); the guest gets joined. Same code path — both
+ *                        rebuild the shadow from the server's resolved setup.
  *   - {type:'intent'} → apply the echoed intent to the shadow (try/catch:
  *                        console.warn + resync flag + onResync on divergence)
  *                        and forward the resolution tree to onEvents
@@ -97,15 +100,16 @@ export function createLanDriver(
       onError?.(m.message);
       return;
     }
-    if (m.type === 'joined') {
-      // Reconnect: the server re-sent the setup and will replay the intent
-      // log. Rebuild the shadow fresh from the payload (the same resolution
-      // the server's makeGame uses: hero by NAME, merged registry) so the
-      // replay applies cleanly. The initial join is a no-op rebuild — the
-      // payload matches the shadow the hook already built.
-      const hero = HEROES.find(h => h.name === heroNameForDeck(m.deckIds)) ?? HEROES[0]!;
+    if (m.type === 'joined' || m.type === 'opponentJoined') {
+      // Reconnect/join setup: the server re-sent the resolved setup (both
+      // decks, hero names, seed, merged registry) and will replay the intent
+      // log after 'joined'. Rebuild the shadow fresh from the payload (the
+      // same resolution the server's makeGame uses: hero by NAME, merged
+      // registry) so the replay applies cleanly. The initial join is a no-op
+      // rebuild — the payload matches the shadow the hook already built.
+      const heroes = m.heroes.map(name => HEROES.find(h => h.name === name) ?? HEROES[0]!);
       current = Game.create(
-        { decks: [m.deckIds, m.deckIds], heroes: [hero, hero], seed: m.seed },
+        { decks: m.decks, heroes: heroes as [HeroSpec, HeroSpec], seed: m.seed },
         new CardRegistry([...buildPool(), ...m.cards]),
       );
       resyncRequested = false;

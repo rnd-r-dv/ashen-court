@@ -14,7 +14,7 @@
 // and replays the intent log so it catches up to the live state.
 import { describe, expect, it, vi } from 'vitest';
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@ashen/core';
-import type { Intent, PlayerIndex } from '@ashen/core';
+import type { HeroSpec, Intent, PlayerIndex } from '@ashen/core';
 import type { ClientMessage, ServerMessage } from '@ashen/server/protocol';
 import type { AddressInfo } from 'ws';
 import { startServer } from '../../server/src/index.js';
@@ -30,7 +30,9 @@ import type { LanMatchDriver } from '../src/game/lanDriver.js';
 // 1-cost creature at index 1, and the script below exercises playCard,
 // heroPower, attack and endTurn (see task-34-report Fix round 1).
 const DECK = expandDeck(DECK_DEFS.ember);
+const CHOIR = expandDeck(DECK_DEFS.choir);
 const HERO = HEROES[0]!;
+const CHOIR_HERO = HEROES[1]!;
 const SEED = 2;
 
 function makeShadow(): Game {
@@ -38,6 +40,11 @@ function makeShadow(): Game {
     { decks: [DECK, DECK], heroes: [HERO, HERO], seed: SEED },
     new CardRegistry([...buildPool()]),
   );
+}
+
+/** Oracle mirror for an arbitrary setup (Task 45: guests pick their own deck). */
+function mirrorFor(decks: [string[], string[]], heroes: [HeroSpec, HeroSpec] = [HERO, HERO], seed: number = SEED): Game {
+  return Game.create({ decks, heroes, seed }, new CardRegistry([...buildPool()]));
 }
 
 // ---------------------------------------------------------------------------
@@ -142,24 +149,26 @@ describe('createLanDriver owns echo application', () => {
 
     // Mid-game reconnect: the server re-sends the setup (joined) and will
     // replay the intent log. The driver rebuilds the shadow fresh from the
-    // payload — different deck/seed than the original shadow — so the replay
-    // applies cleanly.
+    // payload — different decks/seed than the original shadow — so the replay
+    // applies cleanly. Task 45: the payload carries BOTH decks + hero names.
     const choir = expandDeck(DECK_DEFS.choir);
     client.receive({
       type: 'joined',
       player: 1,
       seed: SEED + 1,
       opponentName: 'Hosty',
-      deckIds: choir,
+      decks: [DECK, choir],
+      heroes: [HERO.name, HEROES[1]!.name],
       cards: [],
     });
     const rebuilt = driver.game();
     expect(rebuilt.state.seed).toBe(SEED + 1);
-    expect(rebuilt.state.players[0].hero.name).toBe(HEROES[1]!.name); // choir → index 1
+    expect(rebuilt.state.players[0].hero.name).toBe(HERO.name);
+    expect(rebuilt.state.players[1].hero.name).toBe(HEROES[1]!.name); // choir → index 1
     // The rebuilt shadow equals an oracle built fresh from the joined payload
-    // (the deterministic-mirror contract: same seed/deck/hero/registry).
+    // (the deterministic-mirror contract: same seed/decks/heroes/registry).
     const oracle = Game.create(
-      { decks: [choir, choir], heroes: [HEROES[1]!, HEROES[1]!], seed: SEED + 1 },
+      { decks: [DECK, choir], heroes: [HEROES[0]!, HEROES[1]!], seed: SEED + 1 },
       new CardRegistry([...buildPool()]),
     );
     expect(rebuilt.serialize()).toBe(oracle.serialize());
@@ -168,6 +177,32 @@ describe('createLanDriver owns echo application', () => {
     client.receive({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
     expect(rebuilt.state.mulligansDone[0]).toBe(true);
     expect(driver.resyncRequested).toBe(false); // rebuild cleared the flag
+  });
+
+  it('rebuilds the shadow on an opponentJoined payload (host path, Task 45)', () => {
+    const client = new FakeLanClient();
+    const game = makeShadow();
+    const driver = createLanDriver(client as unknown as LanClient, game);
+
+    // The host built its shadow from its OWN createRoom params (a [DECK, DECK]
+    // placeholder); when the guest joins, the server sends opponentJoined with
+    // the RESOLVED setup — the host driver rebuilds with the guest's real
+    // deck + hero, the same path the guest's joined rebuild uses.
+    client.receive({
+      type: 'opponentJoined',
+      opponentName: 'Guesty',
+      decks: [DECK, CHOIR],
+      heroes: [HERO.name, CHOIR_HERO.name],
+      seed: SEED,
+      cards: [],
+    });
+    const rebuilt = driver.game();
+    expect(rebuilt.state.seed).toBe(SEED);
+    expect(rebuilt.state.players[0].hero.name).toBe(HERO.name);
+    expect(rebuilt.state.players[1].hero.name).toBe(CHOIR_HERO.name);
+    const oracle = mirrorFor([DECK, CHOIR], [HERO, CHOIR_HERO]);
+    expect(rebuilt.serialize()).toBe(oracle.serialize());
+    expect(driver.resyncRequested).toBe(false);
   });
 });
 
@@ -241,8 +276,10 @@ function wire(harness: LanHarness, game: Game): LanMatchDriver {
   return createLanDriver(harness.client, game);
 }
 
-/** createRoom + joinRoom + gameStart for both harnesses; returns the room code. */
-async function startRoom(host: LanHarness, guest: LanHarness): Promise<string> {
+/** createRoom + joinRoom + gameStart for both harnesses; returns the room code.
+ *  Task 45: the guest sends its OWN deck/hero in joinRoom (defaults: the same
+ *  DECK/HERO, so existing mirror scripts stay byte-identical). */
+async function startRoom(host: LanHarness, guest: LanHarness, guestDeck: string[] = DECK, guestHero: HeroSpec = HERO): Promise<string> {
   host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO.name, seed: SEED });
   const created = await host.waitFor(m => m.type === 'roomCreated');
   if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
@@ -250,7 +287,7 @@ async function startRoom(host: LanHarness, guest: LanHarness): Promise<string> {
   const oppP = host.waitFor(m => m.type === 'opponentJoined');
   const hostStartP = host.waitFor(m => m.type === 'gameStart');
   const guestStartP = guest.waitFor(m => m.type === 'gameStart');
-  guest.send({ type: 'joinRoom', code: created.code });
+  guest.send({ type: 'joinRoom', code: created.code, deckIds: guestDeck, customCards: [], heroId: guestHero.name });
   await joinedP;
   await oppP;
   await hostStartP;
@@ -352,6 +389,33 @@ describe('LAN full mirroring (real server)', () => {
     }
   }, 20000);
 
+  it('guest joins with its OWN deck — both shadows mirror the real setup (Task 45)', async () => {
+    const { srv, url } = await makeServer();
+    const host = new LanHarness(url);
+    const guest = new LanHarness(url);
+    const mirror = mirrorFor([DECK, CHOIR], [HERO, CHOIR_HERO]);
+    const hostDriver = wire(host, makeShadow());
+    const guestDriver = wire(guest, makeShadow());
+    try {
+      // The guest picks the choir deck + hero; the server builds the game with
+      // [host, guest] and sends the resolved setup to both sides. Each driver
+      // rebuilds its shadow (guest on joined, host on opponentJoined).
+      await startRoom(host, guest, CHOIR, CHOIR_HERO);
+      expect(hostDriver.game().serialize()).toBe(guestDriver.game().serialize());
+      expect(hostDriver.game().serialize()).toBe(mirror.serialize());
+      // A scripted mulligan (through the host socket) keeps all three in sync.
+      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
+      expect(hostDriver.game().serialize()).toBe(mirror.serialize());
+      expect(guestDriver.game().serialize()).toBe(mirror.serialize());
+      // The guest's shadow uses the choir hero (proving the per-player hero).
+      expect(guestDriver.game().state.players[1].hero.name).toBe(CHOIR_HERO.name);
+    } finally {
+      host.client.close();
+      guest.client.close();
+      await srv.close();
+    }
+  }, 20000);
+
   it('rebuilds the shadow on reconnect and replays the intent log to catch up', async () => {
     const { srv, url } = await makeServer();
     const host = new LanHarness(url);
@@ -390,11 +454,12 @@ describe('LAN full mirroring (real server)', () => {
       const rd = wire(re, makeShadow());
       const joinedP = re.waitFor(m => m.type === 'joined');
       const startP = re.waitFor(m => m.type === 'gameStart');
-      re.send({ type: 'joinRoom', code });
+      re.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO.name });
       const joined = await joinedP;
       if (joined.type !== 'joined') throw new Error('joined never arrived');
       expect(joined.seed).toBe(SEED);
-      expect(joined.deckIds).toEqual(DECK);
+      expect(joined.decks).toEqual([DECK, DECK]);
+      expect(joined.heroes).toEqual([HERO.name, HERO.name]);
       expect(joined.cards.length).toBeGreaterThan(0);
       await startP; // arrives after the full intent-log replay
 
@@ -421,8 +486,8 @@ describe('LAN full mirroring (real server)', () => {
     const guestDriver = wire(guest, makeShadow());
     try {
       const code = await startRoom(host, guest);
-      // The screen remembers the room code for reconnect re-attach.
-      host.client.setRoomCode(code);
+      // The screen remembers the full joinRoom payload for reconnect re-attach.
+      host.client.setJoinPayload({ code, deckIds: DECK, customCards: [], heroId: HERO.name });
 
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
       await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });

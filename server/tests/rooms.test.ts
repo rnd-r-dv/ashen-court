@@ -14,15 +14,17 @@ import { describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import type { AddressInfo, RawData } from 'ws';
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck, validateCard } from '@ashen/core';
-import type { Card, GameEvent, Intent } from '@ashen/core';
+import type { Card, GameEvent, HeroSpec, Intent } from '@ashen/core';
 import { startServer } from '../src/index.js';
 import type { LanServer } from '../src/index.js';
 import type { ClientMessage, ServerMessage } from '../src/protocol.js';
 
 // Deterministic 60-card ember deck + hero for every test.
 const DECK = expandDeck(DECK_DEFS.ember);
+const CHOIR_DECK = expandDeck(DECK_DEFS.choir);
 const HERO_NAME = HEROES[0]!.name;
 const HERO = HEROES[0]!;
+const CHOIR_HERO = HEROES[1]!;
 // Seed 2 (fixed by test): after both mulligans keep [], player 0's hand is
 // [ember-hellhound, neutral-boar, ember-firestorm, ember-igniter] — a legal
 // 1-cost creature play exists at hand index 1 (neutral-boar). Verified against
@@ -162,7 +164,7 @@ async function startRoom(srv: LanServer): Promise<{ host: TestClient; guest: Tes
   const oppP = host.waitFor(m => m.type === 'opponentJoined');
   const hostStartP = host.waitFor(m => m.type === 'gameStart');
   const guestStartP = guest.waitFor(m => m.type === 'gameStart');
-  guest.send({ type: 'joinRoom', code: created.code });
+  guest.send({ type: 'joinRoom', code: created.code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
   await joinedP;
   await oppP;
   await hostStartP;
@@ -170,12 +172,16 @@ async function startRoom(srv: LanServer): Promise<{ host: TestClient; guest: Tes
   return { host, guest, code: created.code };
 }
 
-/** Mirror of the server-side game for the deterministic LAN-mirroring contract. */
-function mirrorGame(deckIds: string[], seed: number, customCards: Card[] = []): Game {
-  return Game.create(
-    { decks: [deckIds, deckIds], heroes: [HERO, HERO], seed },
-    new CardRegistry([...buildPool(), ...customCards]),
-  );
+/** Mirror of the server-side game for the deterministic LAN-mirroring contract.
+ *  Task 45: both decks are explicit ([host, guest]); heroes default to the
+ *  ember hero for both players, pass the real pair when a test needs them. */
+function mirrorGame(
+  decks: [string[], string[]],
+  seed: number,
+  customCards: Card[] = [],
+  heroes: [HeroSpec, HeroSpec] = [HERO, HERO],
+): Game {
+  return Game.create({ decks, heroes, seed }, new CardRegistry([...buildPool(), ...customCards]));
 }
 
 describe('LAN rooms', () => {
@@ -196,13 +202,15 @@ describe('LAN rooms', () => {
       const oppP = host.waitFor(m => m.type === 'opponentJoined');
       const hostStartP = host.waitFor(m => m.type === 'gameStart');
       const guestStartP = guest.waitFor(m => m.type === 'gameStart');
-      guest.send({ type: 'joinRoom', code: created.code });
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
       const joined = await joinedP;
       if (joined.type !== 'joined') throw new Error('joined never arrived');
       expect(joined.player).toBe(1);
       expect(joined.seed).toBe(SEED);
       expect(joined.opponentName).toBe('Hosty');
-      expect(joined.deckIds).toEqual(DECK);
+      expect(joined.decks[0]).toEqual(DECK);  // host deck
+      expect(joined.decks[1]).toEqual(DECK);  // guest deck
+      expect(joined.heroes).toEqual([HERO_NAME, HERO_NAME]);
       expect(joined.cards.length).toBeGreaterThan(0);
       expect((await oppP).type).toBe('opponentJoined');
       expect((await hostStartP).type).toBe('gameStart');
@@ -220,7 +228,7 @@ describe('LAN rooms', () => {
     let guest: TestClient | undefined;
     try {
       ({ host, guest } = await startRoom(srv));
-      const mirror = mirrorGame(DECK, SEED);
+      const mirror = mirrorGame([DECK, DECK], SEED);
       // Mulligans (keep nothing) for both players. Each broadcast is matched by
       // content against the local mirror (LAN-mirroring determinism), so stale
       // broadcasts from the other player can never satisfy the wrong wait.
@@ -262,7 +270,7 @@ describe('LAN rooms', () => {
     let guest: TestClient | undefined;
     try {
       ({ host, guest } = await startRoom(srv));
-      const mirror = mirrorGame(DECK, SEED);
+      const mirror = mirrorGame([DECK, DECK], SEED);
       // Both mulligans complete (host = player 0 mulligans first, then guest).
       const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
       const m1P = host.waitFor(eventsEq(m1));
@@ -302,7 +310,7 @@ describe('LAN rooms', () => {
     let guest: TestClient | undefined;
     try {
       ({ host, guest } = await startRoom(srv));
-      const mirror = mirrorGame(DECK, SEED);
+      const mirror = mirrorGame([DECK, DECK], SEED);
       // Engine mulligan order is fixed (player 0, then player 1): the guest
       // acting first must get an error reply with nothing broadcast.
       const errP = guest.waitFor(m => m.type === 'error');
@@ -348,7 +356,7 @@ describe('LAN rooms', () => {
       const joinedP = guest.waitFor(m => m.type === 'joined');
       const hostStartP = host.waitFor(m => m.type === 'gameStart');
       const guestStartP = guest.waitFor(m => m.type === 'gameStart');
-      guest.send({ type: 'joinRoom', code: created.code });
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
       // The joiner's 'joined' carries the merged registry incl. the custom def.
       const joined = await joinedP;
       if (joined.type !== 'joined') throw new Error('joined never arrived');
@@ -370,7 +378,7 @@ describe('LAN rooms', () => {
     let guest: TestClient | undefined;
     try {
       ({ host, guest } = await startRoom(srv));
-      const mirror = mirrorGame(DECK, SEED);
+      const mirror = mirrorGame([DECK, DECK], SEED);
       const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
       const m1P = host.waitFor(eventsEq(m1));
       host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
@@ -418,7 +426,7 @@ describe('LAN rooms', () => {
       // (nothing is broadcast to the host).
       const errP = guest.waitFor(m => m.type === 'error');
       const hostSilenceP = host.expectNoMessage();
-      guest.send({ type: 'joinRoom', code: created.code });
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: BAD_DECK, customCards: [], heroId: HERO_NAME });
       const err = await errP;
       if (err.type !== 'error') throw new Error('error never arrived');
       expect(err.message).toMatch(/Deck 0 invalid/i);
@@ -426,7 +434,7 @@ describe('LAN rooms', () => {
       // The room was left joinable (no half-installed seat): a retry gets the
       // same deck error, NOT "Room is full".
       const retryP = guest.waitFor(m => m.type === 'error');
-      guest.send({ type: 'joinRoom', code: created.code });
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: BAD_DECK, customCards: [], heroId: HERO_NAME });
       const retry = await retryP;
       if (retry.type !== 'error') throw new Error('error never arrived');
       expect(retry.message).toMatch(/Deck 0 invalid/i);
@@ -436,7 +444,7 @@ describe('LAN rooms', () => {
       const created2 = await host2.waitFor(m => m.type === 'roomCreated');
       if (created2.type !== 'roomCreated') throw new Error('roomCreated never arrived');
       const joinedP = guest2.waitFor(m => m.type === 'joined');
-      guest2.send({ type: 'joinRoom', code: created2.code });
+      guest2.send({ type: 'joinRoom', code: created2.code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
       const joined = await joinedP;
       if (joined.type !== 'joined') throw new Error('joined never arrived');
       expect(joined.player).toBe(1);
@@ -466,6 +474,166 @@ describe('LAN rooms', () => {
     }
   });
 
+  it('guest joins with a DIFFERENT deck — the authoritative game uses it (Task 45)', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      // The guest joins with the CHOIR deck + its hero: no more mirror match.
+      const joinedP = guest.waitFor(m => m.type === 'joined');
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: CHOIR_DECK, customCards: [], heroId: CHOIR_HERO.name });
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      // The wire carries BOTH decks/heroes, resolved server-side ([0]=host, [1]=guest).
+      expect(joined.decks[0]).toEqual(DECK);
+      expect(joined.decks[1]).toEqual(CHOIR_DECK);
+      expect(joined.heroes[0]).toBe(HERO_NAME);
+      expect(joined.heroes[1]).toBe(CHOIR_HERO.name);
+      // Scripted match (host mulligan → guest mulligan → host passes → guest
+      // plays its own hand card) matches a mirror built with [DECK, CHOIR_DECK]
+      // and [HERO, CHOIR_HERO] — proving the authoritative game uses the
+      // guest's deck, byte-for-byte.
+      const mirror = mirrorGame([DECK, CHOIR_DECK], SEED, [], [HERO, CHOIR_HERO]);
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = host.waitFor(eventsEq(m1));
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+      const m2 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m2P = guest.waitFor(eventsEq(m2));
+      guest.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m2P).type).toBe('events');
+      // The guest's redraws came from the CHOIR deck: its hand holds a
+      // choir-only card (impossible with the host's ember deck).
+      expect(mirror.state.players[1].hand).toContain('choir-banish');
+      // Host passes; the guest plays its own hand card (seed-2 hand index 0).
+      const pass = mirror.submit({ kind: 'endTurn' });
+      const passP = host.waitFor(eventsEq(pass));
+      host.send({ type: 'intent', intent: { kind: 'endTurn' } });
+      expect((await passP).type).toBe('events');
+      const play = mirror.submit({ kind: 'playCard', handIndex: 0 });
+      expect(play.some(e => e.type === 'cardPlayed')).toBe(true);
+      const playP = guest.waitFor(eventsEq(play));
+      guest.send({ type: 'intent', intent: { kind: 'playCard', handIndex: 0 } });
+      expect((await playP).type).toBe('events');
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('invalid guest deck errors to the joiner and leaves the room joinable (Task 45)', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      // Host creates with a valid deck; the guest brings a deck that fails
+      // Game-constructor validation (3 cards instead of 60).
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      const BAD_DECK = DECK.slice(0, 3);
+      // Joining must NOT crash the server or half-install the guest seat: the
+      // joiner gets an error reply ONLY (nothing broadcast to the host).
+      const errP = guest.waitFor(m => m.type === 'error');
+      const hostSilenceP = host.expectNoMessage();
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: BAD_DECK, customCards: [], heroId: HERO_NAME });
+      const err = await errP;
+      if (err.type !== 'error') throw new Error('error never arrived');
+      expect(err.message).toMatch(/Deck 1 invalid/i);
+      await hostSilenceP;
+      // The room was left joinable (guestDeckIds reset): a retry with a VALID
+      // deck seats normally and starts the game — NOT "Room is full".
+      const joinedP = guest.waitFor(m => m.type === 'joined');
+      const oppP = host.waitFor(m => m.type === 'opponentJoined');
+      const hostStartP = host.waitFor(m => m.type === 'gameStart');
+      const guestStartP = guest.waitFor(m => m.type === 'gameStart');
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      expect(joined.player).toBe(1);
+      expect(joined.decks[1]).toEqual(DECK);
+      expect((await oppP).type).toBe('opponentJoined');
+      expect((await hostStartP).type).toBe('gameStart');
+      expect((await guestStartP).type).toBe('gameStart');
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('guest custom cards register into the merged registry (Task 45)', async () => {
+    expect(validateCard(CUSTOM_CARD).filter(i => i.severity === 'error')).toEqual([]);
+    // Guest deck: ember deck with one card swapped for the guest's custom card.
+    const deck = [...DECK];
+    deck[deck.length - 1] = CUSTOM_CARD.id;
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      const joinedP = guest.waitFor(m => m.type === 'joined');
+      const hostStartP = host.waitFor(m => m.type === 'gameStart');
+      const guestStartP = guest.waitFor(m => m.type === 'gameStart');
+      // The guest's deck references the custom card, so the server must
+      // register the guest's customCards BEFORE the Game constructor runs.
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: deck, customCards: [CUSTOM_CARD], heroId: HERO_NAME });
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      // 'joined' carries the merged registry incl. the guest's custom def.
+      const custom = joined.cards.find(c => c.id === CUSTOM_CARD.id);
+      expect(custom).toBeDefined();
+      expect(custom?.name).toBe('Custom One');
+      expect((await hostStartP).type).toBe('gameStart');
+      expect((await guestStartP).type).toBe('gameStart');
+      // The game built with the guest's custom deck: a mulligan broadcast
+      // matches a mirror whose registry includes the guest's custom card.
+      const mirror = mirrorGame([DECK, deck], SEED, [CUSTOM_CARD]);
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = host.waitFor(eventsEq(m1));
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('host receives opponentJoined carrying the guest deck/hero (Task 45)', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      const oppP = host.waitFor(m => m.type === 'opponentJoined');
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: CHOIR_DECK, customCards: [], heroId: CHOIR_HERO.name });
+      const opp = await oppP;
+      if (opp.type !== 'opponentJoined') throw new Error('opponentJoined never arrived');
+      expect(opp.opponentName).toBe('You');
+      expect(opp.decks).toEqual([DECK, CHOIR_DECK]);
+      expect(opp.heroes).toEqual([HERO_NAME, CHOIR_HERO.name]);
+      expect(opp.seed).toBe(SEED);
+      expect(opp.cards.length).toBeGreaterThan(0);
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
   it('rematch requires both players and starts a new game', async () => {
     const srv = await makeServer();
     let host: TestClient | undefined;
@@ -486,7 +654,7 @@ describe('LAN rooms', () => {
       expect((await guestP).type).toBe('rematchStart');
       // The new game is fresh (mulligan phase) and seeded old + 1: a mulligan
       // intent's broadcast must match a mirror game with seed SEED + 1.
-      const mirror = mirrorGame(DECK, SEED + 1);
+      const mirror = mirrorGame([DECK, DECK], SEED + 1);
       const m = mirror.submit({ kind: 'mulligan', keep: [] });
       const mullP = host.waitFor(eventsEq(m));
       host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });

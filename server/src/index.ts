@@ -59,7 +59,7 @@ function handle(registry: RoomRegistry, socket: WebSocket, msg: ClientMessage): 
       registry.create(socket, msg);
       break;
     case 'joinRoom':
-      registry.join(msg.code, socket);
+      registry.join(msg, socket);
       break;
     case 'intent': {
       const room = registry.roomOf(socket);

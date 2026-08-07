@@ -1,91 +1,46 @@
-// LAN host screen (Task 34 + fix round 2). Pick a deck (lightweight inline
-// single-pick grid reusing DeckPick's deck sources: @ashen/core DECK_DEFS/HEROES
+// LAN host screen (Task 34 + fix round 2 + Task 45). Pick a deck (shared
+// LanDeckGrid reusing DeckPick's deck sources: @ashen/core DECK_DEFS/HEROES
 // + the loadDecks() custom overlays) → create a room on the LAN server → show
 // the big room code with a copy button → waiting spinner until an opponent
-// joins → gameStart → register the LAN session with App (onSessionReady, so
-// Victory/rematch wiring has the client + driver after this screen unmounts)
-// → navigate to the Match screen with the LAN driver.
+// joins (Task 45: opponentJoined now carries the resolved setup so the room
+// state reflects the guest's deck for App's LanSession) → gameStart → register
+// the LAN session with App (onSessionReady, so Victory/rematch wiring has the
+// client + driver after this screen unmounts) → navigate to the Match screen
+// with the LAN driver.
 //
 // Fix round 2: the screen's own message handler is removed on unmount (the
 // driver owns echo application and lives on the client), the client remembers
 // the room code for reconnect re-attach, and onStatus surfaces a closed
 // connection as an error.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CardRegistry, DECK_DEFS, HEROES, buildPool, expandDeck, validateDeck } from '@ashen/core';
-import type { ArchetypeId } from '@ashen/core';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CardRegistry, DECK_DEFS, buildPool, expandDeck, validateDeck } from '@ashen/core';
 import type { ServerMessage } from '@ashen/server/protocol';
 import { useNav } from '../App.js';
 import type { LanSession } from '../App.js';
+import LanDeckGrid from '../components/LanDeckGrid.js';
 import { connectLan } from '../game/lanClient.js';
 import type { LanClient, LanStatus } from '../game/lanClient.js';
 import { heroNameForDeck } from '../game/lanDriver.js';
+import type { DeckCard } from '../game/lanDecks.js';
 import { useLanMatch } from '../game/useLanMatch.js';
 import type { LanRoomParams } from '../game/useLanMatch.js';
 import { loadCustomCards, loadDecks } from '../storage.js';
 import './shell.css';
 import './lan.css';
 
-interface DeckCard {
-  slug: string;
-  name: string;
-  hero?: string;
-  tag: string;
-  cards: number;
-  custom: boolean;
-}
-
-/** Display names + archetype tags for the 12 curated decks (spec table). */
-const CURATED_INFO: Record<ArchetypeId, { name: string; tag: string }> = {
-  ember: { name: 'The Ember Court', tag: 'Burn / Aggro' },
-  choir: { name: 'The Hollow Choir', tag: 'Control' },
-  vermin: { name: 'The Vermin Swarm', tag: 'Zoo' },
-  dragon: { name: 'The Dragonflight', tag: 'Midrange tribal' },
-  roots: { name: 'The Elder Roots', tag: 'Ramp' },
-  dance: { name: 'The Shadow Dancers', tag: 'Combo' },
-  bone: { name: 'The Bone Horde', tag: 'Token swarm' },
-  pact: { name: 'The Grave Pact', tag: 'Self-damage / life-swap' },
-  coven: { name: 'The Night Coven', tag: 'Debuff control' },
-  star: { name: 'The Starforged', tag: 'Big-mana cheat' },
-  vigil: { name: 'The Eternal Vigil', tag: 'Sustain grind' },
-  storm: { name: 'The Stormwrought', tag: 'Tempo spells' },
-};
-
-function buildCurated(): DeckCard[] {
-  // DECK_DEFS and HEROES share archetype order, so the zip is positional.
-  return (Object.keys(DECK_DEFS) as ArchetypeId[]).map((slug, i) => {
-    const hero = HEROES[i];
-    return {
-      slug,
-      name: CURATED_INFO[slug].name,
-      hero: hero ? hero.name : 'Unknown hero',
-      tag: CURATED_INFO[slug].tag,
-      cards: expandDeck(DECK_DEFS[slug]).length,
-      custom: false,
-    };
-  });
-}
-
-function buildCustom(): DeckCard[] {
-  const overlays = loadDecks(); // slug → card ids (deck builder overlays)
-  return Object.entries(overlays).map(([slug, cardIds]) => ({
-    slug,
-    name: slug in CURATED_INFO ? CURATED_INFO[slug as ArchetypeId].name : slug,
-    tag: 'Custom deck',
-    cards: cardIds.length,
-    custom: true,
-  }));
-}
-
 /** The host's deck → the createRoom payload. Validates against the merged
  *  registry so an invalid custom overlay never reaches the server (whose
- *  makeGame throws on invalid decks). */
+ *  makeGame throws on invalid decks). Task 45: the guest slot is a placeholder
+ *  ([deckIds, deckIds] + same hero) until opponentJoined corrects it with the
+ *  guest's real deck/hero from the wire. */
 function roomParamsFor(deck: DeckCard): LanRoomParams {
-  const deckIds = deck.custom ? (loadDecks()[deck.slug] ?? []) : expandDeck(DECK_DEFS[deck.slug as ArchetypeId]);
+  const deckIds = deck.custom ? (loadDecks()[deck.slug] ?? []) : expandDeck(DECK_DEFS[deck.slug as keyof typeof DECK_DEFS]);
   const customCards = loadCustomCards();
+  const heroId = heroNameForDeck(deckIds);
   return {
-    deckIds,
+    decks: [deckIds, deckIds],
+    heroes: [heroId, heroId],
     customCards,
-    heroId: heroNameForDeck(deckIds),
     seed: Math.floor(Math.random() * 1e9),
   };
 }
@@ -101,23 +56,37 @@ export default function LanHost({ onSessionReady }: { onSessionReady: (s: LanSes
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const curated = useMemo(buildCurated, []);
-  const custom = useMemo(buildCustom, []);
   const { driver } = useLanMatch({ client, room, myPlayer: 0 });
 
   // Stable references for handler cleanup (the screen unmounts at match entry;
   // the session client must not keep this screen's pre-match handler alive).
   const clientRef = useRef<LanClient | null>(null);
   clientRef.current = client;
+  // The createRoom params, captured so the roomCreated handler (registered
+  // once) can build the reconnect payload without a stale closure.
+  const paramsRef = useRef<LanRoomParams | null>(null);
+  paramsRef.current = room;
 
   const handleMessage = useCallback((m: ServerMessage) => {
     switch (m.type) {
       case 'roomCreated':
         setCode(m.code);
-        clientRef.current?.setRoomCode(m.code); // reconnect re-attach (fix round 2)
+        // Reconnect re-attach: remember the FULL joinRoom payload (code + this
+        // host's deck choice) so a reconnect re-attaches validly (Task 45).
+        {
+          const params = paramsRef.current;
+          if (params) {
+            clientRef.current?.setJoinPayload({ code: m.code, deckIds: params.decks[0], customCards: params.customCards, heroId: params.heroes[0] });
+          }
+        }
         break;
       case 'opponentJoined':
         setOpponent(m.opponentName);
+        // The guest's real deck/hero arrive on the wire — correct the
+        // placeholder room state so App's LanSession/rematch bookkeeping
+        // carries the guest deck (the driver rebuilds its own shadow via its
+        // wire handler; this update is only for LanSession).
+        setRoom({ decks: m.decks, heroes: m.heroes, customCards: m.cards, seed: m.seed });
         break;
       case 'gameStart':
         setStarted(true);
@@ -154,7 +123,7 @@ export default function LanHost({ onSessionReady }: { onSessionReady: (s: LanSes
   function startHosting(deck: DeckCard) {
     const params = roomParamsFor(deck);
     const registry = new CardRegistry([...buildPool(), ...params.customCards]);
-    const issues = validateDeck(params.deckIds, registry.pool()).filter(i => i.severity === 'error');
+    const issues = validateDeck(params.decks[0], registry.pool()).filter(i => i.severity === 'error');
     if (issues.length > 0) {
       setError(`Deck invalid: ${issues.map(i => i.message).join('; ')}`);
       return;
@@ -163,7 +132,7 @@ export default function LanHost({ onSessionReady }: { onSessionReady: (s: LanSes
     setRoom(params);
     const c = connectLan(handleMessage, onStatus);
     setClient(c);
-    c.send({ type: 'createRoom', name: 'You', deckIds: params.deckIds, customCards: params.customCards, heroId: params.heroId, seed: params.seed });
+    c.send({ type: 'createRoom', name: 'You', deckIds: params.decks[0], customCards: params.customCards, heroId: params.heroes[0], seed: params.seed });
   }
 
   function leave() {
@@ -202,35 +171,7 @@ export default function LanHost({ onSessionReady }: { onSessionReady: (s: LanSes
       <div className="shell">
         <h1 className="shell-title">LAN Host — choose your deck</h1>
         {error ? <p className="lan-error">{error}</p> : null}
-        <section className="shell-section">
-          <h2 className="shell-section-title">Curated decks</h2>
-          <div className="shell-grid">
-            {curated.map((deck) => (
-              <button type="button" key={`curated-${deck.slug}`} className="shell-card deck-card" onClick={() => startHosting(deck)}>
-                <span className="deck-card-name">{deck.name}</span>
-                {deck.hero ? <span className="deck-card-hero">{deck.hero}</span> : null}
-                <span className="deck-card-tag">{deck.tag}</span>
-                <span className="deck-card-badge">{deck.cards} cards</span>
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className="shell-section">
-          <h2 className="shell-section-title">Custom decks</h2>
-          {custom.length === 0 ? (
-            <p className="shell-empty">No custom decks yet — save one in the Deck Builder.</p>
-          ) : (
-            <div className="shell-grid">
-              {custom.map((deck) => (
-                <button type="button" key={`custom-${deck.slug}`} className="shell-card deck-card" onClick={() => startHosting(deck)}>
-                  <span className="deck-card-name">{deck.name}</span>
-                  <span className="deck-card-tag">{deck.tag}</span>
-                  <span className="deck-card-badge">{deck.cards} cards</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+        <LanDeckGrid onPick={startHosting} />
         <button type="button" className="shell-btn" onClick={() => navigate({ name: 'menu' })}>
           Back
         </button>

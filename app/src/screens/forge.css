@@ -1,423 +1,458 @@
 /* Forge screen (Task 25). Plain CSS — the theme system arrives in Task 36. */
 
 .forge {
-  min-height: 100vh;
-  background: #14131a;
-  color: #e8e6f0;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  padding: 24px;
-  box-sizing: border-box;
+	min-height: 100vh;
+	background: #14131a;
+	color: #e8e6f0;
+	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	padding: 24px;
+	box-sizing: border-box;
 }
 
 .forge-header h1 {
-  margin: 0 0 4px;
-  font-size: 28px;
-  color: #f2f0fa;
+	margin: 0 0 4px;
+	font-size: 28px;
+	color: #f2f0fa;
 }
 
 .forge-subtitle {
-  margin: 0 0 20px;
-  color: #9a97ab;
-  font-size: 14px;
+	margin: 0 0 20px;
+	color: #9a97ab;
+	font-size: 14px;
 }
 
 .forge-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 24px;
-  align-items: start;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 340px;
+	gap: 24px;
+	align-items: start;
 }
 
 @media (max-width: 900px) {
-  .forge-layout {
-    grid-template-columns: 1fr;
-  }
+	.forge-layout {
+		grid-template-columns: 1fr;
+	}
 }
 
 .forge-section {
-  background: #1d1b26;
-  border: 1px solid #2c2938;
-  border-radius: 10px;
-  padding: 14px;
-  margin-bottom: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+	background: #1d1b26;
+	border: 1px solid #2c2938;
+	border-radius: 10px;
+	padding: 14px;
+	margin-bottom: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
 .forge-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #b9b6c9;
-  text-transform: capitalize;
+	font-size: 13px;
+	font-weight: 600;
+	color: #b9b6c9;
+	text-transform: capitalize;
 }
 
 .forge-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
 
 .forge-input {
-  background: #131220;
-  border: 1px solid #322f42;
-  border-radius: 6px;
-  color: #e8e6f0;
-  padding: 8px 10px;
-  font-size: 14px;
-  width: 100%;
-  box-sizing: border-box;
+	background: #131220;
+	border: 1px solid #322f42;
+	border-radius: 6px;
+	color: #e8e6f0;
+	padding: 8px 10px;
+	font-size: 14px;
+	width: 100%;
+	box-sizing: border-box;
 }
 
 .forge-input:focus {
-  outline: none;
-  border-color: #7b5cff;
+	outline: none;
+	border-color: #7b5cff;
 }
 
 select.forge-input {
-  appearance: auto;
+	appearance: auto;
 }
 
 .forge-slider {
-  width: 100%;
-  accent-color: #7b5cff;
+	width: 100%;
+	accent-color: #7b5cff;
 }
 
 .forge-segmented {
-  display: flex;
-  gap: 6px;
+	display: flex;
+	gap: 6px;
 }
 
 .forge-seg-btn {
-  flex: 1;
-  background: #131220;
-  border: 1px solid #322f42;
-  border-radius: 6px;
-  color: #b9b6c9;
-  padding: 8px 0;
-  font-size: 14px;
-  text-transform: capitalize;
-  cursor: pointer;
+	flex: 1;
+	background: #131220;
+	border: 1px solid #322f42;
+	border-radius: 6px;
+	color: #b9b6c9;
+	padding: 8px 0;
+	font-size: 14px;
+	text-transform: capitalize;
+	cursor: pointer;
 }
 
 .forge-seg-btn.active {
-  background: #7b5cff;
-  border-color: #7b5cff;
-  color: #fff;
+	background: #7b5cff;
+	border-color: #7b5cff;
+	color: #fff;
 }
 
 .forge-stats {
-  flex-direction: row;
-  gap: 14px;
+	flex-direction: row;
+	gap: 14px;
 }
 
 .forge-field {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
 }
 
 .forge-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
 }
 
 .forge-chip {
-  background: #131220;
-  border: 1px solid #322f42;
-  border-radius: 999px;
-  color: #b9b6c9;
-  padding: 5px 12px;
-  font-size: 13px;
-  text-transform: capitalize;
-  cursor: pointer;
+	background: #131220;
+	border: 1px solid #322f42;
+	border-radius: 999px;
+	color: #b9b6c9;
+	padding: 5px 12px;
+	font-size: 13px;
+	text-transform: capitalize;
+	cursor: pointer;
 }
 
 .forge-chip.active {
-  background: #3a2d6e;
-  border-color: #7b5cff;
-  color: #e8e6f0;
+	background: #3a2d6e;
+	border-color: #7b5cff;
+	color: #e8e6f0;
 }
 
 .forge-effect-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 8px;
-  align-items: center;
-  padding: 10px;
-  background: #17151f;
-  border: 1px solid #2c2938;
-  border-radius: 8px;
+	display: grid;
+	grid-template-columns: 1fr 1fr auto;
+	gap: 8px;
+	align-items: center;
+	padding: 10px;
+	background: #17151f;
+	border: 1px solid #2c2938;
+	border-radius: 8px;
 }
 
 .forge-slider-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #b9b6c9;
-  white-space: nowrap;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 14px;
+	color: #b9b6c9;
+	white-space: nowrap;
 }
 
 .forge-add-btn,
 .forge-file-btn,
 .forge-remove-btn,
 .forge-reset-btn {
-  background: #2a2740;
-  border: 1px solid #3d3a52;
-  border-radius: 6px;
-  color: #cfcce0;
-  padding: 6px 10px;
-  font-size: 13px;
-  cursor: pointer;
+	background: #2a2740;
+	border: 1px solid #3d3a52;
+	border-radius: 6px;
+	color: #cfcce0;
+	padding: 6px 10px;
+	font-size: 13px;
+	cursor: pointer;
 }
 
 .forge-add-btn:hover,
 .forge-file-btn:hover,
 .forge-remove-btn:hover,
 .forge-reset-btn:hover {
-  background: #383453;
+	background: #383453;
 }
 
 .forge-remove-btn {
-  color: #ff9d9d;
+	color: #ff9d9d;
 }
 
 .forge-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
 }
 
 .forge-swatch {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  cursor: pointer;
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	border: 2px solid transparent;
+	cursor: pointer;
 }
 
 .forge-swatch.active {
-  border-color: #fff;
+	border-color: #fff;
 }
 
 .forge-upload-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
 }
 
 .forge-upload-thumb {
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid #322f42;
+	width: 56px;
+	height: 56px;
+	object-fit: cover;
+	border-radius: 6px;
+	border: 1px solid #322f42;
 }
 
 .forge-textarea {
-  resize: vertical;
-  font-family: inherit;
+	resize: vertical;
+	font-family: inherit;
 }
 
 .forge-actions {
-  display: flex;
-  gap: 10px;
+	display: flex;
+	gap: 10px;
 }
 
 .forge-save-btn {
-  flex: 1;
-  background: #7b5cff;
-  border: none;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  padding: 12px;
-  cursor: pointer;
+	flex: 1;
+	background: #7b5cff;
+	border: none;
+	border-radius: 8px;
+	color: #fff;
+	font-size: 15px;
+	font-weight: 600;
+	padding: 12px;
+	cursor: pointer;
 }
 
 .forge-save-btn:disabled {
-  background: #3a3750;
-  color: #8f8ca6;
-  cursor: not-allowed;
+	background: #3a3750;
+	color: #8f8ca6;
+	cursor: not-allowed;
 }
 
 .forge-error {
-  margin: 0;
-  color: #ff8d8d;
-  font-size: 13px;
+	margin: 0;
+	color: #ff8d8d;
+	font-size: 13px;
 }
 
 .forge-hint {
-  margin: 0;
-  color: #8f8ca6;
-  font-size: 13px;
-  font-style: italic;
+	margin: 0;
+	color: #8f8ca6;
+	font-size: 13px;
+	font-style: italic;
 }
 
 .forge-ok {
-  margin: 0;
-  color: #7ce07c;
-  font-size: 13px;
+	margin: 0;
+	color: #7ce07c;
+	font-size: 13px;
 }
 
 .forge-issue {
-  margin: 0 0 6px;
-  font-size: 13px;
+	margin: 0 0 6px;
+	font-size: 13px;
 }
 
 .forge-issue-error {
-  color: #ff8d8d;
+	color: #ff8d8d;
 }
 
 .forge-issue-warning {
-  color: #f2c14e;
+	color: #f2c14e;
 }
 
 .forge-side-title {
-  margin: 0;
-  font-size: 15px;
-  color: #cfcce0;
+	margin: 0;
+	font-size: 15px;
+	color: #cfcce0;
 }
 
 .forge-toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #2d2a45;
-  border: 1px solid #7b5cff;
-  border-radius: 8px;
-  color: #f2f0fa;
-  padding: 12px 20px;
-  font-size: 14px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
-  z-index: 10;
+	position: fixed;
+	bottom: 24px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: #2d2a45;
+	border: 1px solid #7b5cff;
+	border-radius: 8px;
+	color: #f2f0fa;
+	padding: 12px 20px;
+	font-size: 14px;
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+	z-index: 10;
 }
 
 /* ---- Card preview stub (full styling is Task 37) ---- */
 
 .card-preview {
-  width: 100%;
-  border: 2px solid #8f93a5;
-  border-radius: 10px;
-  background: #1a1824;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+	width: 100%;
+	border: 2px solid #8f93a5;
+	border-radius: 10px;
+	background: #1a1824;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
 }
 
 .card-preview-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 10px;
 }
 
 .card-preview-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #f2f0fa;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	font-size: 14px;
+	font-weight: 700;
+	color: #f2f0fa;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .card-preview-cost {
-  background: #7b5cff;
-  color: #fff;
-  border-radius: 50%;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  flex-shrink: 0;
+	background: #7b5cff;
+	color: #fff;
+	border-radius: 50%;
+	width: 26px;
+	height: 26px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 14px;
+	font-weight: 700;
+	flex-shrink: 0;
 }
 
 .card-preview-type {
-  padding: 0 10px 8px;
-  font-size: 11px;
-  color: #9a97ab;
-  text-transform: capitalize;
+	padding: 0 10px 8px;
+	font-size: 11px;
+	color: #9a97ab;
+	text-transform: capitalize;
 }
 
 .card-preview-keywords {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 0 10px 8px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 0 10px 8px;
 }
 
 .card-preview-keyword {
-  background: #2a2740;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 11px;
-  color: #cfcce0;
-  text-transform: capitalize;
+	background: #2a2740;
+	border-radius: 999px;
+	padding: 2px 8px;
+	font-size: 11px;
+	color: #cfcce0;
+	text-transform: capitalize;
 }
 
 .card-preview-art {
-  flex: 1;
-  min-height: 160px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 10px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: #131220;
+	flex: 1;
+	min-height: 160px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0 10px;
+	border-radius: 6px;
+	overflow: hidden;
+	background: #131220;
 }
 
 .card-preview-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
 }
 
 .card-preview-artfallback {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .card-preview-glyph {
-  font-size: 56px;
-  color: rgba(255, 255, 255, 0.85);
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+	font-size: 56px;
+	color: rgba(255, 255, 255, 0.85);
+	text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
 
 .card-preview-stats {
-  display: flex;
-  gap: 8px;
-  padding: 8px 10px;
+	display: flex;
+	gap: 8px;
+	padding: 8px 10px;
 }
 
 .card-preview-stat {
-  flex: 1;
-  text-align: center;
-  background: #2a2740;
-  border-radius: 6px;
-  padding: 4px 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: #f2f0fa;
+	flex: 1;
+	text-align: center;
+	background: #2a2740;
+	border-radius: 6px;
+	padding: 4px 0;
+	font-size: 14px;
+	font-weight: 700;
+	color: #f2f0fa;
 }
 
 .card-preview-flavor {
-  margin: 0;
-  padding: 0 10px 10px;
-  font-size: 12px;
-  font-style: italic;
-  color: #9a97ab;
+	margin: 0;
+	padding: 0 10px 10px;
+	font-size: 12px;
+	font-style: italic;
+	color: #9a97ab;
+}
+
+/* ---- card collection (finding 22) ---- */
+
+.forge-collection {
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.forge-card-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 0;
+	border-bottom: 1px solid #2a2833;
+}
+
+.forge-card-row:last-child {
+	border-bottom: none;
+}
+
+.forge-card-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 13px;
+	color: #cfcce0;
+}
+
+.forge-card-meta {
+	font-size: 11px;
+	color: #8a869c;
+	white-space: nowrap;
 }

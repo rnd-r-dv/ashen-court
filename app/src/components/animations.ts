@@ -49,14 +49,6 @@ export function playSlam(scale = 1): Variants {
   };
 }
 
-/** Attacker lunging at its target (reserved for a future attack event). */
-export function attackLunge(scale = 1): Variants {
-  return {
-    lunge: { x: 34, transition: { duration: 0.16 * scale, ease: 'easeOut' } },
-    return: { x: 0, transition: { duration: 0.24 * scale, ease: 'easeOut' } },
-  };
-}
-
 /** creatureDied: ember dissolve (AnimatePresence exit on the board slot). */
 export function deathFade(scale = 1): Variants {
   return {
@@ -65,18 +57,6 @@ export function deathFade(scale = 1): Variants {
       scale: 1.18,
       filter: 'brightness(2.4) saturate(0.15)',
       transition: { duration: 0.5 * scale, ease: 'easeIn' },
-    },
-  };
-}
-
-/** Draw-from-deck slide for a card entering the hand. */
-export function drawSlide(scale = 1): Variants {
-  return {
-    slideIn: { y: 42, opacity: 0, transition: { duration: 0.01 } },
-    enter: {
-      y: 0,
-      opacity: 1,
-      transition: { type: 'spring', stiffness: 300, damping: 26, duration: 0.4 * scale },
     },
   };
 }

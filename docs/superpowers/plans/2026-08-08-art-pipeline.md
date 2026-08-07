@@ -6,7 +6,7 @@
 
 **Architecture:** Four pure, unit-tested modules (`styles`, `prompt`, `coverage`, `paths`) and one impure CLI (`generate`) that composes them with `fetch` and `sharp`. The app consumes the output through a single resolver backed by Vite's `import.meta.glob`, so "does this card have art" is answered at build time, never by probing for 404s.
 
-**Tech Stack:** TypeScript (ESM), tsx, vitest, sharp, OpenRouter Images API (`black-forest-labs/flux.2-klein-4b:free`; the contract doc lives at the non-`:free` path).
+**Tech Stack:** TypeScript (ESM), tsx, vitest, sharp, OpenRouter Images API (`black-forest-labs/flux.2-max:free`; the contract doc lives at the non-`:free` path).
 
 ## Global Constraints
 
@@ -18,7 +18,7 @@ Copied verbatim from `docs/superpowers/specs/2026-08-08-ui-overhaul-design.md`. 
 - **Never put pixel dimensions in the prompt.** Output size comes from the sampler's latent grid via `aspect_ratio`; prompt text cannot change it. FLUX.2 renders legible text unusually well, so `"480x320"` in a prompt risks being painted into the illustration.
 - **`aspect_ratio` is derived from `card.rarity`, never operator-set:** `3:4` for rarity ≥ epic (full-bleed), `3:2` below it (banded), `1:1` for heroes.
 - **`OPENROUTER_API_KEY` comes from the environment.** Never committed, never written to a file, never logged.
-- **Default to the free model variant `black-forest-labs/flux.2-klein-4b:free`** (verified 2026-08-08). Free tier is capped at **20 requests/minute** and **50/day** under $10 lifetime credits, **1000/day** above. **This account is on the 1000/day tier**, so a full 297-image pass fits in one run of roughly 16 minutes and the 20/minute rate is the only real constraint. Requests must still be spaced, and a daily-cap 429 must stop the run cleanly rather than grinding through failures — it should never fire here, but it is what keeps the script correct on a 50/day account.
+- **Default to the free model variant `black-forest-labs/flux.2-max:free`** (verified 2026-08-08). Free tier is capped at **20 requests/minute** and **50/day** under $10 lifetime credits, **1000/day** above. **This account is on the 1000/day tier**, so a full 297-image pass fits in one run of roughly 16 minutes and the 20/minute rate is the only real constraint. Requests must still be spaced, and a daily-cap 429 must stop the run cleanly rather than grinding through failures — it should never fire here, but it is what keeps the script correct on a 50/day account.
 - **`--model` is only safe across FLUX-schema models.** `recraft/recraft-v3:free` takes an `image_config` object instead and does not document `aspect_ratio`; using it is client work, not a flag.
 - **Existing suite is 402 tests across 50 files and must stay green.** Run `npm test` before every commit.
 - **Do not commit generated images in the same commit as code.** Images are reviewed separately.
@@ -865,7 +865,7 @@ describe('generateImage', () => {
     expect(Object.keys(body).sort()).toEqual(
       ['aspect_ratio', 'model', 'n', 'output_format', 'prompt'].sort(),
     );
-    expect(body.model).toBe('black-forest-labs/flux.2-klein-4b:free');
+    expect(body.model).toBe('black-forest-labs/flux.2-max:free');
     expect(body.aspect_ratio).toBe('3:2');
     expect(body.n).toBe(1);
     expect(body.output_format).toBe('jpeg');
@@ -941,15 +941,16 @@ describe('generateImage', () => {
     const fetchImpl = vi.fn().mockResolvedValue(okResponse());
     await generateImage({ ...base, fetchImpl: fetchImpl as unknown as typeof fetch });
     let body = JSON.parse((fetchImpl.mock.calls[0]![1] as RequestInit).body as string);
-    expect(body.model).toBe('black-forest-labs/flux.2-klein-4b:free');
+    expect(body.model).toBe('black-forest-labs/flux.2-max:free');
 
+    // Override with a DIFFERENT model, or the assertion is tautological.
     fetchImpl.mockClear();
     await generateImage({
-      ...base, model: 'black-forest-labs/flux.2-max:free',
+      ...base, model: 'black-forest-labs/flux.2-klein-4b:free',
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     body = JSON.parse((fetchImpl.mock.calls[0]![1] as RequestInit).body as string);
-    expect(body.model).toBe('black-forest-labs/flux.2-max:free');
+    expect(body.model).toBe('black-forest-labs/flux.2-klein-4b:free');
   });
 
   it('throws a clear error when the response carries no image', async () => {
@@ -974,24 +975,30 @@ Expected: FAIL — cannot resolve `../art/openrouter.js`.
 // scripts/art/openrouter.ts
 
 /**
- * OpenRouter Images API client for black-forest-labs/flux.2-klein-4b.
- * Contract: https://openrouter.ai/black-forest-labs/flux.2-klein-4b/llms.txt
+ * OpenRouter Images API client for the FLUX.2 family.
+ * Request contract: https://openrouter.ai/black-forest-labs/flux.2-klein-4b/llms.txt
+ * (the llms.txt lives at the non-:free path; the schema is the same).
  */
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/images';
 
 /**
- * Default to the FREE variant (verified 2026-08-08). It takes the same request
- * fields as the paid model, so nothing else changes.
+ * All :free variants cost $0, so the default is chosen on fitness alone.
  *
- * Swappable via --model, but only across models sharing THIS request schema —
- * the other BFL variants (flux.2-klein-4b, flux.2-pro:free, flux.2-max:free)
- * do. Non-FLUX models do not: recraft/recraft-v3:free, for instance, takes an
- * `image_config` object with style/strength/rgb_colors and does not document
- * aspect_ratio at all. Pointing --model at one of those is schema work, not a
- * flag change.
+ * This is a default to REVISIT, not a proven winner: "max" is a tier name, and
+ * larger models often trend toward photorealism and literal interpretation,
+ * which is the opposite of what stylised card art wants. Reversing is cheap by
+ * construction — --model swaps it, --force regenerates, and every FLUX variant
+ * shares this request schema. If the first real output disappoints, switch.
+ *
+ * Swappable across FLUX variants (flux.2-klein-4b:free, flux.2-pro:free) at
+ * zero cost. NOT swappable to recraft/recraft-v3:free, which takes a different
+ * request shape (image_config, no documented aspect_ratio) — that is client
+ * work, not a flag. Recraft is the first thing to try if FLUX output proves
+ * inconsistent across archetypes, since its `style` parameter would enforce
+ * house style structurally rather than through prompt wording.
  */
-export const DEFAULT_MODEL = 'black-forest-labs/flux.2-klein-4b:free';
+export const DEFAULT_MODEL = 'black-forest-labs/flux.2-max:free';
 
 /**
  * Only 429 (rate limited) and 502 (upstream failure, not billed) are worth
@@ -1034,8 +1041,14 @@ export async function generateImage(opts: GenerateOptions): Promise<GenerateResu
   const sleep = opts.sleep ?? defaultSleep;
   const maxRetries = opts.maxRetries ?? 3;
 
-  // Exactly the documented fields. An unlisted field is rejected with 400 —
-  // in particular there is NO width/height/size parameter, so do not add one.
+  // The narrow, per-model documented field set. Accepted fields vary BY MODEL:
+  // flux.2-klein-4b's llms.txt lists only these and rejects anything else with
+  // 400, while OpenRouter's general image docs list a wider set (resolution,
+  // size, quality, background, ...). Build against the narrow set.
+  //
+  // If `size` turns out to be accepted by the chosen model it would let us
+  // request 480x320 directly and drop the sharp downscale entirely — probe it
+  // once by hand before designing around it.
   const body = {
     model: opts.model ?? DEFAULT_MODEL,
     prompt: opts.prompt,
@@ -1145,15 +1158,16 @@ describe('parseArgs', () => {
     expect(a.limit).toBeNull();
     expect(a.force).toEqual([]);
     expect(a.heroes).toBe(true);
-    expect(a.model).toBe('black-forest-labs/flux.2-klein-4b:free');
+    expect(a.model).toBe('black-forest-labs/flux.2-max:free');
   });
 
   it('accepts --model for the other FLUX variants', () => {
-    // Only across models sharing the FLUX request schema. Non-FLUX models
-    // (e.g. recraft/recraft-v3:free, which takes an image_config object) need
-    // schema work in openrouter.ts, not just this flag.
-    expect(parseArgs(['--model', 'black-forest-labs/flux.2-max:free']).model)
-      .toBe('black-forest-labs/flux.2-max:free');
+    // Only across models sharing the FLUX request schema. recraft/recraft-v3:free
+    // takes an image_config object instead and needs schema work in
+    // openrouter.ts, not just this flag.
+    // A model that is NOT the default, so the assertion means something.
+    expect(parseArgs(['--model', 'black-forest-labs/flux.2-klein-4b:free']).model)
+      .toBe('black-forest-labs/flux.2-klein-4b:free');
   });
 
   it('turns off dry-run only when --commit is passed explicitly', () => {
@@ -1226,7 +1240,7 @@ import { buildCardPrompt, buildHeroPrompt, type BuiltPrompt } from './prompt.js'
  *   npm run art:generate -- --dry-run
  *   npm run art:generate -- --commit --force a --force b --force c   # Stage 0
  *   npm run art:generate -- --commit --coverage epic+
- *   npm run art:generate -- --commit --model black-forest-labs/flux.2-max:free
+ *   npm run art:generate -- --commit --model black-forest-labs/flux.2-klein-4b:free
  *
  * DEFAULTS TO --dry-run and to the FREE model variant. Both a real request and
  * a paid model require an explicit flag.

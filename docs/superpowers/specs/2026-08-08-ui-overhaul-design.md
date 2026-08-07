@@ -139,12 +139,25 @@ together with `--force`.
 Per `https://openrouter.ai/black-forest-labs/flux.2-klein-4b/llms.txt`:
 
 - `POST https://openrouter.ai/api/v1/images`, `Authorization: Bearer $OPENROUTER_API_KEY`
-- Accepted request fields are **exactly** `model`, `prompt`, `aspect_ratio`,
-  `output_format`, `n`, `input_references`, `seed`, plus `provider` routing.
-  **There is no width/height/size field, and an unlisted value is rejected with 400.**
-  Output resolution is therefore provider-chosen and cannot be requested; stating
-  dimensions in the prompt does not work either, and risks the model rendering those
-  characters into the image.
+- **Accepted fields are per-model, not API-wide.** `flux.2-klein-4b`'s `llms.txt` lists
+  exactly `model`, `prompt`, `aspect_ratio`, `output_format`, `n`, `input_references`,
+  `seed`, plus `provider` routing, and states that an unlisted value is rejected with
+  400. The *general* image-generation docs list a wider set — `resolution`,
+  `aspect_ratio`, `size`, `quality`, `output_format`, `background`,
+  `output_compression`, `seed`, `stream`, `input_references` — so dimension control may
+  be available depending on the model.
+
+  Build against the narrow, documented-per-model set: `model`, `prompt`, `aspect_ratio`,
+  `output_format`, `n`. **If `size` turns out to be accepted by the chosen model, it
+  would let the script request 480×320 directly and skip the `sharp` downscale in §3.6
+  entirely** — worth probing once in Stage 0, but not worth designing around until
+  confirmed.
+
+  An earlier revision of this spec asserted API-wide that "there is no width/height/size
+  field". That was over-generalised from one model's list and is withdrawn.
+- Stating dimensions in the *prompt* remains useless regardless: prompt text cannot
+  reach the sampler's latent grid, and on FLUX it risks the characters being rendered
+  into the image.
 - **`aspect_ratio` is chosen per asset, from the treatment that asset will receive
   (§4.1).** This is not one global constant:
 
@@ -170,9 +183,44 @@ Per `https://openrouter.ai/black-forest-labs/flux.2-klein-4b/llms.txt`:
 
 ### 3.5 Cost, and why the smoke batch is a gate
 
-**Default to the free model variant: `black-forest-labs/flux.2-klein-4b:free`.**
-Verified 2026-08-08 — the variant exists and takes the same request fields. The model
-is a `--model` flag so the paid variant can be swapped in if free output disappoints.
+### Model selection
+
+**Default: `black-forest-labs/flux.2-max:free`.**
+
+**All `:free` variants cost $0.** The rate cards on each model page describe the *paid*
+endpoint; the `:free` route is not billed. Cost is therefore not a selection criterion,
+and the choice is fitness alone.
+
+`max` is chosen as a deliberate default-to-revisit rather than a proven winner. Its own
+page positions it as the top tier — *"image quality, prompt understanding, and editing
+consistency to the highest level yet"* — and prompt understanding is the property that
+matters most here, since each prompt is a three-layer composition and the failure mode
+we care about is a model ignoring the `no text, no lettering` clause or the archetype's
+palette. But "max" is a tier name, not evidence, and larger models often trend toward
+photorealism and literal interpretation, which is the opposite of what stylised card
+art wants.
+
+**Reversing is cheap by construction**: `--model` swaps the model, `--force` regenerates
+any card, and every FLUX variant shares one request schema. If the first real output
+disappoints, switch and re-run. Do not treat this default as settled.
+
+**Not chosen:**
+
+- **`x-ai/grok-imagine-image-quality`** — free, but optimised for exactly what §3.3
+  suppresses. Its page leads with *"clean multilingual text rendering inside images"*
+  and targets *"posters, packaging, ads, menus, and social graphics"*. Also
+  *"photorealistic"*, against a painterly house style. Wrong tool twice over.
+- **`recraft/recraft-v3`** — the strongest unexplored option, parked rather than
+  rejected. It reportedly exposes a `style` parameter, which would enforce house style
+  *structurally* instead of relying on prompt wording holding across 297 calls —
+  and cross-image consistency, not per-image beauty, is the hardest problem here. It is
+  parked only because it needs a different request shape (`image_config`, no documented
+  `aspect_ratio`), which is real client work rather than a flag. **Revisit it first if
+  FLUX output proves inconsistent across archetypes.**
+- **`flux.2-klein-4b`** — the 4B small/fast tier, and this spec's original default only
+  because it was the model in the source doc, never because it was evaluated. Documented
+  fallback if `max` proves slow or queue-limited on the free tier.
+- **`flux.2-pro`** — mid tier; `max` is preferred at the same price.
 
 **Free-tier rate limits are the real constraint, not money** (verified against
 OpenRouter's rate-limit docs, 2026-08-08):

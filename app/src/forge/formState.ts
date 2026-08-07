@@ -85,17 +85,42 @@ export function draftToCard(d: ForgeDraft): Card {
 }
 
 /**
- * validateCard(draftToCard(d)) PLUS the pool-reference rule: a summon/copyCard
- * effect's `cardId` must exist in buildPool() ∪ saved custom cards (deduped by
- * id). Missing cardIds are legal (summon no-ops, copyCard resolves a random
- * enemy creature card — see engine/effects.ts), so only present-but-unknown
- * references are flagged.
+ * Pool-reference rule (shared by the Forge save gate and the JSON import path,
+ * audit 05 C1): a summon/copyCard effect's `cardId` must exist in the pool.
+ * Missing cardIds are legal (summon no-ops, copyCard resolves a random enemy
+ * creature card — see engine/effects.ts), so only present-but-unknown
+ * references are flagged. Importing a card that violates this rule would save
+ * fine but crash the engine at resolution (core/src/engine/effects.ts throws
+ * 'Unknown card id'), so both entry points must enforce it.
+ */
+export function poolRuleIssues(card: Card, pool: ReadonlyMap<string, Card>): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const allEffects = [...card.effects, ...(card.triggers ?? []).flatMap((t) => t.effects)];
+  for (const e of allEffects) {
+    if ((e.kind === 'summon' || e.kind === 'copyCard') && e.cardId && !pool.has(e.cardId)) {
+      issues.push({ field: 'effect', message: `Unknown card reference: ${e.cardId}`, severity: 'error' });
+    }
+  }
+  return issues;
+}
+
+/**
+ * validateCard(draftToCard(d)) PLUS the pool-reference rule (C1) PLUS a
+ * warning when a creature/artifact carries effect rows with no trigger (M1 —
+ * draftToCard drops those effects on save, a silent data-loss trap).
  */
 export function draftIssues(d: ForgeDraft): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (d.type === 'creature') {
     if (!d.attack.trim()) issues.push({ field: 'attack', message: 'Attack is required.', severity: 'error' });
     if (!d.health.trim()) issues.push({ field: 'health', message: 'Health is required.', severity: 'error' });
+  }
+  if (d.type !== 'spell' && d.trigger === '' && d.effects.length > 0) {
+    issues.push({
+      field: 'effect',
+      message: 'Effects will be dropped: add a trigger or make it a spell.',
+      severity: 'warning',
+    });
   }
   const card = draftToCard(d);
   issues.push(...validateCard(card));
@@ -104,12 +129,7 @@ export function draftIssues(d: ForgeDraft): ValidationIssue[] {
   for (const c of [...buildPool(), ...loadCustomCards()]) {
     if (!pool.has(c.id)) pool.set(c.id, c);
   }
-  const allEffects = [...card.effects, ...(card.triggers ?? []).flatMap((t) => t.effects)];
-  for (const e of allEffects) {
-    if ((e.kind === 'summon' || e.kind === 'copyCard') && e.cardId && !pool.has(e.cardId)) {
-      issues.push({ field: 'effect', message: `Unknown card reference: ${e.cardId}`, severity: 'error' });
-    }
-  }
+  issues.push(...poolRuleIssues(card, pool));
   return issues;
 }
 

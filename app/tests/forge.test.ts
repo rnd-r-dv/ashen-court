@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { validateCard } from '@ashen/core';
+import { buildPool, validateCard } from '@ashen/core';
 import type { ForgeDraft } from '../src/forge/formState.js';
-import { createDraft, draftToCard, draftIssues } from '../src/forge/formState.js';
+import { createDraft, draftToCard, draftIssues, poolRuleIssues } from '../src/forge/formState.js';
 
 /** A fully valid creature draft; spread overrides to build invalid variants. */
 const validDraft = (over: Partial<ForgeDraft> = {}): ForgeDraft => ({
@@ -63,5 +63,40 @@ describe('forge form state', () => {
   it('flags a summon effect that references a card outside the pool', () => {
     const d = validDraft({ effects: [{ kind: 'summon', value: 1, cardId: 'token-nonexistent' }] });
     expect(errors(d).some((i) => i.message.includes('token-nonexistent'))).toBe(true);
+  });
+
+  it('warns when a creature has effects but no trigger — they would be dropped on save (M1)', () => {
+    const d = validDraft({ trigger: '', effects: [{ kind: 'draw', value: 1 }] });
+    const warns = draftIssues(d).filter((i) => i.severity === 'warning');
+    expect(warns.some((i) => i.message.includes('dropped'))).toBe(true);
+    // Save stays enabled: warning severity does not gate the save button.
+    expect(errors(d)).toEqual([]);
+  });
+});
+
+describe('poolRuleIssues (shared Forge/import pool-reference rule, C1)', () => {
+  const empty = new Map<string, ReturnType<typeof draftToCard>>();
+
+  it('flags a summon to an unknown cardId', () => {
+    const card = draftToCard(validDraft({ effects: [{ kind: 'summon', value: 1, cardId: 'token-rat' }] }));
+    expect(poolRuleIssues(card, empty).some((i) => i.message.includes('token-rat'))).toBe(true);
+  });
+
+  it('flags a copyCard to an unknown cardId', () => {
+    const card = draftToCard(validDraft({ effects: [{ kind: 'copyCard', cardId: 'ember-bolt' }] }));
+    expect(poolRuleIssues(card, empty).some((i) => i.message.includes('ember-bolt'))).toBe(true);
+  });
+
+  it('passes references that exist in the pool', () => {
+    const card = draftToCard(validDraft({ effects: [{ kind: 'summon', value: 1, cardId: 'token-rat' }] }));
+    const pool = new Map<string, ReturnType<typeof draftToCard>>();
+    for (const c of [...buildPool(), card]) pool.set(c.id, c);
+    expect(poolRuleIssues(card, pool)).toEqual([]);
+  });
+
+  it('is exactly the rule draftIssues applies for a non-spell card (triggers flattened)', () => {
+    const d = validDraft({ effects: [{ kind: 'summon', value: 1, cardId: 'token-nonexistent' }] });
+    const card = draftToCard(d);
+    expect(poolRuleIssues(card, empty)).toEqual(errors(d));
   });
 });

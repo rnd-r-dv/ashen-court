@@ -327,13 +327,16 @@
 }
 
 /* ---- creature stats pips --------------------------------------
-   Corner ornaments straddling the art panel's bottom edge, NOT a
-   layout row: a creature and a spell must occupy the same box.     */
+   INSIDE the art panel's lower corners, not straddling its edge.
+   The previous rule hung them 13px below the panel, where the type
+   ribbon lives, so on every creature the pips covered the ribbon's
+   icon and its rarity label. Keeping them inside makes the overlap
+   structurally impossible — no per-type padding, no special cases. */
 .card__stats {
   position: absolute;
-  left: -2px;
-  right: -2px;
-  bottom: -13px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
   display: flex;
   justify-content: space-between;
   pointer-events: none;

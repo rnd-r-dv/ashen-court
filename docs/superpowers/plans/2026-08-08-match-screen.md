@@ -455,6 +455,7 @@ git commit -m "feat(mana): larger crystal rail with an explicit spent state"
 import { describe, expect, it, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
+import type { HeroState } from '@ashen/core';
 import HeroPortrait from '../src/components/HeroPortrait.js';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -466,15 +467,36 @@ vi.mock('../src/art/resolveArt.js', () => ({
   heroSlug: (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
 }));
 
+/**
+ * Every field of HeroState, spelled exactly as core/src/types.ts declares it:
+ * the used-power flag is `usedPower`, not `powerUsed`, and the two discount
+ * counters are required. Typed rather than cast so a future rename of any of
+ * them fails this fixture loudly instead of silently.
+ */
+function heroState(name: string): HeroState {
+  return {
+    name,
+    hp: 30,
+    maxHp: 30,
+    shields: 0,
+    power: { name: 'Lullaby', cost: 2, effects: [] },
+    usedPower: false,
+    discountMostExpensive: 0,
+    discountNextSpell: 0,
+  };
+}
+
 function render(heroName: string) {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   act(() => {
     root.render(createElement(HeroPortrait, {
-      hero: { name: heroName, hp: 30, maxHp: 30, shields: 0, power: { name: 'Lullaby', cost: 2, effects: [] }, powerUsed: false },
-      player: 0, isViewer: true, active: true,
-    } as never));
+      hero: heroState(heroName),
+      player: 0,
+      isViewer: true,
+      active: true,
+    }));
   });
   return { host, cleanup: () => act(() => root.unmount()) };
 }

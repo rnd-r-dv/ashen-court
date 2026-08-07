@@ -193,9 +193,13 @@ describe('style blocks', () => {
     expect(Object.keys(STYLE_BLOCKS)).toHaveLength(14);
   });
 
-  it('keeps every block distinct, so archetypes do not read alike', () => {
-    const values = Object.values(STYLE_BLOCKS);
-    expect(new Set(values).size).toBe(values.length);
+  it('keeps every authored block distinct, so archetypes do not read alike', () => {
+    // 'token' is deliberately an alias of 'neutral' (tokens belong to no deck),
+    // so it is excluded — the other 13 must all differ.
+    const authored = Object.entries(STYLE_BLOCKS)
+      .filter(([k]) => k !== 'token')
+      .map(([, v]) => v);
+    expect(new Set(authored).size).toBe(authored.length);
   });
 
   it('routes tokens to the neutral look — they belong to no deck', () => {
@@ -304,19 +308,6 @@ export function styleFor(archetype: string): string {
 
 Run: `npx vitest run scripts/tests/styles.test.ts`
 Expected: PASS, 6 tests.
-
-Note: the "distinct" test passes because `token` is assigned *after* the literal, so `Object.values` contains 14 entries of which two are the same string — **this will fail**. Fix by asserting distinctness over the 13 authored blocks only:
-
-```ts
-  it('keeps every block distinct, so archetypes do not read alike', () => {
-    const authored = Object.entries(STYLE_BLOCKS)
-      .filter(([k]) => k !== 'token')          // token is an alias of neutral by design
-      .map(([, v]) => v);
-    expect(new Set(authored).size).toBe(authored.length);
-  });
-```
-
-Re-run and confirm PASS before continuing.
 
 - [ ] **Step 5: Commit**
 

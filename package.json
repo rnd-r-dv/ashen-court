@@ -1,15 +1,22 @@
 {
   "name": "ashen-court",
   "private": true,
-  "workspaces": ["core", "server", "app"],
+  "workspaces": [
+    "core",
+    "server",
+    "app"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "npm run dev -w app",
     "build": "npm run build -w core && npm run build -w server && npm run build -w app",
-    "server": "npm run start -w server"
+    "server": "npm run start -w server",
+    "art:generate": "tsx scripts/art/generate.ts"
   },
   "devDependencies": {
+    "sharp": "^0.35.3",
+    "tsx": "^4.23.11",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
   }

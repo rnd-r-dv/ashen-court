@@ -60,3 +60,24 @@ export function deckStatus(
 ): { count: number; issues: ValidationIssue[] } {
   return { count: list.length, issues: validateDeck(list, pool) };
 }
+
+/** True when saving under this slug would clobber a different, non-empty
+ *  saved overlay (DeckBuilder asks for confirmation before overwriting —
+ *  audit 05 I3). Re-saving identical content is a no-op and needs no confirm. */
+export function wouldOverwrite(existing: string[] | undefined, incoming: string[]): boolean {
+  if (!existing || existing.length === 0) return false;
+  if (incoming.length !== existing.length) return true;
+  return incoming.some((id, i) => id !== existing[i]);
+}
+
+/** Deck export gate (ImportExport deck mode — audit 05 M4): export is only
+ *  allowed when the deck would round-trip through its own import, i.e. it is
+ *  exactly 60 cards and validateDeck reports no errors. Returns the blocking
+ *  error message, or undefined when the deck is exportable. */
+export function deckExportError(ids: string[], pool: Map<string, Card>): string | undefined {
+  const status = deckStatus(ids, pool);
+  if (status.count !== 60) {
+    return `Deck export requires exactly 60 cards (currently ${status.count}).`;
+  }
+  return status.issues.find((i) => i.severity === 'error')?.message;
+}

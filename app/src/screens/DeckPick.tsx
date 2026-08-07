@@ -11,7 +11,7 @@ import { DECK_DEFS, HEROES, expandDeck } from '@ashen/core';
 import type { ArchetypeId } from '@ashen/core';
 import { useNav } from '../App.js';
 import type { BotLevel, Mode } from '../types.js';
-import { loadCustomCards, loadDecks } from '../storage.js';
+import { deckSlug, loadCustomCards, loadDecks } from '../storage.js';
 import './shell.css';
 
 /** What a deck-pick flow reports back to App. */
@@ -62,17 +62,17 @@ function buildCurated(): DeckCard[] {
 }
 
 function buildCustom(): DeckCard[] {
-  const overlays = loadDecks(); // slug → card ids (deck builder overlays)
-  return Object.entries(overlays).map(([slug, cardIds]) => {
-    const curated = slug in CURATED_INFO ? CURATED_INFO[slug as ArchetypeId] : undefined;
-    return {
-      slug,
-      name: curated ? curated.name : slug,
-      tag: 'Custom deck',
-      cards: cardIds.length,
-      custom: true,
-    };
-  });
+  // Overlays are stored under namespaced 'custom:<slug>' keys (audit 05 I4);
+  // the namespaced key IS the deck's slug downstream (deckCardIds resolves it
+  // before DECK_DEFS), so a custom deck can never resolve to a curated deck.
+  const overlays = loadDecks();
+  return Object.entries(overlays).map(([key, cardIds]) => ({
+    slug: key,
+    name: deckSlug(key) ?? key,
+    tag: 'Custom deck',
+    cards: cardIds.length,
+    custom: true,
+  }));
 }
 
 export default function DeckPick({

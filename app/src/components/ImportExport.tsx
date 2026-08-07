@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react';
 import type { Card } from '@ashen/core';
 import { buildPool, validateDeck } from '@ashen/core';
 import { exportCardsJson, importCardsJson, loadCustomCards, saveCustomCard } from '../storage.js';
+import { deckExportError } from '../deckBuild.js';
 import './importexport.css';
 
 /**
@@ -73,8 +74,12 @@ export default function ImportExport({ mode, deckIds, onImportedCards, onImporte
       showToast(`Exported ${cards.length} custom card${cards.length === 1 ? '' : 's'}.`);
     } else {
       const ids = deckIds ?? [];
-      if (ids.length === 0) {
-        showToast('Nothing to export — the deck is empty.');
+      const pool = new Map<string, Card>();
+      for (const c of [...buildPool(), ...loadCustomCards()]) pool.set(c.id, c);
+      // M4: a non-60 or invalid deck would fail its own import — refuse to export it.
+      const blocked = deckExportError(ids, pool);
+      if (blocked) {
+        showToast(blocked);
         return;
       }
       downloadText(JSON.stringify({ deck: ids }, null, 2), DECK_FILENAME);
@@ -105,7 +110,19 @@ export default function ImportExport({ mode, deckIds, onImportedCards, onImporte
       showToast(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
-    for (const card of cards) saveCustomCard(card);
+    try {
+      for (const card of cards) {
+        if (!saveCustomCard(card)) {
+          showToast('Import failed: storage is full — some cards could not be saved.');
+          return;
+        }
+      }
+    } catch (err) {
+      // saveCustomCard rejects slug collisions with curated ids / other custom
+      // cards (audit 05 I2) — surface the reason instead of crashing mid-loop.
+      showToast(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
     onImportedCards?.(cards);
     showToast(`Imported ${cards.length} card${cards.length === 1 ? '' : 's'}.`);
   }

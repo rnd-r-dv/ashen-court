@@ -52,7 +52,7 @@ const PALETTES: [string, string][] = [
 
 /** Kinds whose spec carries a numeric value the slider can edit. */
 const VALUE_KINDS: ReadonlySet<EffectKind> = new Set([
-  'dealDamage', 'draw', 'heal', 'buff', 'summon', 'gainMana', 'refillMana', 'discountCheapest', 'discountNextSpell',
+  'dealDamage', 'draw', 'heal', 'buff', 'summon', 'gainMana', 'refillMana', 'discountMostExpensive', 'discountNextSpell',
 ]);
 /** Kinds whose spec carries a target select. */
 const TARGET_KINDS: ReadonlySet<EffectKind> = new Set([
@@ -131,7 +131,20 @@ export default function Forge() {
     e.preventDefault();
     if (errors.length > 0) return;
     const card = draftToCard(draft);
-    saveCustomCard(card);
+    let saved: boolean;
+    try {
+      saved = saveCustomCard(card);
+    } catch (err) {
+      // I2: slug collision with a curated id or a different-name custom card —
+      // keep the draft so the user can rename; surface the reason in the toast.
+      showToast(err instanceof Error ? err.message : 'Save failed.');
+      return;
+    }
+    if (!saved) {
+      // I1: localStorage rejected the write (quota — usually an oversized image).
+      showToast('Storage full — the card could not be saved. Try a smaller image or fewer custom cards.');
+      return;
+    }
     showToast(`Saved "${card.name}" as ${card.id}`);
     setForm(initialForm());
   }

@@ -3,7 +3,7 @@
 // hero resolution, bot vs hotseat config, Game-constructor validity, and the
 // rematch fresh-seed helper.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildPool, CardRegistry, HEROES } from '@ashen/core';
+import { buildPool, CardRegistry, DECK_DEFS, expandDeck, HEROES } from '@ashen/core';
 import { deleteDeck, saveDeck } from '../src/storage.js';
 import {
   buildMatchEntry,
@@ -30,9 +30,15 @@ describe('deckCardIds', () => {
     deleteDeck('my-deck');
   });
 
-  it('prefers the curated definition when a custom overlay shares a curated slug', () => {
-    // Documented edge case: a saved overlay named 'ember' cannot override the
-    // curated deck in v1 (DeckPickResult carries no custom flag).
+  it('a custom deck named ember resolves to its own overlay, not Ember Court (I4)', () => {
+    // Overlays are namespaced ('custom:<slug>', saveDeck/DeckPick pass the
+    // namespaced key), so the DECK_DEFS-first lookup can never shadow it.
+    saveDeck('ember', ['overlay-only']);
+    expect(deckCardIds('custom:ember')).toEqual(['overlay-only']);
+    deleteDeck('ember');
+  });
+
+  it('a raw curated slug still resolves to the curated deck (no overlay shadowing)', () => {
     saveDeck('ember', ['overlay-only']);
     const ids = deckCardIds('ember');
     expect(ids).toHaveLength(60);
@@ -72,6 +78,15 @@ describe('buildMatchEntry', () => {
     expect(g.state.players[0].hero.name).toBe(heroFor('dragon').name);
     expect(g.state.players[1].hero.name).toBe(heroFor('ember').name);
     expect(entry.core.seed).toBeTypeOf('number');
+  });
+
+  it('bot mode: a custom ember-named deck plays the overlay, not Ember Court (I4 end-to-end)', () => {
+    const boneIds = expandDeck(DECK_DEFS.bone);
+    saveDeck('ember', boneIds); // custom deck whose slug collides with the curated archetype
+    const entry = buildMatchEntry({ mode: 'bot', decks: [{ slug: 'custom:ember', name: 'Ember' }] });
+    expect(entry.core.decks[0]).toEqual(boneIds);
+    expect(entry.core.decks[0]).not.toEqual(expandDeck(DECK_DEFS.ember));
+    deleteDeck('ember');
   });
 
   it('defaults the bot difficulty to recruit', () => {

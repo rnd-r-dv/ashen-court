@@ -7,7 +7,12 @@ import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@a
 import type { ArchetypeId, HeroSpec, MatchSetup } from '@ashen/core';
 import type { BotLevel, MatchScreenSetup } from '../types.js';
 import { createLocalDriver } from './drivers.js';
-import { loadCustomCards, loadDecks } from '../storage.js';
+import { deckKey, loadCustomCards, loadDecks } from '../storage.js';
+
+// Custom-deck slugs flowing through DeckPick → buildMatchEntry are already
+// namespaced ('custom:<slug>', audit 05 I4), so a custom deck can never
+// resolve to a curated archetype even when its display slug collides.
+const CUSTOM_DECK_PREFIX = 'custom:';
 
 export interface MatchPick {
   slug: string;
@@ -34,10 +39,14 @@ export function freshSeed(): number {
 }
 
 /** Deck card ids for a picked slug: curated archetype → its definition,
- *  otherwise a saved custom-deck overlay (deck builder storage). */
+ *  otherwise a saved custom-deck overlay (deck builder storage). Custom
+ *  overlays are namespaced ('custom:<slug>') so the DECK_DEFS-first lookup
+ *  can never shadow a custom deck named like a curated archetype (I4). */
 export function deckCardIds(slug: string): string[] {
   if ((DECK_DEFS as Record<string, unknown>)[slug]) return expandDeck(DECK_DEFS[slug as ArchetypeId]);
-  return loadDecks()[slug] ?? [];
+  if (slug.startsWith(CUSTOM_DECK_PREFIX)) return loadDecks()[slug] ?? [];
+  // Belt-and-braces for non-namespaced callers: resolve via the namespaced key.
+  return loadDecks()[deckKey(slug)] ?? [];
 }
 
 /** Hero for a picked slug: the archetype's hero; custom decks default to the

@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, dmg, draw, gainMana, heal, summon } from './builders.js';
 
 /**
  * Elder Roots (Task 15): Oldroot's ramp deck — gainMana adds EMPTY crystals
@@ -10,44 +11,7 @@ import type { DeckDef } from './index.js';
  */
 const ROOTS_PALETTE = ['#0d2818', '#7fd66b'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-const art = (id: string): Card['art'] => ({ preset: 'nature', palette: ROOTS_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [], flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'roots',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'roots',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
-  id, name, type: 'artifact', cost,
-  keywords: [], effects: [], triggers, rarity, archetype: 'roots',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const heal = (value: number): EffectSpec => ({ kind: 'heal', value, target: 'hero' });
-const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
-const gainMana = (value: number): EffectSpec => ({ kind: 'gainMana', value });
-const summon = (cardId: string, value?: number): EffectSpec => ({ kind: 'summon', cardId, ...(value !== undefined ? { value } : {}) });
+const { artifact, creature, spell } = archetypeCards('nature', ROOTS_PALETTE, 'roots');
 
 export const HERO: HeroSpec = {
   name: 'Oldroot',

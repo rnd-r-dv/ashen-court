@@ -84,8 +84,17 @@ select.deckbuilder-input {
 
 .deckbuilder-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  /* Tracks are sized to the rendered card (240px x 0.74, below) so a card
+     fills its cell instead of spilling into its neighbour. */
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
+  justify-items: center;
+}
+
+/* Browsing size: smaller than a hand card, still large enough to read the
+   rules text — this grid is where a deck actually gets chosen. */
+.deckbuilder-grid .card {
+  zoom: 0.74;
 }
 
 .deckbuilder-grid-item {

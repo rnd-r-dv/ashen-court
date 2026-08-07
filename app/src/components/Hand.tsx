@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Card as CardSpec } from '@ashen/core';
 import { motion } from 'framer-motion';
 import CardView from './CardView.js';
@@ -6,18 +7,21 @@ import { handEnter } from './animations.js';
 import './hand.css';
 
 /**
- * Hand (Task 31): the viewer's fanned hand. Cards overlap along an arc with
- * the middle on top; hover lift comes from Card's `card--hand` state.
- * Playable cards (legal playCard intent this turn) get the golden glow;
- * everything else is dimmed (opponent's turn / targeting in progress).
- * Pure presentational — clicking reports the hand index, Match decides.
+ * Hand (Task 31): the viewer's hand, laid out as a straight ordered row.
+ * Hover lift comes from Card's `card--hand` state. Playable cards (legal
+ * playCard intent this turn) get the golden glow; everything else is dimmed
+ * (opponent's turn / targeting in progress). Pure presentational — clicking
+ * reports the hand index, Match decides.
  *
- * Task 41 (responsive): the fan geometry is viewport-aware — the overlap
- * (negative margin) widens just enough that a full hand stays inside the
- * window at every breakpoint (hand cards also shrink below 900px via
- * card.css zoom tiers), and the arc angle relaxes on narrow screens so the
- * rotated cards don't dip off-screen. Mirror values (zoom tiers, hand
- * padding) are kept in sync with card.css / hand.css.
+ * UI pass 2026-08-07: the arc fan is gone. Cards used to be rotated ±(i-mid)
+ * degrees and always overlapped, which made the hand read as a shuffled pile
+ * (hand order was there, but you had to infer it from the z-stack) and made
+ * the outermost cards dip below the viewport's bottom edge. They now sit
+ * upright in index order with a real gap whenever the row fits, tightening
+ * into an overlap only when the viewport actually runs out of width.
+ *
+ * The geometry is viewport-aware; mirror values (zoom tiers, hand padding)
+ * are kept in sync with card.css / hand.css.
  */
 
 export interface HandProps {
@@ -41,40 +45,63 @@ export interface HandProps {
  * carry 3x commons), so keying by id alone collides in React; and
  * index-based keys (`${i}-${id}`) remount every later card when one is
  * played from the middle, replaying the handEnter draw animation on cards
- * that never moved. Instead each slot keeps the key it got at creation:
- * ids pool their keys, so surviving cards keep theirs across a play (no
- * remount) while a newly drawn card — even a second copy of an id already
- * in hand — gets a fresh key (its draw animation replays). Computed on
- * every render (not memoized): the engine mutates state.players[].hand in
- * place, so the array reference is stable while the content changes.
+ * that never moved.
+ *
+ * A card in hand has no engine-side instance identity — a hand is literally
+ * `string[]` — so which slot survived has to be recovered from how the array
+ * changed. The engine only ever removes a played/discarded card in place
+ * (splice) and appends draws to the end, so a new hand is always the old hand
+ * with entries deleted plus fresh entries appended. Matching each new id to
+ * the earliest still-unconsumed occurrence of that id in the previous hand
+ * (a left-to-right cursor, never rewound — the engine never reorders a hand)
+ * therefore identifies the survivors exactly: a survivor keeps its key, so
+ * React reuses its node (no remount, no replayed draw lift), and anything
+ * left unmatched is genuinely new and gets a fresh key so its draw animation
+ * plays.
+ *
+ * This replaces an earlier scheme that pooled keys per id by occurrence
+ * index. That one also never changed a live key, but it released the LAST key
+ * of an id rather than the key of the copy that actually left. Invisible when
+ * a duplicate is merely played (the copies are interchangeable), but when one
+ * copy is played and another copy of the same id is drawn in the SAME
+ * resolution — one state-mirror update, e.g. a spell that damages and draws —
+ * the id's count is unchanged, no fresh key is minted, and the newly drawn
+ * card silently inherits the played card's mounted node and never animates in.
+ *
+ * Computed on every render (not memoized): the engine mutates
+ * state.players[].hand in place, so the array reference is stable while the
+ * content changes. Re-running on an unchanged hand is idempotent (every entry
+ * matches itself), so a repeated or discarded render cannot shuffle keys.
  */
 function useStableHandKeys(hand: string[]): string[] {
-  // id → keys currently held by that id's slots (first occurrence = first key).
-  const poolRef = useRef<Map<string, string[]>>(new Map());
-  // id → next fresh key number (monotonic per id; freed keys are dropped).
-  const nextRef = useRef<Map<string, number>>(new Map());
-  const counts = new Map<string, number>();
-  for (const id of hand) counts.set(id, (counts.get(id) ?? 0) + 1);
-  const used = new Map<string, number>();
+  const prevHandRef = useRef<string[]>([]);
+  const prevKeysRef = useRef<string[]>([]);
+  // Monotonic key counter — a freed key is never handed out again.
+  const nextRef = useRef(0);
+
+  const prevHand = prevHandRef.current;
+  const prevKeys = prevKeysRef.current;
   const keys: string[] = [];
+  // Cursor into the previous hand; only ever moves forward, so each previous
+  // slot is claimed by at most one new slot and survivors keep their order.
+  let cursor = 0;
   for (const id of hand) {
-    const n = used.get(id) ?? 0;
-    used.set(id, n + 1);
-    const pool = poolRef.current;
-    const slotKeys = pool.get(id) ?? [];
-    while (slotKeys.length < (counts.get(id) ?? 0)) {
-      slotKeys.push(`${id}__${nextRef.current.get(id) ?? 0}`);
-      nextRef.current.set(id, (nextRef.current.get(id) ?? 0) + 1);
+    let found = -1;
+    for (let j = cursor; j < prevHand.length; j++) {
+      if (prevHand[j] === id) {
+        found = j;
+        break;
+      }
     }
-    pool.set(id, slotKeys);
-    keys.push(slotKeys[n]!);
+    if (found === -1) {
+      keys.push(`${id}__${nextRef.current++}`); // newly drawn → animates in
+    } else {
+      cursor = found + 1;
+      keys.push(prevKeys[found]!); // survivor → same node, no remount
+    }
   }
-  // Drop freed keys so the pool mirrors what is actually in hand (a played
-  // card's key is gone; the next draw of that id gets a fresh one).
-  for (const [id, slotKeys] of poolRef.current) {
-    const c = counts.get(id) ?? 0;
-    if (slotKeys.length > c) slotKeys.length = c;
-  }
+  prevHandRef.current = [...hand];
+  prevKeysRef.current = keys;
   return keys;
 }
 
@@ -89,32 +116,44 @@ function useViewportWidth(): number {
   return vw;
 }
 
-/** Rendered hand-card width — CardArt 250px + frame chrome, at zoom 1. */
-const HAND_CARD_WIDTH = 264;
+/** Rendered hand-card width at zoom 1 — card.css `--card-w`. */
+const HAND_CARD_WIDTH = 240;
+
+/** Gap between cards when the whole row fits without overlapping. */
+const HAND_GAP = 10;
 
 /**
- * Fan overlap (negative margin between adjacent cards). Mirrors the card.css
- * zoom tiers (0.82 / 0.7 / 0.6 below 900/700px) and the hand.css side
- * padding, then picks the widest overlap that still (a) fits the whole fan
- * inside the viewport and (b) keeps a fanned-overlap look (≤ 96px) without
- * the old fixed-140 cap that hid ~65% of every card.
+ * Never hide more than this fraction of a card behind its neighbour, however
+ * large the hand gets. Past roughly two thirds only the cost gem is left and
+ * the row stops being readable at all; overflowing the container is the
+ * lesser evil, and `.hand` centres so the overflow splits evenly.
  */
-function fanSpread(n: number, vw: number): number {
+const MAX_OVERLAP_FRACTION = 0.66;
+
+/**
+ * Horizontal step between adjacent cards, as a MARGIN: positive values are a
+ * real gap, negative values an overlap. Mirrors the card.css zoom tiers
+ * (1 / 0.88 / 0.76 / 0.66 at 1200/900/700px) and the hand.css side padding.
+ *
+ * Cards are only pulled together once the row genuinely cannot fit, and never
+ * past MAX_OVERLAP_FRACTION. Previously the hand overlapped unconditionally
+ * (≤96px, and more when tight) even with three cards on a wide screen.
+ */
+export function handStep(n: number, vw: number): number {
   if (n <= 1) return 0;
-  const zoom = vw <= 700 ? 0.6 : vw <= 900 ? 0.7 : 0.82;
+  const zoom = vw <= 700 ? 0.66 : vw <= 900 ? 0.76 : vw <= 1200 ? 0.88 : 1;
   const cardW = HAND_CARD_WIDTH * zoom;
   const pad = Math.max(24, Math.min(48, vw * 0.05)); // hand.css clamp(24px, 5vw, 48px)
   const usable = Math.max(280, vw - 2 * pad);
-  const fit = (cardW * n - usable) / (n - 1); // widest overlap that still fits
-  return Math.max(fit, Math.min(96, 540 / (n - 1)));
+  if (cardW * n + HAND_GAP * (n - 1) <= usable) return HAND_GAP;
+  const overlap = (cardW * n - usable) / (n - 1); // tightest fit that still fits
+  return -Math.min(overlap, cardW * MAX_OVERLAP_FRACTION);
 }
 
 export default function Hand({ hand, getCard, playable, interactive, targeting, onCardClick, animScale = 1 }: HandProps) {
   const vw = useViewportWidth();
   const n = hand.length;
-  const spread = fanSpread(n, vw);
-  const angleStep = vw <= 700 ? 3 : vw <= 900 ? 3.5 : 4;
-  const mid = (n - 1) / 2;
+  const step = handStep(n, vw);
   // Stable slot keys: distinct cards keep their key across a play from the
   // middle (no remount → no handEnter replay); fresh draws get new keys.
   const slotKeys = useStableHandKeys(hand);
@@ -126,28 +165,25 @@ export default function Hand({ hand, getCard, playable, interactive, targeting, 
         const card = getCard(id);
         if (!card) return null;
         const isPlayable = playable.has(i);
-        const angle = (i - mid) * angleStep;
         return (
           // Task 39: new cards (draws) mount with a fade-and-lift via
-          // handEnter; the inner slot keeps the fan rotate transform so the
-          // framer animation (on the wrapper) never fights it. The overlap
-          // negative margin lives on the wrapper (the flex child) exactly as
-          // before Task 39. Keyed by the stable per-slot key (see
-          // useStableHandKeys) so playing a card never remounts the rest.
+          // handEnter. The horizontal step lives on the wrapper (the flex
+          // child) exactly as before Task 39. Keyed by the stable per-slot key
+          // (see useStableHandKeys) so playing a card never remounts the rest.
+          //
+          // z-index ascends with the hand index so an overlapping row still
+          // stacks left-to-right in order; `--z` (not an inline z-index) so
+          // hand.css can lift the hovered card above its neighbours — an
+          // inline value would outrank the :hover rule.
           <motion.div
             key={slotKeys[i]}
             className="hand-slot-anim"
-            style={{ marginRight: i < n - 1 ? -spread : 0, zIndex: i + 1 }}
+            style={{ marginRight: i < n - 1 ? step : 0, ['--z' as string]: i + 1 } as CSSProperties}
             variants={handEnter(animScale)}
             initial="handIn"
             animate="enter"
           >
-            <div
-              className="hand-slot"
-              style={{
-                transform: `rotate(${angle}deg)`,
-              }}
-            >
+            <div className="hand-slot">
               <CardView
                 card={card}
                 size="hand"

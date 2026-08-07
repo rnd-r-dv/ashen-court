@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, buff, dmg, summon } from './builders.js';
 
 /**
  * Bone Horde (Task 16): Baron Von Bone's skeleton token swarm. Signature
@@ -9,40 +10,7 @@ import type { DeckDef } from './index.js';
  */
 const BONE_PALETTE = ['#221a12', '#e6c98f'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-const art = (id: string): Card['art'] => ({ preset: 'bone', palette: BONE_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [],
-  flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'bone',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const spell = (
-  id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[],
-  flavor?: string,
-): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'bone',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const buff = (value: number, value2: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'buff', value, value2, target });
-const summon = (cardId: string, value?: number): EffectSpec => ({ kind: 'summon', cardId, ...(value !== undefined ? { value } : {}) });
+const { creature, spell } = archetypeCards('bone', BONE_PALETTE, 'bone');
 
 export const HERO: HeroSpec = {
   name: 'Baron Von Bone',

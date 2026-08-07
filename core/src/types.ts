@@ -1,6 +1,7 @@
 export type PlayerIndex = 0 | 1;
 
-/** Player 1's setup head-start spell (surge already granted; see Game constructor). */
+/** The Coin: player 1's one-shot 0-cost "Gain 1 Mana" spell, dealt to hand at
+ *  setup and gated to a single use by PlayerState.surged (see Game). */
 export const MANA_SURGE = 'mana-surge';
 
 /** Hard turn limit (Task 22, Phase 3 amendment): a match still running at
@@ -14,7 +15,7 @@ export type CardType = 'creature' | 'spell' | 'artifact';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Keyword = 'taunt' | 'rush' | 'charge' | 'windfury' | 'lifesteal' | 'ward' | 'shield';
 export type Trigger = 'battlecry' | 'deathrattle' | 'startOfTurn' | 'endOfTurn' | 'onDamage';
-export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'copyCard' | 'giveKeyword' | 'discountCheapest' | 'discountNextSpell';
+export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'copyCard' | 'giveKeyword' | 'discountMostExpensive' | 'discountNextSpell';
 export type EffectTarget = 'any' | 'hero' | 'anyCreature' | 'enemyCreature' | 'friendlyCreature' | 'friendlyDragon' | 'allEnemies' | 'allEnemyCreatures' | 'allFriendlyCreatures' | 'randomEnemy' | 'randomEnemyCreature' | 'self';
 
 export interface EffectSpec { kind: EffectKind; value?: number; value2?: number; target?: EffectTarget; keyword?: Keyword; cardId?: string; }
@@ -47,7 +48,7 @@ export interface ArtifactState { id: string; cardId: string; owner: PlayerIndex;
 export interface HeroState {
   name: string; hp: number; maxHp: number; shields: number;
   power: HeroPower; usedPower: boolean;
-  discountCheapest: number; discountNextSpell: number;
+  discountMostExpensive: number; discountNextSpell: number;
 }
 export interface PlayerState {
   hero: HeroState; deck: string[]; hand: string[]; board: CreatureState[]; artifacts: ArtifactState[];

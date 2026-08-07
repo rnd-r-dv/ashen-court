@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, EffectSpec, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, buff, dmg, draw } from './builders.js';
 
 /**
  * Stormwrought (Task 17): Zephyra Stormveil's storm-tempo deck. Signature
@@ -10,42 +11,9 @@ import type { DeckDef } from './index.js';
  */
 const STORM_PALETTE = ['#1c2b3a', '#7fb2e5'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+const { artifact, creature, spell } = archetypeCards('storm', STORM_PALETTE, 'storm');
 
-const art = (id: string): Card['art'] => ({ preset: 'storm', palette: STORM_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [], flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'storm', flavor,
-  art: art(id), author: 'curated', version: 1,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'storm', flavor,
-  art: art(id), author: 'curated', version: 1,
-});
-
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
-  id, name, type: 'artifact', cost,
-  keywords: [], effects: [], triggers, rarity, archetype: 'storm', flavor,
-  art: art(id), author: 'curated', version: 1,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
-const buff = (value: number, value2: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'buff', value, value2, target });
+/** Stormwrought is the only archetype that discounts spells, so this stays local. */
 const discSpell = (value: number): EffectSpec => ({ kind: 'discountNextSpell', value });
 
 export const HERO: HeroSpec = {

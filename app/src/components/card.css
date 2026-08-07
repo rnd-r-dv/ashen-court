@@ -7,9 +7,28 @@
    ============================================================ */
 
 .card {
+  /* ---- fixed card box (UI pass 2026-08-07) --------------------
+     Every card is exactly --card-w x --card-h regardless of type,
+     keyword count or flavor length. Before this the frame was a
+     content-sized flex column wrapped around a 250x350 art block,
+     so cards ran ~600px tall and no two were the same height:
+     creatures gained a stats row, spells didn't, and a long flavor
+     line pushed the whole card down. The art panel is now a fixed
+     landscape slot and all variable copy lives in one clipped
+     well (.card__body), which makes the box invariant.            */
+  --card-w: 240px;
+  --card-h: 336px;   /* 5:7, the standard TCG proportion */
+  --card-pad: 8px;
+  --card-top-h: 32px;
+  /* Matches CardArt's VIEW_W/VIEW_H aspect (250/180) at the inner
+     width, so the art panel never has to crop in normal layout. */
+  --card-art-h: 158px;
+
   --rarity-color: #8a8a8a;
   position: relative;
-  width: fit-content;
+  box-sizing: border-box;
+  width: var(--card-w);
+  height: var(--card-h);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -18,33 +37,49 @@
 }
 
 /* ---- sizes --------------------------------------------------
-   CardArt's contract is a fixed 250x350 render (Task 26; Task 38
-   keeps recipe/imageUrl props), so sizes scale the whole card with
-   `zoom` — it also shrinks the layout box, unlike transform.      */
+   `zoom` scales the box AND the type together, so one base geometry
+   serves every context; it also shrinks the layout box (unlike
+   transform), which is what keeps the fan and board rows honest.   */
 .card--preview { zoom: 1; }
-.card--hand    { zoom: 0.82; }
-.card--board   { zoom: 0.42; }
+.card--hand    { zoom: 1; }
+.card--board   { zoom: 0.5; }
 
-/* Task 41 responsive tiers: hand cards shrink below 900px so the fan stays
-   usable down to ~700px; board minis scale with their rows. `zoom` is not
-   affected by media queries on the element itself, so the tiers live in
-   viewport @media blocks (Hand.tsx's fanSpread mirrors these values). */
+/* Responsive tiers. Hand cards now start at full size — the base card is
+   small enough that shrinking it further is what made rules text unreadable
+   — and step down only when the viewport genuinely cannot seat them.
+   `zoom` is not affected by media queries on the element itself, so tiers
+   live in viewport @media blocks (Hand.tsx's fanSpread mirrors these). */
+@media (max-width: 1200px) {
+  .card--hand  { zoom: 0.88; }
+}
 @media (max-width: 900px) {
-  .card--hand  { zoom: 0.7; }
-  .card--board { zoom: 0.38; }
+  .card--hand  { zoom: 0.76; }
+  .card--board { zoom: 0.44; }
 }
 @media (max-width: 700px) {
-  .card--hand  { zoom: 0.6; }
-  .card--board { zoom: 0.34; }
+  .card--hand  { zoom: 0.66; }
+  .card--board { zoom: 0.4; }
+}
+/* Short windows: the board needs the vertical room more than the hand does.
+   Guarded by min-width so these never *enlarge* a card the width tiers above
+   already shrank (equal specificity — the later rule would otherwise win). */
+@media (max-height: 800px) and (min-width: 1201px) {
+  .card--hand { zoom: 0.86; }
+}
+@media (max-height: 680px) and (min-width: 901px) {
+  .card--hand { zoom: 0.74; }
 }
 
 /* ---- base frame -------------------------------------------- */
 .card__frame {
   position: relative;
+  box-sizing: border-box;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 6px;
+  padding: var(--card-pad);
   border-radius: 14px;
+  overflow: hidden;
 }
 
 /* common: flat charcoal + thin border */
@@ -148,11 +183,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 0 0 var(--card-top-h);
+  height: var(--card-top-h);
   margin-bottom: 6px;
 }
 .card__cost {
-  width: 30px;
-  height: 30px;
+  width: var(--card-top-h);
+  height: var(--card-top-h);
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -160,18 +197,19 @@
   border: 1.5px solid #0c0a12;
   background: radial-gradient(circle at 35% 30%, #fdfdfd, var(--rarity-color) 62%, #201507);
   color: #120d04;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 800;
   filter: drop-shadow(0 0 4px var(--rarity-color));
 }
 .card__nameplate {
   flex: 1;
-  padding: 3px 8px;
+  min-width: 0;
+  padding: 4px 8px;
   border-radius: 6px;
   background: linear-gradient(180deg, #2a2a33, #1c1c24);
   border: 1px solid #3f3f4a;
   color: #f0e6d0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.4px;
   text-align: center;
@@ -183,12 +221,28 @@
 .card--rarity-epic .card__nameplate { color: #e3d2ff; }
 .card--rarity-legendary .card__nameplate { color: #ffd9a0; }
 
-/* ---- art slot ------------------------------------------------ */
+/* ---- art slot ------------------------------------------------
+   The wrapper is the pips' positioning context and must not clip;
+   the inner panel clips the (slice-scaled) SVG to the rounded box. */
+.card__artwrap {
+  position: relative;
+  flex: 0 0 var(--card-art-h);
+  height: var(--card-art-h);
+}
 .card__art {
   position: relative;
+  width: 100%;
+  height: 100%;
   border-radius: 8px;
   overflow: hidden;
   line-height: 0;
+  background: #101014;
+}
+/* Face-down cards carry no chrome below the art, so the panel takes the
+   whole frame — the box still matches a face-up card exactly. */
+.card--face-down .card__artwrap {
+  flex: 1 1 auto;
+  height: auto;
 }
 .card__art--face-down {
   filter: grayscale(1) brightness(0.5) contrast(1.15);
@@ -207,6 +261,7 @@
 .card__ribbon {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 6px;
   margin-top: 6px;
   padding: 2px 8px;
@@ -214,9 +269,10 @@
   background: #23232c;
   border: 1px solid #3a3a44;
   color: #cfc7b5;
-  font-size: 12px;
+  font-size: 12.5px;
   font-variant: small-caps;
   letter-spacing: 0.6px;
+  white-space: nowrap;
 }
 .card__ribbon-icon { color: var(--rarity-color); font-size: 13px; }
 .card__ribbon-label { font-weight: 700; }
@@ -226,39 +282,63 @@
   font-weight: 700;
 }
 
+/* ---- text well -------------------------------------------------
+   Takes whatever height is left and clips. This is the single place
+   where variable-length copy is absorbed, which is what makes the
+   card box independent of rules/flavor length.                     */
+.card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 /* ---- keyword chips -------------------------------------------- */
 .card__keywords {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;      /* a second chip row would eat the rules text */
+  justify-content: center;
+  overflow: hidden;
   gap: 3px;
   margin-top: 5px;
 }
 .card__keyword {
+  flex: 0 0 auto;
   padding: 1px 6px;
   border-radius: 8px;
   background: #2c2c36;
   border: 1px solid #43434f;
   color: #d8d2c2;
   font-family: system-ui, sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
-/* ---- creature stats pips -------------------------------------- */
+/* ---- creature stats pips --------------------------------------
+   Corner ornaments straddling the art panel's bottom edge, NOT a
+   layout row: a creature and a spell must occupy the same box.     */
 .card__stats {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  bottom: -13px;
   display: flex;
   justify-content: space-between;
-  margin-top: 6px;
+  pointer-events: none;
 }
 .card__stat {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 2px solid #0c0a12;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 .card__stat--attack {
   background: radial-gradient(circle at 35% 30%, #f5c97b, #c97f2b 60%, #6e3a12);
@@ -269,23 +349,41 @@
   color: #fff4f0;
 }
 
-/* ---- rules text ---------------------------------------------- */
+/* ---- rules text ----------------------------------------------
+   Line-clamped rather than allowed to overflow mid-glyph, so a long
+   effect reads as an intentional truncation.                      */
 .card__text {
-  margin: 6px 2px 0;
-  font-size: 11px;
-  color: #d8d2c2;
-  line-height: 1.35;
+  margin: 7px 4px 0;
+  font-size: 12.5px;
+  color: #e6e0d0;
+  line-height: 1.32;
   text-align: center;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
 }
 
 /* ---- flavor ---------------------------------------------------- */
 .card__flavor {
-  margin: 5px 2px 0;
-  font-size: 11px;
+  margin: 5px 4px 0;
+  font-size: 11.5px;
   font-style: italic;
-  color: #9a927f;
-  line-height: 1.35;
+  color: #a79e88;
+  line-height: 1.3;
   text-align: center;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+/* Creature stats already say a lot; give rules text the room instead.
+   The preview (Forge) always shows flavor — that's where it is authored. */
+.card--hand .card__flavor,
+.card--board .card__flavor {
+  display: none;
 }
 
 /* ---- interaction states ---------------------------------------- */
@@ -316,9 +414,14 @@
   50% { filter: drop-shadow(0 0 10px rgba(255, 205, 80, 0.75)); }
 }
 
-/* board minis: keywords/flavor are unreadable at 0.42 zoom */
-.card--board .card__keywords,
-.card--board .card__flavor,
-.card--board .card__text {
+/* Board minis: at half zoom the ribbon and rules copy are 6px tall — noise,
+   not information. Dropping them lets the mini shrink to just the nameplate
+   row + art panel, so board rows stay compact instead of reserving a text
+   well nothing renders into. */
+.card--board {
+  --card-h: 216px;   /* pad/border 20 + top 38 + art 158 */
+}
+.card--board .card__ribbon,
+.card--board .card__body {
   display: none;
 }

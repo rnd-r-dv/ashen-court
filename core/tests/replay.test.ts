@@ -7,6 +7,46 @@ describe('serialization', () => {
   it('clone() produces an equal state', () => {
     const a = Game.create(makeTestSetup()); a.state.phase = 'main';
     const b = a.clone();
+    expect(b.serialize()).toBe(a.serialize());   // fresh game: the log is empty, so this is total equality
+  });
+  // audit 02 bug 16: clone() is the BOT SEARCH path (evaluate() reads only
+  // state.players), so it drops the append-only event log instead of
+  // round-tripping the whole match history through JSON on every search node —
+  // measured 0.155ms → 0.012ms per clone at turn 40, and flat in match length
+  // rather than growing. serialize()/deserialize() stay lossless.
+  it('clone() drops the event log but keeps everything else identical', () => {
+    const a = Game.create(makeTestSetup());
+    a.submit({ kind: 'mulligan', keep: [] }); a.submit({ kind: 'mulligan', keep: [] });
+    a.submit({ kind: 'endTurn' });
+    expect(a.state.log.length).toBeGreaterThan(0);
+    const b = a.clone();
+    expect(b.state.log).toEqual([]);
+    // everything OTHER than the log round-trips exactly, rngState included
+    expect(JSON.stringify({ ...b.state, log: 0 })).toBe(JSON.stringify({ ...a.state, log: 0 }));
+    expect(b.state.rngState).toEqual(a.state.rngState);
+  });
+  it('a clone stays deterministic: same intents → same state as the original', () => {
+    const a = Game.create(makeTestSetup());
+    a.submit({ kind: 'mulligan', keep: [] }); a.submit({ kind: 'mulligan', keep: [] });
+    const b = a.clone();
+    // Drive both through the same legalIntents-derived script (the rng position
+    // must survive cloning, or a random effect would diverge here).
+    for (let step = 0; step < 8; step++) {
+      if (a.state.phase === 'gameOver') break;
+      const me = a.currentPlayer();
+      const legal = a.legalIntents(me);
+      const intent = legal.find(i => i.kind === 'playCard' || i.kind === 'attack' || i.kind === 'heroPower') ?? legal[0]!;
+      expect(a.submit(intent)).toEqual(b.submit(intent));
+    }
+    // identical modulo the log the clone never inherited
+    expect(JSON.stringify({ ...b.state, log: 0 })).toBe(JSON.stringify({ ...a.state, log: 0 }));
+  });
+  it('serialize() itself stays lossless — the log survives a round-trip', () => {
+    const a = Game.create(makeTestSetup());
+    a.submit({ kind: 'mulligan', keep: [] }); a.submit({ kind: 'mulligan', keep: [] });
+    a.submit({ kind: 'endTurn' });
+    const b = Game.deserialize(a.serialize(), a.registry);
+    expect(b.state.log).toEqual(a.state.log);
     expect(b.serialize()).toBe(a.serialize());
   });
   it('applying identical intents to two games from the same seed diverges identically (replay)', () => {

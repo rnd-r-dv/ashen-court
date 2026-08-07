@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/engine/game.js';
+import { validatePlayCard } from '../src/engine/intents.js';
 import { makeTestSetup, addCreature } from './helpers.js';
-import type { Intent } from '../src/types.js';
+import type { Card, Intent } from '../src/types.js';
 
 // Type-guard filters: TS keeps discriminated-union narrowing on the results.
 const playCard = (i: Intent): i is Extract<Intent, { kind: 'playCard' }> => i.kind === 'playCard';
@@ -92,6 +93,57 @@ describe('legalIntents', () => {
     expect(attacks).toHaveLength(1);
     expect(attacks[0]!.target).toEqual({ type: 'creature', id: taunt.id });
     expect(attacks.some(i => i.target.type === 'hero')).toBe(false);
+  });
+
+  // audit 02: targetVariants enumerated refs for the FIRST choice-target spec
+  // only, while validateEffectTargets validates the one supplied ref against
+  // EVERY choice spec. A card with two DIFFERENT choice targets therefore
+  // produced intents that submit() rejects — the UI offered the card and
+  // errored on click, and the bot's greedyBest silently skipped it. No curated
+  // card has this shape today, but the Forge can build one and Forge cards run
+  // the identical path, so the fixture is synthetic.
+  describe('enumeration agrees with validation for multi-choice-target cards', () => {
+    const mixed = (id: string, effects: Card['effects']): Card => ({
+      id, name: `Mixed ${id}`, type: 'spell', cost: 1, keywords: [], effects,
+      rarity: 'common', archetype: 'neutral',
+      art: { preset: 'shadow', palette: ['#1a1a2e', '#3a3a5e'], seed: 1 },
+      author: 'custom', version: 1,
+    });
+
+    it('every enumerated playCard intent passes validatePlayCard', () => {
+      const game = Game.create(makeTestSetup());
+      main(game);
+      game.state.players[0].mana = 10;
+      game.registry.register(mixed('mix-any-friendly', [
+        { kind: 'dealDamage', value: 2, target: 'anyCreature' },
+        { kind: 'buff', value: 1, target: 'friendlyCreature' },
+      ]));
+      game.state.players[0].hand = ['mix-any-friendly'];
+      const friendly = addCreature(game, 0, { id: 't-012', attack: 1, health: 1, keywords: [] });
+      addCreature(game, 1, { id: 't-013', attack: 1, health: 1, keywords: [] });
+
+      const intents = game.legalIntents(0).filter(playCard);
+      // intersection of anyCreature and friendlyCreature = the friendly board
+      expect(intents).toHaveLength(1);
+      expect(intents[0]!.target).toEqual({ type: 'creature', id: friendly.id });
+      for (const i of intents) expect(validatePlayCard(game, i, 0)).toBeNull();
+    });
+
+    it('an empty intersection makes the card unplayable, not falsely legal', () => {
+      const game = Game.create(makeTestSetup());
+      main(game);
+      game.state.players[0].mana = 10;
+      game.registry.register(mixed('mix-enemy-friendly', [
+        { kind: 'dealDamage', value: 2, target: 'enemyCreature' },
+        { kind: 'buff', value: 1, target: 'friendlyCreature' },
+      ]));
+      game.state.players[0].hand = ['mix-enemy-friendly'];
+      addCreature(game, 0, { id: 't-012', attack: 1, health: 1, keywords: [] });
+      addCreature(game, 1, { id: 't-013', attack: 1, health: 1, keywords: [] });
+
+      // no single ref can be both an enemy and a friendly creature
+      expect(game.legalIntents(0).filter(playCard)).toHaveLength(0);
+    });
   });
 
   it('mulligan phase returns []', () => {

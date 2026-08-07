@@ -7,6 +7,18 @@ export const RARITY_COPY_LIMIT: Record<Rarity, number> = { common: 3, rare: 2, e
 /** Budget = attack + health for a vanilla creature at a given cost. */
 export function statBudget(cost: number): number { return 2 + 2 * cost; }
 
+/**
+ * Design headroom allowed above statBudget() before a card is rejected (I10).
+ * The baseline prices a *vanilla* creature; cards that carry a drawback, a
+ * conditional upside, or an externally-paid cost are meant to sit above it.
+ * Two curated tokens rely on this: token-treant (baseline 2, spends 3) and
+ * token-phoenixash (baseline 2, spends 4) are 0-cost bodies whose real cost is
+ * paid by the card that summons them. So the enforced ceiling — and the number
+ * the error message must quote — is statBudget(cost) + STAT_BUDGET_SLACK, not
+ * statBudget(cost) itself.
+ */
+export const STAT_BUDGET_SLACK = 4;
+
 export const KEYWORD_COST: Record<Keyword, number> = {
   taunt: 1, rush: 1, charge: 2, windfury: 2, lifesteal: 1, ward: 1, shield: 1,
 };
@@ -42,8 +54,12 @@ export function validateCard(card: Card): ValidationIssue[] {
   }
   if (card.type === 'creature' && card.attack !== undefined && card.health !== undefined) {
     const budget = statBudget(card.cost);
+    const ceiling = budget + STAT_BUDGET_SLACK;
     const spent = card.attack + card.health + card.keywords.reduce((s, k) => s + KEYWORD_COST[k], 0);
-    if (spent > budget + 4) err('stats', `Stat+keyword budget ${budget} exceeded by ${spent - budget}.`);
+    if (spent > ceiling) {
+      err('stats', `Stat+keyword total ${spent} exceeds the max ${ceiling} for cost ${card.cost} `
+        + `(vanilla budget ${budget} + ${STAT_BUDGET_SLACK} design slack) by ${spent - ceiling}.`);
+    }
   }
   const TARGET_KINDS: EffectKind[] = ['dealDamage', 'heal', 'buff', 'freeze', 'destroy', 'giveKeyword'];
   const allEffects = [...(card.effects ?? []), ...(card.triggers ?? []).flatMap(t => t.effects)];

@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, buff, dmg, draw, summon } from './builders.js';
 
 /**
  * Dragonflight (Task 15): Seraphina Skywing's dragon-tempo deck. Signature
@@ -9,44 +10,7 @@ import type { DeckDef } from './index.js';
  */
 const DRAGON_PALETTE = ['#1a1f3a', '#c9a227'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-const art = (id: string): Card['art'] => ({ preset: 'dragon', palette: DRAGON_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [],
-  flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'dragon',
-  art: art(id), flavor, author: 'curated', version: 1,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'dragon',
-  art: art(id), flavor, author: 'curated', version: 1,
-});
-
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
-  id, name, type: 'artifact', cost,
-  keywords: [], effects: [], triggers, rarity, archetype: 'dragon',
-  art: art(id), flavor, author: 'curated', version: 1,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const buff = (value: number, value2: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'buff', value, value2, target });
-const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
-const summon = (cardId: string, value?: number): EffectSpec => ({ kind: 'summon', cardId, ...(value !== undefined ? { value } : {}) });
+const { artifact, creature, spell } = archetypeCards('dragon', DRAGON_PALETTE, 'dragon');
 
 export const HERO: HeroSpec = {
   name: 'Seraphina Skywing',

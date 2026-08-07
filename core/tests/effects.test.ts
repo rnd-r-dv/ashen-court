@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Game } from '../src/engine/game.js';
 import { applyEffect } from '../src/engine/effects.js';
 import type { EffectCtx } from '../src/engine/effects.js';
+import { summarize } from '../src/engine/stats.js';
 import { makeTestSetup } from './helpers.js';
 
 const g = () => Game.create(makeTestSetup());
@@ -24,6 +25,17 @@ describe('dealDamage', () => {
     applyEffect(game, ctx, { kind: 'dealDamage', value: 3, target: 'allEnemies' });   // allEnemies hits the enemy hero (enemy board empty)
     expect(game.state.phase).toBe('gameOver');
     expect(game.state.log.some(e => e.type === 'gameOver')).toBe(true);
+  });
+  it('hero damage emits heroDamaged and summarize counts it on a real log (audit 01 I1)', () => {
+    const game = g();
+    game.state.phase = 'main';
+    game.state.players[0].mana = 10;
+    game.state.players[0].hand.unshift('bc-2dmg');   // battlecry: deal 2 to allEnemies
+    const evts = game.submit({ kind: 'playCard', handIndex: 0 });   // enemy board empty → hero hit
+    expect(evts.some(e => e.type === 'heroDamaged' && e.player === 1 && e.amount === 2)).toBe(true);
+    expect(evts.some(e => e.type === 'damageDealt' && e.target.type === 'hero' && e.amount === 2)).toBe(true);
+    expect(game.state.players[1].hero.hp).toBe(28);
+    expect(summarize(game.state.log).damageDealt).toEqual([0, 2]);
   });
 });
 
@@ -70,6 +82,41 @@ describe('heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
     expect(game.state.players[0].maxMana).toBe(4); expect(game.state.players[0].mana).toBe(0);
     applyEffect(game, ctx, { kind: 'refillMana', value: 1 });
     expect(game.state.players[0].mana).toBe(1);
+  });
+  // The two mana kinds are distinct and must never share a formula again
+  // (audit 02: they did, so refillMana handed out permanent crystals):
+  //   gainMana   "Gain N empty mana crystals." → maxMana += N, mana unchanged
+  //   refillMana "Gain N Mana."                → mana += N (capped at maxMana), maxMana unchanged
+  it('refillMana refills current mana only — maxMana is untouched', () => {
+    const game = g(); game.state.phase = 'main';
+    const p = game.state.players[0];
+    p.maxMana = 5; p.mana = 1;
+    applyEffect(game, ctx, { kind: 'refillMana', value: 3 });
+    expect(p.mana).toBe(4);
+    expect(p.maxMana).toBe(5);        // no permanent crystals from a refill
+  });
+  // A refill MAY leave the player above their crystal count for the turn — the
+  // Coin depends on it (a player is always at full mana on their own turn), and
+  // beginTurn's mana = maxMana expires the surplus. Only the hard 15 cap holds.
+  it('refillMana may exceed maxMana for the turn but never the 15 cap', () => {
+    const game = g(); game.state.phase = 'main';
+    const p = game.state.players[0];
+    p.maxMana = 3; p.mana = 3;
+    applyEffect(game, ctx, { kind: 'refillMana', value: 4 });
+    expect(p.mana).toBe(7);
+    expect(p.maxMana).toBe(3);
+    p.mana = 14;
+    applyEffect(game, ctx, { kind: 'refillMana', value: 4 });
+    expect(p.mana).toBe(15);
+    expect(p.maxMana).toBe(3);
+  });
+  it('gainMana adds empty crystals only — current mana is untouched', () => {
+    const game = g(); game.state.phase = 'main';
+    const p = game.state.players[0];
+    p.maxMana = 2; p.mana = 2;
+    applyEffect(game, ctx, { kind: 'gainMana', value: 2 });
+    expect(p.maxMana).toBe(4);
+    expect(p.mana).toBe(2);           // the new crystals arrive empty
   });
   it('freeze sets frozen, destroy removes without damage events', () => {
     const game = g(); game.state.phase = 'main';

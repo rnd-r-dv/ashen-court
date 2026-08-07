@@ -35,10 +35,26 @@ export interface ProjectileProps {
   onDone?: () => void;
 }
 
-/** Shared flight budget so Match can delay the damage popup to the impact. */
+/**
+ * Shared flight budget: how long the traveller takes to cross from `from` to
+ * `to`. Distance-dependent, so it is NOT a constant Match can guess at —
+ * Match imports this and delays the damage popup by exactly this value,
+ * computed from the same two points it hands to the entry. One number, one
+ * definition; the popup and the orb cannot drift apart.
+ */
 export function flightTime(from: { x: number; y: number }, to: { x: number; y: number }, scale = 1): number {
   const dist = Math.hypot(to.x - from.x, to.y - from.y) || 1;
   return Math.min(0.9, Math.max(0.35, dist / 900)) * scale;
+}
+
+/**
+ * AoE impact budget. AoE entries have no traveller — a ring erupts at the
+ * zone centre — so they legitimately need their own timing rather than a
+ * distance-based flight. Exported for the same single-source reason as
+ * flightTime: the tint below and Match's popup delay read this one value.
+ */
+export function aoeFlightTime(scale = 1): number {
+  return 0.75 * scale;
 }
 
 export default function Projectile({ entry, scale = 1, onDone }: ProjectileProps) {
@@ -57,7 +73,7 @@ export default function Projectile({ entry, scale = 1, onDone }: ProjectileProps
           className={`projectile-aoe-tint projectile-aoe-tint--${kind}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 1, 0] }}
-          transition={{ duration: 0.75 * scale, times: [0, 0.28, 1], ease: 'easeOut' }}
+          transition={{ duration: aoeFlightTime(scale), times: [0, 0.28, 1], ease: 'easeOut' }}
         />
         <motion.div
           className={`projectile-aoe-ring projectile-aoe-ring--${kind}`}

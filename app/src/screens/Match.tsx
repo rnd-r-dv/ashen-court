@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import type { Card as CardSpec, GameEvent, Intent, PlayerIndex, TargetRef } from '@ashen/core';
 import { useMatch } from '../game/useMatch.js';
+import type { LanMatchDriver } from '../game/lanDriver.js';
 import { useNav } from '../App.js';
 import type { MatchScreenSetup } from '../types.js';
 import { loadSettings, saveSettings } from '../storage.js';
@@ -14,7 +15,7 @@ import DamagePopup from '../components/DamagePopup.js';
 import type { DamageEntry } from '../components/DamagePopup.js';
 import Hand from '../components/Hand.js';
 import PassDevice from '../components/PassDevice.js';
-import Projectile from '../components/Projectile.js';
+import Projectile, { aoeFlightTime, flightTime } from '../components/Projectile.js';
 import type { ProjectileEntry, ProjectileKind } from '../components/Projectile.js';
 import TurnBanner from '../components/TurnBanner.js';
 import type { TurnBannerEntry } from '../components/TurnBanner.js';
@@ -32,6 +33,9 @@ const EMBER_SEEDS = Array.from({ length: 14 }, (_, i) => ({
   drift: (i % 2 === 0 ? 1 : -1) * (16 + ((i * 13) % 42)),
   delay: (i % 5) * 0.055,
 }));
+
+/** Rejected-intent banner lifetime (I1, audit 04) — transient, then auto-dismissed. */
+const ERROR_BANNER_MS = 4000;
 
 /**
  * Match (Task 31, hotseat flow Task 32): the board screen. Wires useMatch
@@ -83,10 +87,24 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         fastMode ? 0 : 1500,
       );
     },
+    // I1 (audit 04): a rejected submit (invalid/duplicate intent — the local
+    // driver's engine throws) must be visible, not a silent unhandled
+    // rejection. Release the awaiting guard too: no batch or state change
+    // will acknowledge a rejected intent.
+    onError: (message) => {
+      setAwaiting(false);
+      setErrorMsg(message);
+      if (errorTimerRef.current !== null) clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = setTimeout(() => setErrorMsg(null), ERROR_BANNER_MS);
+    },
   });
 
   const [targeting, setTargeting] = useState<BoardTargeting | null>(null);
   const [awaiting, setAwaiting] = useState(false); // submit in flight (button re-click guard)
+  // I1 (audit 04): rejected-intent banner — a transient top-center alert,
+  // auto-dismissed after ERROR_BANNER_MS (or replaced by the next error).
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Hotseat pass-and-play (Task 32): the viewer is whoever currently holds
   // the device — starts as the first pick (player 0) and alternates as the
@@ -143,6 +161,14 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // Delayed popup/shake timers for spell damage (land on projectile impact);
   // cleared by skip() and on unmount.
   const pendingFxRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Spell-damage popups awaiting their projectile's impact. An effect's
+  // damageDealt events precede its effectResolved, but the projectile — and
+  // therefore the flight budget the popup has to match — only exists at
+  // effectResolved, where the from/to geometry is resolved. Collect the
+  // popups per sourceCardId here and fire them there, so the delay IS the
+  // launched projectile's own flight time instead of a second, independently
+  // drifting guess. Same lifetime as dmgTargetsRef (which pairs with it).
+  const pendingPopupsRef = useRef<Record<string, { amount: number; side: 'top' | 'bottom' }[]>>({});
   // Win-navigation timer (cleared on unmount so rematch/menu never double-fire).
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -164,13 +190,21 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // the viewer always sees their own hand (the enemy hand is never rendered
   // in main phase anyway) and never sees the pass overlay.
   const hideHands = setup.mode === 'hotseat' && !visible;
+  // M6 (audit 04): at game over the pass-and-play contract is over — render
+  // an empty hand placeholder (not silhouettes) so the winner's hand size
+  // never leaks to the other seat during the 1.5s cinematic.
+  const gameOver = state.phase === 'gameOver';
   // Pass overlay: same gate as hideHands, and never in LAN. Game over
   // navigates away on the next batch, so never flash an overlay on it.
-  const passVisible = hideHands && setup.mode !== 'lan' && state.phase !== 'gameOver';
+  const passVisible = hideHands && setup.mode !== 'lan' && !gameOver;
 
+  // M4 (audit 04): keyed on the registry identity, not just the driver — a
+  // LAN reconnect rebuilds the shadow (and its CardRegistry) while the driver
+  // object is stable, and the memo must follow the live registry.
+  const registry = setup.driver.game().registry;
   /** Resolve card ids against the engine registry (unknown ids → undefined). */
   const getCard = useMemo(() => {
-    const reg = setup.driver.game().registry;
+    const reg = registry;
     return (id: string): CardSpec | undefined => {
       try {
         return reg.get(id);
@@ -178,7 +212,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         return undefined;
       }
     };
-  }, [setup.driver]);
+  }, [setup.driver, registry]);
 
   // ---- Task 39: event → animation map --------------------------------
   /** Board half an event belongs to ('top' = enemy zone, 'bottom' = mine). */
@@ -248,10 +282,30 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const handArea = (player: PlayerIndex) => pointOf(player === viewer ? '.match-handwrap' : '.board-enemyhand');
   const zoneCenter = (side: 'top' | 'bottom') => pointOf(side === 'top' ? '.board-zone--top' : '.board-zone--bottom');
 
-  /** Landing point for a damageDealt target (dead creature → foe hero). */
+  // Last-known slot position per creatureId (M2, audit 04). The state mirror
+  // refreshes at batch arrival, so a creature killed earlier in the same
+  // resolution is gone from state.players[*].board — and its slot unmounted —
+  // when the queue processes its damageDealt. Snapshot the slot point on
+  // every state change while the creature is alive, so a spell projectile
+  // lands on the last-known position instead of the foe hero (inconsistent
+  // with targetSide's owner snapshot). Entries intentionally persist after
+  // death: targetPoint only consults the map when the slot is already gone
+  // (i.e. the creature is not on the board), so a stale entry can never
+  // mis-aim a live target.
+  const slotPointRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  useEffect(() => {
+    for (const p of state.players) {
+      for (const c of p.board) {
+        const pt = creatureSlot(c.id);
+        if (pt) slotPointRef.current.set(c.id, pt);
+      }
+    }
+  }, [state]);
+
+  /** Landing point for a damageDealt target (dead creature → last-known slot → foe hero). */
   function targetPoint(ref: TargetRef): { x: number; y: number } | null {
     if (ref.type === 'hero') return heroCircle(ref.player);
-    return creatureSlot(ref.id) ?? heroCircle(foe);
+    return creatureSlot(ref.id) ?? slotPointRef.current.get(ref.id) ?? heroCircle(foe);
   }
 
   /** Board half a damageDealt target belongs to. */
@@ -309,25 +363,66 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     );
   }
 
-  /** Launch a single-target projectile from the caster's hand/hero. */
-  function launchProjectile(kind: ProjectileKind, from: 'hand' | 'hero', caster: PlayerIndex, ref: TargetRef) {
+  /**
+   * Launch a single-target projectile from the caster's hand/hero. Returns
+   * the orb's flight budget in seconds — the impact moment the damage popup
+   * must wait for — or null when a position lookup failed (jsdom, unmounted
+   * element), where no orb flies and so there is no impact to wait for.
+   */
+  function launchProjectile(
+    kind: ProjectileKind,
+    from: 'hand' | 'hero',
+    caster: PlayerIndex,
+    ref: TargetRef,
+  ): number | null {
     const fromPt = from === 'hero' ? heroCircle(caster) : handArea(caster);
     const toPt = targetPoint(ref);
-    if (!fromPt || !toPt) return;
+    if (!fromPt || !toPt) return null;
     setProjectiles((prev) => [
       ...prev,
       { id: ++fxIdRef.current, kind, from: fromPt, to: toPt, side: targetSide(ref) },
     ]);
+    // Same two points the entry carries → Projectile computes the identical
+    // duration for the orb (bug 26: this used to be a hardcoded 0.55s guess).
+    return flightTime(fromPt, toPt, animScale);
   }
 
-  /** Launch an AoE ring + tint flash from the target zone's center. */
-  function launchAoe(kind: ProjectileKind, side: 'top' | 'bottom') {
+  /**
+   * Launch an AoE ring + tint flash from the target zone's center. Returns the
+   * ring's own impact budget (no traveller — see aoeFlightTime), or null when
+   * the zone could not be located.
+   */
+  function launchAoe(kind: ProjectileKind, side: 'top' | 'bottom'): number | null {
     const center = zoneCenter(side);
-    if (!center) return;
+    if (!center) return null;
     setProjectiles((prev) => [
       ...prev,
       { id: ++fxIdRef.current, kind, from: center, to: center, aoe: true, side },
     ]);
+    return aoeFlightTime(animScale);
+  }
+
+  /**
+   * Fire the spell popups queued for `sourceCardId`, `delaySec` after the
+   * launch that just happened. delaySec <= 0 (no FX could be placed) pops
+   * immediately — a missing projectile must never swallow the damage number.
+   */
+  function flushSpellPopups(sourceCardId: string, delaySec: number) {
+    const pending = pendingPopupsRef.current[sourceCardId] ?? [];
+    pendingPopupsRef.current[sourceCardId] = [];
+    for (const p of pending) {
+      if (delaySec <= 0) {
+        setShakeSeq((n) => n + 1);
+        addPopup(p.amount, 'damage', p.side);
+        continue;
+      }
+      const timer = setTimeout(() => {
+        pendingFxRef.current.delete(timer);
+        setShakeSeq((n) => n + 1);
+        addPopup(p.amount, 'damage', p.side);
+      }, delaySec * 1000);
+      pendingFxRef.current.add(timer);
+    }
   }
 
   /**
@@ -362,15 +457,20 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
           targets.push(e.target);
           if (targets.length > 8) targets.shift();
           dmgTargetsRef.current[e.sourceCardId] = targets;
+          // M1 (audit 04): shield-absorbed hits emit damageDealt with amount 0
+          // (core shields branch) — no popup (a '-0' float) and no board
+          // shake. The target is still recorded above so a spell's projectile
+          // aims at the shielded creature, not the fallback.
+          if (e.amount <= 0) return;
           const side = e.target.type === 'hero' ? sideOf(e.target.player) : creatureSideOf(e.target.id);
           if (isSpellDamage(e.sourceCardId)) {
-            const delayMs = (aoeFor(e.sourceCardId) ? 0.75 : 0.55) * animScale * 1000;
-            const timer = setTimeout(() => {
-              pendingFxRef.current.delete(timer);
-              setShakeSeq((n) => n + 1);
-              addPopup(e.amount, 'damage', side);
-            }, delayMs);
-            pendingFxRef.current.add(timer);
+            // Hold it: this effect's effectResolved (next in the queue)
+            // launches the projectile and knows its real flight budget, so
+            // the popup is scheduled there (flushSpellPopups) rather than
+            // from a duplicated constant here.
+            const queued = pendingPopupsRef.current[e.sourceCardId] ?? [];
+            queued.push({ amount: e.amount, side });
+            pendingPopupsRef.current[e.sourceCardId] = queued;
           } else {
             setShakeSeq((n) => n + 1);
             addPopup(e.amount, 'damage', side);
@@ -407,16 +507,29 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
           const targets = dmgTargetsRef.current[e.sourceCardId] ?? [];
           dmgTargetsRef.current[e.sourceCardId] = [];
           if (e.kind === 'dealDamage' && isSpellDamage(e.sourceCardId)) {
-            const kind = e.sourceCardId === 'hero-power'
-              ? heroKindForName(state.players[e.player].hero.name)
-              : (projectileKindFor(getCard(e.sourceCardId)!) as ProjectileKind);
+            // M3 (audit 04): the old `projectileKindFor(getCard(id)!)` threw on
+            // a registry miss inside handleEvent (violating the module's
+            // no-crash claim). Guarded fallback, consistent with the try/catch
+            // getCard design — a miss (shouldn't happen: isSpellDamage implies
+            // the card resolved) becomes the default starbeam.
+            const card = getCard(e.sourceCardId);
+            const kind: ProjectileKind =
+              e.sourceCardId === 'hero-power'
+                ? heroKindForName(state.players[e.player].hero.name)
+                : card
+                  ? projectileKindFor(card)
+                  : 'starbeam';
+            // The launch reports its own impact budget; the damage popups
+            // held since damageDealt are timed to exactly that (bug 26).
+            let budget: number | null;
             if (aoeFor(e.sourceCardId)) {
-              launchAoe(kind, targets.length > 0 ? targetSide(targets[0]!) : sideOf(foe));
+              budget = launchAoe(kind, targets.length > 0 ? targetSide(targets[0]!) : sideOf(foe));
             } else {
               const ref = targets[targets.length - 1] ?? ({ type: 'hero', player: foe } as TargetRef);
               const from = e.sourceCardId === 'hero-power' ? 'hero' : 'hand';
-              launchProjectile(kind, from, e.player, ref);
+              budget = launchProjectile(kind, from, e.player, ref);
             }
+            flushSpellPopups(e.sourceCardId, budget ?? 0);
           }
         }
         break;
@@ -491,9 +604,12 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     setTokenBursts([]);
     setDims([]);
     setGameOverFx(0);
-    // Cancel spell-damage popups that were delayed to the projectile impact.
+    // Cancel spell-damage popups that were delayed to the projectile impact,
+    // and drop the ones still waiting for a launch whose effectResolved this
+    // skip just discarded (they must not leak onto the next spell).
     for (const t of pendingFxRef.current) clearTimeout(t);
     pendingFxRef.current.clear();
+    pendingPopupsRef.current = {};
   }
 
   // Unmount safety: never navigate or popup after teardown (rematch/menu).
@@ -505,6 +621,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
       }
       for (const t of pendingFxRef.current) clearTimeout(t);
       pendingFxRef.current.clear();
+      if (errorTimerRef.current !== null) clearTimeout(errorTimerRef.current);
     },
     [],
   );
@@ -522,10 +639,16 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     if (revealed) setEnemyRevealed(true);
   }, [events, enemyRevealed, foe]);
 
-  // A submit is acknowledged once the next event batch arrives.
+  // A submit is acknowledged once the next event batch arrives (LAN echo /
+  // local resolution tree). One edge emits no batch: the mulligan keep-all
+  // (all 3 cards kept while the other player still has to mulligan — audit
+  // M7) returns []. There the state-mirror change the submit caused is the
+  // acknowledgement — compare the object snapshot taken at submit time.
+  const awaitingStateRef = useRef(state);
   useEffect(() => {
-    if (awaiting && events.length > 0) setAwaiting(false);
-  }, [awaiting, events]);
+    if (!awaiting) return;
+    if (events.length > 0 || state !== awaitingStateRef.current) setAwaiting(false);
+  }, [awaiting, events, state]);
 
   // Legal intents for the current acting player. Bot mode: useMatch computes
   // them for the single human (myPlayer). Hotseat: both humans submit through
@@ -555,7 +678,16 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const pulseScale = useMemo(() => (turnPulseSeq ? [1, 1.012, 1] : 1), [turnPulseSeq]);
 
   function submitOnce(intent: Intent) {
+    // I1 (audit 04): one submit in flight at a time. `awaiting` is set here
+    // and released when the next batch arrives (or the state mirror changes
+    // — the empty-batch mulligan keep-all — or the submit rejects via
+    // onError). Without the guard, a double-click inside the LAN latency
+    // window submits the same intent twice (the server rejects the second
+    // silently), and in local modes the second submit throws inside an async
+    // driver → unhandled promise rejection with zero feedback.
+    if (awaiting) return;
     setAwaiting(true);
+    awaitingStateRef.current = state;
     submit(intent);
   }
 
@@ -597,10 +729,13 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     if (!targeting) return;
     const t = targeting;
     setTargeting(null);
+    // BoardTargeting is a discriminated union, so each branch's payload is
+    // guaranteed present — no `?? 0` / `?? ''` defaults (the old `handIndex
+    // ?? 0` quietly played hand slot 0 instead of failing).
     if (t.kind === 'play') {
-      submitOnce({ kind: 'playCard', handIndex: t.handIndex ?? 0, target: ref });
+      submitOnce({ kind: 'playCard', handIndex: t.handIndex, target: ref });
     } else if (t.kind === 'attack') {
-      submitOnce({ kind: 'attack', attackerId: t.attackerId ?? '', target: ref });
+      submitOnce({ kind: 'attack', attackerId: t.attackerId, target: ref });
     } else {
       submitOnce({ kind: 'heroPower', target: ref });
     }
@@ -647,6 +782,27 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     },
   });
 
+  // I3 (audit 04): LAN divergence must be visible. The driver raises a
+  // resync flag when its shadow cannot apply an echoed intent; render it as a
+  // persistent banner (v1 recovery: rejoin by code) instead of the silent
+  // freeze the audit found. Local/hotseat drivers carry no flag — the cast
+  // reads undefined and renders nothing.
+  const resyncRequested = (setup.driver as LanMatchDriver).resyncRequested;
+  const alerts = (
+    <>
+      {errorMsg !== null && (
+        <div className="match-alert" role="alert">
+          {errorMsg}
+        </div>
+      )}
+      {resyncRequested && (
+        <div className="match-alert match-alert--resync" role="status">
+          Out of sync — rejoin by code
+        </div>
+      )}
+    </>
+  );
+
   // ---- mulligan phase ----
   if (state.phase === 'mulligan') {
     // The engine's mulligan actor (fixed order: player 0, then player 1,
@@ -660,6 +816,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     const showMulliganHand = iAmActor && !mineDone;
     return (
       <div className="match match--mulligan">
+        {alerts}
         <h1 className="shell-title">Mulligan</h1>
         <p className="shell-subtitle">
           {showMulliganHand
@@ -693,6 +850,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         if (inTargeting && e.target === e.currentTarget) setTargeting(null);
       }}
     >
+      {alerts}
       <div className="match-topbar">
         <span className={`match-banner${myTurn ? ' match-banner--mine' : ''}`}>
           {myTurn ? 'Your turn' : currentPlayer === foe ? 'Enemy turn…' : ''} · Turn {turnNumber}
@@ -788,7 +946,13 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
 
       <div className="match-handwrap">
         {hideHands ? (
-          handHidden
+          gameOver ? (
+            // Empty placeholder: keeps the hand area's layout height without
+            // leaking the hand size (audit M6).
+            <div className="match-hand-hidden" aria-hidden="true" />
+          ) : (
+            handHidden
+          )
         ) : (
           <Hand
             hand={meP.hand}
@@ -797,6 +961,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
             interactive={myTurn}
             targeting={inTargeting}
             onCardClick={onHandCardClick}
+            animScale={animScale}
           />
         )}
       </div>

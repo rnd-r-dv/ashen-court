@@ -42,6 +42,41 @@ describe('playCard', () => {
     expect(w.warded).toBe(false);    // ward consumed
     expect(game.state.players[0].hand).not.toContain('test-spell');   // the spell is still spent
   });
+  it('ward fizzles the WHOLE spell — effects before the warded spec do not land (audit 01 I3)', () => {
+    const game = Game.create(makeTestSetup()); ready(game);
+    // mixed spell: heal 3 hero FIRST, then deal 3 to anyCreature — cast on a
+    // warded enemy creature the heal must NOT land (whole spell fizzles).
+    game.registry.register({
+      id: 'mixed-spell', name: 'Mixed Spell', type: 'spell', cost: 1,
+      keywords: [], effects: [
+        { kind: 'heal', value: 3, target: 'hero' },
+        { kind: 'dealDamage', value: 3, target: 'anyCreature' },
+      ],
+      rarity: 'common', archetype: 'neutral',
+      art: { preset: 'shadow', palette: ['#1a1a2e', '#3a3a5e'], seed: 99 },
+      author: 'custom', version: 1,
+    });
+    game.state.players[0].hero.hp = 20;   // heal 3 would bring it to 23
+    game.state.players[0].hand.unshift('mixed-spell');
+    const w = addCreature(game, 1, { id: 't-002', attack: 1, health: 2, keywords: ['ward'], exhausted: false });
+    const evts = game.submit({ kind: 'playCard', handIndex: 0, target: { type: 'creature', id: w.id } });
+    expect(evts.some(e => e.type === 'spellFizzled')).toBe(true);
+    expect(w.health).toBe(2);              // damage negated
+    expect(w.warded).toBe(false);          // ward consumed
+    expect(game.state.players[0].hero.hp).toBe(20);   // heal did NOT land — whole spell fizzled
+    expect(game.state.players[0].hand).not.toContain('mixed-spell');   // the spell is still spent
+  });
+  it('rejects creature plays at the 7-creature board cap; legalIntents excludes them (audit 01 C2)', () => {
+    const game = Game.create(makeTestSetup()); ready(game);
+    for (let i = 0; i < 7; i++) addCreature(game, 0, { id: `t-cap-${i}`, attack: 1, health: 1, keywords: [], exhausted: false });
+    game.state.players[0].hand.unshift('t-001');   // 3-cost creature
+    expect(() => game.submit({ kind: 'playCard', handIndex: 0 })).toThrow('Board is full');
+    expect(game.legalIntents(0).filter(i => i.kind === 'playCard' && i.handIndex === 0)).toHaveLength(0);
+    // spells are still playable at a full board
+    game.state.players[0].hand.unshift('test-spell-2');   // AoE spell, no target choice
+    game.submit({ kind: 'playCard', handIndex: 0 });
+    expect(game.state.players[0].board).toHaveLength(7);
+  });
   it('artifact: moves to artifact zone', () => {
     const game = Game.create(makeTestSetup()); ready(game);
     game.state.players[0].hand.unshift('art-heal');
@@ -59,9 +94,9 @@ describe('playCard', () => {
     // (note: creature TargetRefs carry only { type: 'creature', id } — the owner is inferred from the board):
     expect(() => game.submit({ kind: 'playCard', handIndex: 0, target: { type: 'creature', id: own.id } })).toThrow();
   });
-  it('discountCheapest applies to the most expensive card in hand', () => {
+  it('discountMostExpensive applies to the most expensive card in hand', () => {
     const game = Game.create(makeTestSetup()); ready(game);
-    game.state.players[0].hero.discountCheapest = 2;
+    game.state.players[0].hero.discountMostExpensive = 2;
     game.state.players[0].hand = ['t-001', 't-007'];     // 3-cost and 7-cost in helpers
     game.state.players[0].mana = 6;
     game.submit({ kind: 'playCard', handIndex: 1 });     // play the 7-cost → costs 5

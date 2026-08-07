@@ -1,6 +1,6 @@
 import { MANA_SURGE } from '../types.js';
 import type { Card, EffectSpec, EffectTarget, Intent, PlayerIndex, TargetRef } from '../types.js';
-import { findCreature, isDragon, resolveTargets, SINGLE_TARGET_TARGETS } from './effects.js';
+import { findCreature, isChoiceTarget, isDragon, resolveTargets, BOARD_CAP } from './effects.js';
 import { canAttack, effectiveKeywords, tauntPresent } from './keywords.js';
 import type { Game } from './game.js';
 
@@ -13,14 +13,16 @@ import type { Game } from './game.js';
  *
  * Rulings encoded here (task brief 17d659a):
  *  - effective cost = registry cost minus discountNextSpell (spells) or minus
- *    discountCheapest (only for the most expensive creature in hand, via
+ *    discountMostExpensive (only for the most expensive creature in hand, via
  *    registry cost lookup); discounts are consumed on use even at effective 0.
  *  - single-target effects require a valid target ref: creature refs carry only
  *    { type: 'creature', id } — the owner is inferred from the board. Side
  *    checks: enemyCreature → enemy board, friendlyCreature/friendlyDragon →
  *    own board, anyCreature/any → anywhere, hero/self → own hero ref.
- *  - Mana Surge (refillMana 1): the `surged` flag gates it — validation
- *    rejects when surged is true (the head start was already granted).
+ *  - Mana Surge / the Coin (refillMana 1): the `surged` flag gates it to ONE
+ *    use per match — validation rejects once surged is true. `surged` starts
+ *    false and is set when the card is played (audit 02: setup used to pre-set
+ *    it, which made the card permanently unplayable).
  */
 
 /** Cost the player would actually pay to play `card`, with discounts applied. */
@@ -30,7 +32,7 @@ export function playEffectiveCost(game: Game, card: Card, me: PlayerIndex): numb
   if (card.type === 'spell') {
     eff -= p.hero.discountNextSpell;
   } else if (card.type === 'creature' && isMostExpensiveCreatureInHand(game, me, card)) {
-    eff -= p.hero.discountCheapest;
+    eff -= p.hero.discountMostExpensive;
   }
   return Math.max(0, eff);
 }
@@ -58,6 +60,9 @@ export function validatePlayCard(
   if (!card) return `Unknown card id: ${cardId}`;
   if (cardId === MANA_SURGE && p.surged) return 'Mana Surge already surged';
   if (p.mana < playEffectiveCost(game, card, me)) return 'Not enough mana';
+  // Board cap (audit 01 C2): a full board (BOARD_CAP creatures) cannot play
+  // more creatures — effect summons cap too, so the invariant holds for both.
+  if (card.type === 'creature' && p.board.length >= BOARD_CAP) return 'Board is full';
   // Single-target effects require a valid target ref; every single-target
   // effect must accept the supplied ref (multi-target / no-target effects
   // resolve internally and need no target). hero/self effects auto-resolve to
@@ -84,8 +89,8 @@ function battlecryEffects(card: Card): EffectSpec[] {
  */
 export function validateEffectTargets(game: Game, me: PlayerIndex, effects: readonly EffectSpec[], target: TargetRef | undefined): string | null {
   for (const spec of effects) {
-    if (spec.target === undefined || !SINGLE_TARGET_TARGETS.has(spec.target) || spec.target === 'hero' || spec.target === 'self') continue;
-    const err = validateTarget(game, me, spec.target, target);
+    if (!isChoiceTarget(spec.target)) continue;
+    const err = validateTarget(game, me, spec.target!, target);
     if (err) return err;
   }
   return null;
@@ -136,7 +141,7 @@ function safeCard(game: Game, id: string): Card | undefined {
  * Discount consistency: affordability uses the same playEffectiveCost that
  * validatePlayCard and the playCard payment use, so validation/enumeration/
  * payment never disagree. (Discounts are turn-scoped: beginTurn zeroes
- * discountCheapest/discountNextSpell at every turn start.)
+ * discountMostExpensive/discountNextSpell at every turn start.)
  */
 export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
   if (game.state.phase !== 'main' || game.currentPlayer() !== player) return [];
@@ -151,8 +156,15 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
     // Mana Surge is unplayable once surged (validatePlayCard's gate) — never
     // enumerate an intent submit would reject.
     if (card.id === MANA_SURGE && p.surged) continue;
+    // Board cap (audit 01 C2): creatures at a full board are unplayable —
+    // mirror how unaffordable cards are skipped (validatePlayCard rejects).
+    if (card.type === 'creature' && p.board.length >= BOARD_CAP) continue;
     if (p.mana < playEffectiveCost(game, card, player)) continue;
-    const variants = targetVariants(game, player, card.type === 'creature' ? battlecryEffects(card) : card.effects);
+    // Same effect list validatePlayCard validates against — spell effects AND
+    // battlecry effects — so enumeration and validation cannot disagree. (No
+    // curated creature carries `effects`, but a Forge one may, and it would
+    // otherwise be enumerated without the target validation demands.)
+    const variants = targetVariants(game, player, [...card.effects, ...battlecryEffects(card)]);
     if (!variants) continue;   // single-target effect with no legal ref → unplayable
     for (const t of variants) out.push({ kind: 'playCard', handIndex: i, target: t });
   }
@@ -192,18 +204,23 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
  * one intent per legal ref via resolveTargets; hero/self auto-resolve to the
  * caster's own hero and are never enumerated as choices. Effects with no
  * single-target choice (AoE/random/no-target, or only hero/self) yield a
- * single no-target variant. Returns null when a choice kind has no legal refs
- * (the card/power is unplayable).
+ * single no-target variant. Returns null when no ref is legal (the card/power
+ * is unplayable).
+ *
+ * An intent carries ONE target ref, and validateEffectTargets checks that ref
+ * against EVERY choice spec — so enumeration must do the same and yield the
+ * INTERSECTION. Enumerating only the first choice spec's refs (audit 02) let
+ * legalIntents emit intents validatePlayCard rejects whenever a card mixed two
+ * different choice targets (e.g. dmg(enemyCreature) + buff(friendlyCreature),
+ * whose intersection is always empty). Filtering the candidate refs through
+ * validateTarget — the very function validation uses — is what keeps the two
+ * from drifting apart again.
  */
 function targetVariants(game: Game, me: PlayerIndex, effects: readonly EffectSpec[]): (TargetRef | undefined)[] | null {
-  let choice: EffectTarget | undefined;
-  for (const spec of effects) {
-    if (spec.target === undefined || !SINGLE_TARGET_TARGETS.has(spec.target)) continue;
-    if (spec.target === 'hero' || spec.target === 'self') continue;
-    choice = spec.target;
-    break;
-  }
-  if (!choice) return [undefined];
-  const refs = resolveTargets(game, me, choice);
+  const choices: EffectTarget[] = [];
+  for (const spec of effects) if (isChoiceTarget(spec.target)) choices.push(spec.target!);
+  if (choices.length === 0) return [undefined];
+  const refs = resolveTargets(game, me, choices[0]!)
+    .filter(ref => choices.every(kind => validateTarget(game, me, kind, ref) === null));
   return refs.length > 0 ? refs : null;
 }

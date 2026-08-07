@@ -1,22 +1,27 @@
-// LAN WebSocket client (Task 34 + Task 34 fix round). Thin wrapper over the
-// browser WebSocket: JSON serialization on send, JSON parse + dispatch on
-// message, buffered sends while the socket is connecting, and auto-reconnect
-// with exponential backoff inside the server's reconnect-grace window
-// (5 minutes, RECONNECT_GRACE_MS in server/src/rooms.ts). The server keeps a
-// room alive for the grace window after a socket drops, so the client keeps
-// trying to re-attach until then and gives up afterwards (status 'closed').
+// LAN WebSocket client (Task 34 + Task 34 fix round + Task 45). Thin
+// wrapper over the browser WebSocket: JSON serialization on send, JSON parse +
+// dispatch on message, buffered sends while the socket is connecting, and
+// auto-reconnect with exponential backoff inside the server's reconnect-grace
+// window (5 minutes, RECONNECT_GRACE_MS in server/src/rooms.ts). The server
+// keeps a room alive for the grace window after a socket drops, so the client
+// keeps trying to re-attach until then and gives up afterwards (status
+// 'closed').
 //
-// Reconnect re-attach (fix round 2): the client remembers the room code from
-// the original session (setRoomCode — the screens call it once they learn the
-// code) and re-sends joinRoom on the first re-opened socket after a drop, so
-// the server re-attaches the reconnecting socket to the room (join() re-joins
-// the freed slot) and replays the intent log.
+// Reconnect re-attach (fix round 2 + Task 45): the client remembers the FULL
+// joinRoom payload from the original session (setJoinPayload — the screens
+// call it once they know the code and their deck choice) and re-sends
+// joinRoom on the first re-opened socket after a drop, so the server
+// re-attaches the reconnecting socket to the room (join() re-joins the freed
+// slot) and replays the intent log. Task 45: the payload now carries the
+// guest's deck + hero too, so a guest reconnect re-attaches with a valid
+// joinRoom (deckIds/customCards/heroId), not just a bare code.
 //
 // Wire types come from the server package (NOT duplicated here) — the protocol
 // lives in server/src/protocol.ts and is re-exported through the
 // "@ashen/server/protocol" subpath (server/package.json "exports"). These are
 // type-only imports: they are erased at build time and never enter the browser
 // bundle.
+import type { Card } from '@ashen/core';
 import type { ClientMessage, ServerMessage } from '@ashen/server/protocol';
 
 /** Connection lifecycle status, surfaced via the optional onStatus callback. */
@@ -36,10 +41,15 @@ export class LanClient {
   private closed = false;
   private reconnectAttempts = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Room code from the original session — re-sent on reconnect so the
-   *  re-attached socket re-joins its room (fix round 2). */
-  private roomCode: string | null = null;
-  private readonly graceUntil = Date.now() + RECONNECT_GRACE_MS;
+  /** Full joinRoom payload from the original session — re-sent on reconnect
+   *  so the re-attached socket re-joins its room with a valid joinRoom
+   *  (Task 45: the guest's deck/hero ride along; fix round 2 added the code). */
+  private joinPayload: { code: string; deckIds: string[]; customCards: Card[]; heroId: string } | null = null;
+  /** Grace deadline (epoch ms): the server keeps a room alive this long after
+   *  a socket drops. Re-anchored at each drop from an ESTABLISHED connection
+   *  (I1, audit 06) — NOT at construction — so a drop late in a long session
+   *  still gets the full reconnect window. 0 = not yet anchored. */
+  private graceUntil = 0;
   /** Sends made before the socket opened (e.g. createRoom right after connect). */
   private pendingSends: ClientMessage[] = [];
 
@@ -60,9 +70,10 @@ export class LanClient {
     this.handlers.delete(cb);
   }
 
-  /** Remember the room this session belongs to; re-sent on reconnect re-open. */
-  setRoomCode(code: string): void {
-    this.roomCode = code;
+  /** Remember the full joinRoom payload (code + deck choice); re-sent on
+   *  reconnect re-open so the server re-attaches the room (fix round 2 + 45). */
+  setJoinPayload(payload: { code: string; deckIds: string[]; customCards: Card[]; heroId: string }): void {
+    this.joinPayload = payload;
   }
 
   /** Send one client message as JSON. Buffered until the socket is open. */
@@ -74,9 +85,18 @@ export class LanClient {
     }
   }
 
-  /** Intentional close: no reconnect, buffered sends dropped. */
-  close(): void {
+  /** Terminal close: no reconnect, buffered sends dropped, registered handlers
+   *  released (M2, audit 06 — the old code kept pendingSends and handlers alive
+   *  after the final give-up, holding the screen/hook closures forever). */
+  private finalize(): void {
     this.closed = true;
+    this.pendingSends = [];
+    this.handlers.clear();
+  }
+
+  /** Intentional close: no reconnect, buffered sends and handlers dropped. */
+  close(): void {
+    this.finalize();
     if (this.retryTimer !== null) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
@@ -105,12 +125,13 @@ export class LanClient {
       const reconnecting = this.reconnectAttempts > 0;
       this.reconnectAttempts = 0;
       // Reconnect re-attach: the first re-opened socket after a drop re-sends
-      // joinRoom so the server re-attaches it to the room (the slot is free —
-      // it was cleared on disconnect) and replays the intent log. Sent BEFORE
-      // the buffered sends so nothing hits the server un-attached.
-      if (reconnecting && this.roomCode) {
+      // the full joinRoom payload so the server re-attaches it to the room
+      // (the slot is free — it was cleared on disconnect) and replays the
+      // intent log. Sent BEFORE the buffered sends so nothing hits the server
+      // un-attached.
+      if (reconnecting && this.joinPayload) {
         try {
-          ws.send(JSON.stringify({ type: 'joinRoom', code: this.roomCode }));
+          ws.send(JSON.stringify({ type: 'joinRoom', ...this.joinPayload }));
         } catch {
           /* the socket may have closed again mid-send */
         }
@@ -141,6 +162,13 @@ export class LanClient {
       if (this.ws !== ws) return;
       this.ws = null;
       if (this.closed) return;
+      // I1 (audit 06): each drop from an ESTABLISHED connection restarts the
+      // grace window (reconnectAttempts === 0 means the main connection or a
+      // freshly-opened reconnect). Failed CONNECTION attempts
+      // (reconnectAttempts > 0) do NOT extend the window — they count against
+      // it, so the client gives up once the server's own grace (anchored at
+      // the first drop) has passed without a successful re-attach.
+      if (this.reconnectAttempts === 0) this.graceUntil = Date.now() + RECONNECT_GRACE_MS;
       this.scheduleReconnect();
     };
   }
@@ -148,7 +176,10 @@ export class LanClient {
   private scheduleReconnect(): void {
     if (this.closed) return;
     if (Date.now() >= this.graceUntil) {
-      // Reconnect window expired: the server will have dropped the room.
+      // Reconnect window expired: the server will have dropped the room. The
+      // client is dead — drop buffered sends and registered handlers so
+      // nothing is retained (M2, audit 06).
+      this.finalize();
       this.onStatus?.('closed');
       return;
     }

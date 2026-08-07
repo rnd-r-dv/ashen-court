@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, buff, destroy, dmg, draw, heal } from './builders.js';
 
 /**
  * Grave Pact (Task 16): Morticia Gravefall's self-damage / draw-engine deck.
@@ -9,44 +10,7 @@ import type { DeckDef } from './index.js';
  */
 const PACT_PALETTE = ['#150e1e', '#a06bff'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-const art = (id: string): Card['art'] => ({ preset: 'void', palette: PACT_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [], flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'pact',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'pact',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
-  id, name, type: 'artifact', cost,
-  keywords: [], effects: [], triggers, rarity, archetype: 'pact',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const heal = (value: number): EffectSpec => ({ kind: 'heal', value, target: 'hero' });
-const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
-const buff = (value: number, value2: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'buff', value, value2, target });
-const destroy = (target: EffectSpec['target']): EffectSpec => ({ kind: 'destroy', target });
+const { artifact, creature, spell } = archetypeCards('void', PACT_PALETTE, 'pact');
 
 export const HERO: HeroSpec = {
   name: 'Morticia Gravefall',

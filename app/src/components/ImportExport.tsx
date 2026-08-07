@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react';
 import type { Card } from '@ashen/core';
 import { buildPool, validateDeck } from '@ashen/core';
 import { exportCardsJson, importCardsJson, loadCustomCards, saveCustomCard } from '../storage.js';
+import { deckExportError } from '../deckBuild.js';
 import './importexport.css';
 
 /**
@@ -10,7 +11,9 @@ import './importexport.css';
  *
  *  - mode="cards": export all saved custom cards as 'ashen-custom-cards.json'
  *    (pretty JSON via exportCardsJson); import parses + validates via
- *    importCardsJson, saves each card to storage, then reports the count.
+ *    importCardsJson, PRE-FLIGHTS the whole batch (importBatchError, audit 07
+ *    bug 13) so a bad card aborts with zero writes, then commits and reports
+ *    the count actually saved.
  *  - mode="deck": export the working deck's ids as { deck: [...] } in
  *    'ashen-deck.json'; import validates the ids against the full pool
  *    (buildPool() ∪ custom cards) and hands a clean deck to the caller.
@@ -41,12 +44,56 @@ function downloadText(text: string, filename: string): void {
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // Audit 07 bug 14: revoking in the same task as the click races the download
+  // — some browsers cancel a save that has not started fetching the blob yet.
+  // Deferring one macrotask lets the navigation begin; the revoke still runs,
+  // so the blob does not leak for the lifetime of the page.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-/** 'ashen-deck.json' → 'ashen-deck' (basename without .json). */
+/**
+ * 'ashen-deck.json' → 'ashen-deck' (basename without .json).
+ *
+ * Audit 07 bug 15: only the .json extension comes off. A second, generic
+ * `.replace(/\.[^/.]+$/, '')` used to run after it and ate the real last
+ * segment of a dotted name ('my.deck.json' → 'my.deck' → 'my').
+ */
 function nameFromFilename(filename: string): string {
-  return filename.replace(/\.json$/i, '').replace(/\.[^/.]+$/, '');
+  return filename.replace(/\.json$/i, '');
+}
+
+/**
+ * Pre-flight a whole card batch against everything checkable WITHOUT writing
+ * (audit 07 bug 13). Returns the first blocking reason, or null when the batch
+ * is safe to commit.
+ *
+ * saveCustomCard throws on an id collision, so the old per-card commit loop
+ * wrote every card up to the failure and then reported a bare "Import failed"
+ * — a 5-card file whose 3rd card collided left 2 cards silently installed.
+ * Running every non-write check over the FULL batch first turns that into a
+ * zero-write abort.
+ *
+ * Mirrors saveCustomCard's own rules (storage.ts, audit 05 I2) plus one the
+ * commit loop could never see: duplicate ids *inside* the imported file, which
+ * would upsert over each other (same name) or throw halfway (different name).
+ */
+export function importBatchError(cards: Card[], existing: Card[]): string | null {
+  const curated = new Set(buildPool().map((c) => c.id));
+  const seen = new Set<string>();
+  for (const card of cards) {
+    if (curated.has(card.id)) {
+      return `Cannot save "${card.name}": id ${card.id} is taken by a curated card. Rename it.`;
+    }
+    const clash = existing.find((c) => c.id === card.id && c.name !== card.name);
+    if (clash) {
+      return `Cannot save "${card.name}": id ${card.id} is already used by "${clash.name}". Rename it.`;
+    }
+    if (seen.has(card.id)) {
+      return `Duplicate id ${card.id} in the imported file — every card needs a unique id.`;
+    }
+    seen.add(card.id);
+  }
+  return null;
 }
 
 export default function ImportExport({ mode, deckIds, onImportedCards, onImportedDeck }: ImportExportProps) {
@@ -73,8 +120,12 @@ export default function ImportExport({ mode, deckIds, onImportedCards, onImporte
       showToast(`Exported ${cards.length} custom card${cards.length === 1 ? '' : 's'}.`);
     } else {
       const ids = deckIds ?? [];
-      if (ids.length === 0) {
-        showToast('Nothing to export — the deck is empty.');
+      const pool = new Map<string, Card>();
+      for (const c of [...buildPool(), ...loadCustomCards()]) pool.set(c.id, c);
+      // M4: a non-60 or invalid deck would fail its own import — refuse to export it.
+      const blocked = deckExportError(ids, pool);
+      if (blocked) {
+        showToast(blocked);
         return;
       }
       downloadText(JSON.stringify({ deck: ids }, null, 2), DECK_FILENAME);
@@ -105,7 +156,34 @@ export default function ImportExport({ mode, deckIds, onImportedCards, onImporte
       showToast(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
-    for (const card of cards) saveCustomCard(card);
+    // Audit 07 bug 13: check the WHOLE batch before writing anything, so a
+    // collision on card 3 of 5 can no longer leave cards 1-2 installed.
+    const blocked = importBatchError(cards, loadCustomCards());
+    if (blocked) {
+      showToast(`Import failed: ${blocked}`);
+      return;
+    }
+    // Only a quota rejection survives the pre-flight, and it cannot be
+    // predicted without writing. storage.ts has no bulk single-write helper,
+    // so this loop is NOT atomic — say exactly how many cards landed rather
+    // than claiming a guarantee we do not have.
+    let saved = 0;
+    try {
+      for (const card of cards) {
+        if (!saveCustomCard(card)) break;
+        saved += 1;
+      }
+    } catch (err) {
+      // Unreachable after the pre-flight; kept so an unforeseen storage.ts
+      // rule still reports its reason plus the true saved count.
+      const reason = err instanceof Error ? err.message : String(err);
+      showToast(`Import stopped after ${saved} of ${cards.length}: ${reason}`);
+      return;
+    }
+    if (saved < cards.length) {
+      showToast(`Storage full — imported ${saved} of ${cards.length} cards. Free space and re-import.`);
+      return;
+    }
     onImportedCards?.(cards);
     showToast(`Imported ${cards.length} card${cards.length === 1 ? '' : 's'}.`);
   }

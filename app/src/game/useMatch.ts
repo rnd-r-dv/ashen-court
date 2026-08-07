@@ -15,6 +15,8 @@ export interface UseMatchOpts {
   /** Auto-play the opponent as a bot at this level (omitted for hotseat). */
   bot?: { level: BotLevel };
   onGameOver?: (result: MatchResult) => void;
+  /** A rejected driver.submit (invalid/duplicate intent) — surfaced instead of an unhandled rejection. */
+  onError?: (message: string) => void;
 }
 
 export interface UseMatchApi {
@@ -67,13 +69,32 @@ function matchResult(game: Game): MatchResult {
 }
 
 export function useMatch(opts: UseMatchOpts): UseMatchApi {
-  const { driver, myPlayer, bot, onGameOver } = opts;
+  const { driver, myPlayer, bot, onGameOver, onError } = opts;
 
   // Latest-value refs (rendered each render; callbacks read them at call time).
   const botRef = useRef(bot);
   botRef.current = bot;
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
+  /**
+   * Submit and surface a rejected intent (invalid/duplicate — the engine
+   * throws on stale hand indices, used powers, out-of-window turns) via
+   * onError instead of an unhandled promise rejection. LAN submits never
+   * reject (they only send; the echo applies later), so this is the local-
+   * mode safety net; the Match screen renders the message as a transient
+   * banner and releases its awaiting guard.
+   */
+  const safeSubmit = useCallback(
+    (intent: Intent) => {
+      void driver.submit(intent).catch((err: unknown) => {
+        onErrorRef.current?.(err instanceof Error ? err.message : String(err));
+      });
+    },
+    [driver],
+  );
   const botPolicyRef = useRef(bot ? createBot(bot.level) : undefined);
   botPolicyRef.current = bot ? createBot(bot.level) : undefined;
 
@@ -126,7 +147,7 @@ export function useMatch(opts: UseMatchOpts): UseMatchApi {
       : botPolicyRef.current!.chooseIntent(g, botPlayer);
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
-      void driver.submit(intent);
+      safeSubmit(intent);
       // events arrive via onEvents → stepRef, which schedules the next move
     }, BOT_PACING_MS);
   };
@@ -154,10 +175,12 @@ export function useMatch(opts: UseMatchOpts): UseMatchApi {
     (intent: Intent) => {
       // The driver notifies onEvents with the resulting batch (local: the
       // resolution tree; LAN (Task 34): the server echo), so the hook needs no
-      // separate drain of submit's promise.
-      void driver.submit(intent);
+      // separate drain of submit's promise — only the rejection needs
+      // handling (safeSubmit), so a bad intent never becomes an unhandled
+      // rejection with zero user feedback.
+      safeSubmit(intent);
     },
-    [driver],
+    [safeSubmit],
   );
 
   const drainEvents = useCallback((): GameEvent[] => {

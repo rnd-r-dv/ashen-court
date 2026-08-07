@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, EffectSpec, EffectTarget, HeroSpec, Keyword } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, dmg, draw, heal } from './builders.js';
 
 /**
  * Eternal Vigil (Task 17): Ser Aldric the Vigilant's healing wall deck.
@@ -10,43 +11,10 @@ import type { DeckDef } from './index.js';
  */
 const VIGIL_PALETTE = ['#2b2525', '#f2e6c9'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+const { artifact, creature, spell } = archetypeCards('vigil', VIGIL_PALETTE, 'vigil');
 
-const art = (id: string): Card['art'] => ({ preset: 'vigil', palette: VIGIL_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [], flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'vigil',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'vigil',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
-  id, name, type: 'artifact', cost,
-  keywords: [], effects: [], triggers, rarity, archetype: 'vigil',
-  art: art(id), author: 'curated', version: 1, flavor,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const heal = (value: number, target: EffectSpec['target'] = 'hero'): EffectSpec => ({ kind: 'heal', value, target });
-const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
-const giveK = (keyword: Keyword, target: EffectSpec['target']): EffectSpec => ({ kind: 'giveKeyword', keyword, target });
+/** Vigil is the only archetype that hands out keywords, so this stays local. */
+const giveK = (keyword: Keyword, target: EffectTarget): EffectSpec => ({ kind: 'giveKeyword', keyword, target });
 
 export const HERO: HeroSpec = {
   name: 'Ser Aldric the Vigilant',

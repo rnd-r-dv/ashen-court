@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, TargetRef } from '@ashen/core';
 import CardView, { FACE_DOWN_CARD } from './CardView.js';
@@ -17,13 +18,22 @@ import './board.css';
  * (intents.ts enumerates one intent per legal target).
  */
 
-export type BoardTargetingKind = 'play' | 'attack' | 'heroPower';
+/**
+ * Active targeting mode. A discriminated union, deliberately NOT one flat
+ * shape with two optional payload fields: each kind carries exactly the field
+ * it needs, so the consumer (Match.onTargetClick) reads `handIndex` /
+ * `attackerId` without a defensive `??` default. Those defaults were the bug —
+ * `attackerId ?? ''` at least failed loudly ("Attacker not found"), but
+ * `handIndex ?? 0` silently played whatever card sat in hand slot 0, turning a
+ * state bug into a wrong and irreversible game action. With the union the
+ * fallbacks are unrepresentable rather than merely unused.
+ */
+export type BoardTargeting =
+  | { kind: 'play'; handIndex: number }
+  | { kind: 'attack'; attackerId: string }
+  | { kind: 'heroPower' };
 
-export interface BoardTargeting {
-  kind: BoardTargetingKind;
-  handIndex?: number;
-  attackerId?: string;
-}
+export type BoardTargetingKind = BoardTargeting['kind'];
 
 export interface BoardProps {
   state: GameState;
@@ -114,6 +124,13 @@ export default function Board({
   const myHeroTarget = isTarget({ type: 'hero', player: me });
   const foeHeroTarget = isTarget({ type: 'hero', player: foe });
 
+  // Click handler for a valid target (both heroes and creatures use it):
+  // stopPropagation first so the board's empty-space cancel never also fires.
+  const targetClick = (ref: TargetRef) => (e: ReactMouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    onTargetClick(ref);
+  };
+
   function creatureSlot(c: CreatureState, friendly: boolean) {
     const def = getCard(c.cardId);
     if (!def) return null;
@@ -144,10 +161,7 @@ export default function Board({
           muted={inTargeting && !targetable}
           onClick={
             targetable
-              ? (e) => {
-                  e.stopPropagation();
-                  onTargetClick(ref);
-                }
+              ? targetClick(ref)
               : selectable
                 ? (e) => {
                     e.stopPropagation();
@@ -182,14 +196,7 @@ export default function Board({
             fx={heroFx?.[foe]}
             powerFx={powerFx?.[foe]}
             animScale={animScale}
-            onClick={
-              foeHeroTarget
-                ? (e) => {
-                    e.stopPropagation();
-                    onTargetClick({ type: 'hero', player: foe });
-                  }
-                : undefined
-            }
+            onClick={foeHeroTarget ? targetClick({ type: 'hero', player: foe }) : undefined}
           />
           <div className="board-enemyhand" aria-label={`Enemy hand: ${foeP.hand.length} cards`}>
             {foeP.hand.map((id, i) => (
@@ -220,14 +227,7 @@ export default function Board({
             fx={heroFx?.[me]}
             powerFx={powerFx?.[me]}
             animScale={animScale}
-            onClick={
-              myHeroTarget
-                ? (e) => {
-                    e.stopPropagation();
-                    onTargetClick({ type: 'hero', player: me });
-                  }
-                : undefined
-            }
+            onClick={myHeroTarget ? targetClick({ type: 'hero', player: me }) : undefined}
             onPowerClick={onHeroPower}
             powerEnabled={myTurn && heroPowerLegal && !inTargeting}
           />

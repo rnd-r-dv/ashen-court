@@ -1,5 +1,6 @@
-import type { Card, EffectSpec, HeroSpec, Keyword, Rarity, TriggerSpec } from '../types.js';
+import type { Card, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
+import { archetypeCards, dmg, draw } from './builders.js';
 
 /**
  * Shadow Dancers (Task 15): Nyx Nightshade's draw/damage deck. Signature
@@ -9,41 +10,7 @@ import type { DeckDef } from './index.js';
  */
 const DANCE_PALETTE = ['#1a1a2e', '#c084fc'];
 
-/** FNV-1a (32-bit) over the card id: deterministic, stable, distinct per id. */
-function hashId(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-const art = (id: string): Card['art'] => ({ preset: 'shadow', palette: DANCE_PALETTE, seed: hashId(id) });
-
-const creature = (
-  id: string, name: string, cost: number, attack: number, health: number,
-  rarity: Rarity, keywords: Keyword[] = [], triggers: TriggerSpec[] = [], flavor?: string,
-): Card => ({
-  id, name, type: 'creature', cost, attack, health,
-  keywords, triggers, effects: [], rarity, archetype: 'dance',
-  art: art(id), flavor, author: 'curated', version: 1,
-});
-
-const spell = (id: string, name: string, cost: number, rarity: Rarity, effects: EffectSpec[], flavor?: string): Card => ({
-  id, name, type: 'spell', cost,
-  keywords: [], effects, rarity, archetype: 'dance',
-  art: art(id), flavor, author: 'curated', version: 1,
-});
-
-const artifact = (id: string, name: string, cost: number, rarity: Rarity, triggers: TriggerSpec[], flavor?: string): Card => ({
-  id, name, type: 'artifact', cost,
-  keywords: [], effects: [], triggers, rarity, archetype: 'dance',
-  art: art(id), flavor, author: 'curated', version: 1,
-});
-
-const dmg = (value: number, target: EffectSpec['target']): EffectSpec => ({ kind: 'dealDamage', value, target });
-const draw = (value: number): EffectSpec => ({ kind: 'draw', value });
+const { artifact, creature, spell } = archetypeCards('shadow', DANCE_PALETTE, 'dance');
 
 export const HERO: HeroSpec = {
   name: 'Nyx Nightshade',

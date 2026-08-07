@@ -45,6 +45,22 @@ describe('targeted battlecries (Task 15 ruling)', () => {
     expect(first.health).toBe(1);    // untouched
   });
 
+  // audit 02: fireTriggers handed the ONE chosen ref to EVERY spec in the
+  // group, so a mixed battlecry redirected its non-choice specs at the chosen
+  // target. pact-morticia is dmg(3,'self') + dmg(3,'allEnemies'): a hand-rolled
+  // intent carrying the enemy hero (validation skips self/allEnemies specs, and
+  // the LAN server forwards client intents straight to submit) turned the
+  // self-damage drawback into 6 more damage to the enemy face.
+  it('a chosen ref never leaks into self/AoE battlecry specs (pact-morticia)', () => {
+    const g = game();
+    toMain(g);
+    g.state.players[0].mana = 10;
+    g.state.players[0].hand.unshift('pact-morticia');
+    g.submit({ kind: 'playCard', handIndex: 0, target: { type: 'hero', player: 1 } });
+    expect(g.state.players[0].hero.hp).toBe(27);   // dmg(3,'self') stays on the caster
+    expect(g.state.players[1].hero.hp).toBe(27);   // dmg(3,'allEnemies') lands once
+  });
+
   it('legalIntents enumerates playCard with a target for choice battlecries', () => {
     const g = game();
     toMain(g);

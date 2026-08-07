@@ -49,13 +49,16 @@
 .match-handwrap {
   position: relative;
   /* Task 41: board + hand scale with the window (clamp) instead of fixed
-     heights; the bottom padding keeps rotated fan corners on-screen (they
-     dip ~20-30px below the card baseline at full fan angles). */
+     heights. The hand row keeps itself clear of the bottom edge via
+     hand.css's padding-bottom — cards are upright now, so there are no
+     rotated corners to reserve extra room for. */
   min-height: clamp(190px, 27vh, 300px);
   margin: 0 calc(var(--space-5) * -1);
   padding-top: var(--space-2);
-  padding-bottom: clamp(24px, 4vh, 40px);
-  background: linear-gradient(180deg, transparent 0%, rgba(13, 10, 22, 0.55) 40%, var(--bg-1) 100%);
+  /* UI pass 2026-08-07: near-opaque backdrop. The old mostly-transparent
+     gradient let the battlefield show through the hand, which is the same
+     washed-out effect the muted-card opacity had. */
+  background: linear-gradient(180deg, transparent 0%, rgba(13, 10, 22, 0.92) 32%, var(--bg-1) 62%);
   /* Task 41: the container never eats clicks — only the hand cards
      themselves are interactive (.hand-slot re-enables pointer events), so
      board controls (End Turn, mana tray) stay clickable even when the board
@@ -81,7 +84,9 @@
 }
 
 .match-hand-hidden .cardview {
-  margin-right: -64px; /* overlap like the fanned hand; last card needs no pull */
+  /* Overlap like the live hand. Retuned for the narrower card box (240px,
+     was 264) so a full 10-card hand of backs still seats on one screen. */
+  margin-right: -120px;
 }
 
 .match-hand-hidden .cardview:last-child {

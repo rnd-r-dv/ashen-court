@@ -93,7 +93,10 @@ export default function Victory({ result, myPlayer, lan, onRematch, onChangeDeck
           {rematchLabel}
         </button>
         <button type="button" className="shell-btn" onClick={onChangeDeck}>
-          Change Deck
+          {/* M4 (audit 06): while waiting for the opponent's rematch the
+              primary button is disabled with no exit — reuse the Change-Deck
+              escape (back to the LAN screens) as a Cancel affordance. */}
+          {lan && waiting ? 'Cancel Rematch' : 'Change Deck'}
         </button>
         <button type="button" className="shell-btn" onClick={onMenu}>
           Main Menu

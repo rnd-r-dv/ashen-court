@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import type { Card as CardSpec, CardType } from '@ashen/core';
 import { buildPool, DECK_DEFS } from '@ashen/core';
-import { loadCustomCards, saveDeck, deleteDeck } from '../storage.js';
-import { addCard, deckStatus, filterPool, removeCard } from '../deckBuild.js';
+import { deckKey, deckSlug, deleteDeck, loadCustomCards, loadDecks, saveDeck } from '../storage.js';
+import { addCard, deckStatus, filterPool, removeCard, wouldOverwrite } from '../deckBuild.js';
 import Card from '../components/Card.js';
 import ImportExport from '../components/ImportExport.js';
 import './forge.css';          // .card-preview styling for the Card stub (Task 25)
@@ -76,6 +76,12 @@ export default function DeckBuilder() {
   const slug = slugify(deckName);
   const canSave = status.count === 60 && errors.length === 0 && slug !== '';
 
+  // Saved custom-deck overlays (namespaced 'custom:<slug>' keys, audit 05 I4) —
+  // loaded live so saves/deletes refresh the picker (I3: decks are editable).
+  const savedDecks = Object.entries(loadDecks())
+    .map(([key, ids]) => ({ slug: deckSlug(key) ?? key, ids }))
+    .sort((a, b) => a.slug.localeCompare(b.slug));
+
   const counts = useMemo(() => {
     const map = new Map<string, number>();
     for (const id of deck) map.set(id, (map.get(id) ?? 0) + 1);
@@ -101,9 +107,26 @@ export default function DeckBuilder() {
     setDeck(removeCard(deck, id));
   }
 
+  function loadDeck(loadedSlug: string) {
+    const ids = loadDecks()[deckKey(loadedSlug)];
+    if (!ids || ids.length === 0) return;
+    setDeck(ids);
+    setDeckName(loadedSlug);
+    setActiveDeckId(loadedSlug);
+  }
+
   function onSave() {
     if (!canSave) return;
-    saveDeck(slug, deck);
+    // I3: never silently clobber a different, non-empty saved overlay.
+    if (wouldOverwrite(loadDecks()[deckKey(slug)], deck) &&
+        !window.confirm(`Overwrite the existing deck "${deckName.trim()}"?`)) {
+      return;
+    }
+    if (!saveDeck(slug, deck)) {
+      // I1: localStorage rejected the write (quota).
+      showToast('Storage full — the deck could not be saved.');
+      return;
+    }
     setActiveDeckId(slug);
     showToast(`Saved deck "${deckName.trim()}" (${deck.length} cards)`);
     // keep building — the working list stays as-is
@@ -112,7 +135,15 @@ export default function DeckBuilder() {
   function onDelete() {
     if (!activeDeckId) return;
     if (!window.confirm(`Delete deck "${activeDeckId}"? This cannot be undone.`)) return;
-    deleteDeck(activeDeckId);
+    // Audit 07 bug 21: deleteDeck returns false when localStorage rejects the
+    // write (I1/I9). Discarding that reported "Deleted deck" AND wiped the
+    // working list while the overlay was still on disk — a reload brought the
+    // "deleted" deck straight back, and the player's in-progress list was gone
+    // for nothing. Keep every bit of state on a failed delete.
+    if (!deleteDeck(activeDeckId)) {
+      showToast('Storage full — the deck could not be deleted.');
+      return;
+    }
     setActiveDeckId(null);
     setDeck([]);
     setDeckName('');
@@ -253,6 +284,22 @@ export default function DeckBuilder() {
             {errors.map((i, n) => (
               <p className="deckbuilder-issue deckbuilder-issue-error" key={`e${n}`}>{i.message}</p>
             ))}
+          </section>
+
+          <section className="deckbuilder-section">
+            <label className="deckbuilder-label" htmlFor="deck-load">Load a saved deck</label>
+            <select
+              id="deck-load"
+              className="deckbuilder-input"
+              value=""
+              onChange={(e) => { const s = e.target.value; if (s) loadDeck(s); }}
+              aria-label="Load a saved deck"
+            >
+              <option value="">— choose a saved deck —</option>
+              {savedDecks.map(({ slug: s, ids }) => (
+                <option key={s} value={s}>{s} ({ids.length} cards)</option>
+              ))}
+            </select>
           </section>
 
           <section className="deckbuilder-section">

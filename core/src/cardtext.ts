@@ -1,4 +1,4 @@
-import type { Card, EffectSpec, EffectTarget, HeroPower, Trigger } from './types.js';
+import type { Card, EffectSpec, EffectTarget, HeroPower, Keyword, Trigger } from './types.js';
 import { TOKEN_CARDS } from './data/tokens.js';
 
 /**
@@ -24,6 +24,23 @@ const TRIGGER_LABEL: Record<Trigger, string> = {
   startOfTurn: 'Start of Turn',
   endOfTurn: 'End of Turn',
   onDamage: 'On Damage',
+};
+
+/**
+ * Player-facing rules text for every keyword. Ward and Shield were previously
+ * indistinguishable in play: both read as "absorbs something", and neither
+ * appeared on a card. They are genuinely different — Ward answers TARGETED
+ * SPELLS AND EFFECTS (game.ts fizzles the spell outright), Shield answers
+ * DAMAGE from any source, attacks included. Stated here so the UI can show it.
+ */
+export const KEYWORD_TEXT: Record<Keyword, string> = {
+  taunt: 'Enemies must attack this creature before your hero or your other creatures.',
+  rush: 'Can attack enemy creatures the turn it is summoned.',
+  charge: 'Can attack anything, including the enemy hero, the turn it is summoned.',
+  windfury: 'Can attack twice each turn.',
+  lifesteal: 'Damage this creature deals also restores that much health to your hero.',
+  ward: 'Absorbs the next enemy spell or effect that targets this creature.',
+  shield: 'Absorbs the next instance of damage from any source.',
 };
 
 /** Player-facing names for every EffectTarget union member. */

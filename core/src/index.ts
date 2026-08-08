@@ -7,7 +7,7 @@ export type * from './types.js';
 
 export { validateCard, validateDeck, RARITY_COPY_LIMIT, type ValidationIssue } from './validate.js';
 
-export { cardText, heroPowerText, effectText } from './cardtext.js';
+export { cardText, heroPowerText, effectText, KEYWORD_TEXT } from './cardtext.js';
 
 export {
   buildPool,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cardText, heroPowerText, effectText } from '../src/cardtext.js';
+import { cardText, heroPowerText, effectText, KEYWORD_TEXT } from '../src/cardtext.js';
 import { buildPool, HEROES, TOKEN_CARDS } from '../src/data/index.js';
 import type { Card, EffectSpec, HeroPower, TriggerSpec } from '../src/types.js';
 
@@ -177,6 +177,20 @@ describe('cardText — real curated cards (Task 43)', () => {
       for (const e of c.effects) {
         if (e.kind === 'summon' && e.cardId) expect(tokenIds.has(e.cardId), `${c.id}: ${e.cardId}`).toBe(true);
       }
+    }
+  });
+});
+
+describe('keyword text', () => {
+  it('distinguishes ward from shield', () => {
+    expect(KEYWORD_TEXT.ward).toBe('Absorbs the next enemy spell or effect that targets this creature.');
+    expect(KEYWORD_TEXT.shield).toBe('Absorbs the next instance of damage from any source.');
+  });
+
+  it('covers every keyword', () => {
+    const keywords = ['taunt', 'rush', 'charge', 'windfury', 'lifesteal', 'ward', 'shield'] as const;
+    for (const k of keywords) {
+      expect(KEYWORD_TEXT[k].length).toBeGreaterThan(0);
     }
   });
 });

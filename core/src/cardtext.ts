@@ -134,6 +134,8 @@ export function effectText(effect: EffectSpec): string {
       return `Give ${target(effect.target)} Spell Power +${v}.`;
     case 'overload':
       return `Overload: ${v}.`;
+    case 'discover':
+      return 'Discover a card.';
   }
 }
 

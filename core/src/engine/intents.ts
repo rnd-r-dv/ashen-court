@@ -145,6 +145,16 @@ function safeCard(game: Game, id: string): Card | undefined {
  * discountMostExpensive/discountNextSpell at every turn start.)
  */
 export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
+  // Discover suspends legality (Task 1): while a choice is pending, ONLY the
+  // pending owner may act, and its only legal intents are the three choices.
+  // Every other player has no legal intents at all — the whole normal
+  // enumeration below is suspended, not filtered.
+  const pending = game.state.pendingChoice;
+  if (pending !== null) {
+    return pending.player === player
+      ? pending.cardIds.map((_, choice) => ({ kind: 'discover' as const, choice }))
+      : [];
+  }
   if (game.state.phase !== 'main' || game.currentPlayer() !== player) return [];
   const p = game.state.players[player];
   const enemy = (1 - player) as PlayerIndex;

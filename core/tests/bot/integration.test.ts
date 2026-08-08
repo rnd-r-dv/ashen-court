@@ -5,10 +5,10 @@ import type { ArchetypeId } from '../../src/data/index.js';
 import { Game } from '../../src/engine/game.js';
 import { createBot } from '../../src/bot/index.js';
 import type { BotLevel } from '../../src/bot/index.js';
-import { mulliganPolicy } from '../../src/bot/policies.js';
+import { mulliganPolicy, Grandmaster } from '../../src/bot/policies.js';
 import { MAX_TURNS } from '../../src/types.js';
 import type { PlayerIndex } from '../../src/types.js';
-import { makeTestSetup } from '../helpers.js';
+import { makeTestSetup, addCreature } from '../helpers.js';
 
 const pool = new CardRegistry(buildPool());
 
@@ -126,5 +126,52 @@ describe('bot integration', () => {
     expect(game.state.phase).toBe('gameOver');
     const over = game.state.log.find(e => e.type === 'gameOver');
     expect(over).toMatchObject({ winner: 'draw', reason: 'turn limit' });
+  });
+
+  it('grandmaster resolves a pending discover inside the depth-2 enemy-turn simulation', () => {
+    // Deterministic depth-2 scenario (Task 1 Step 7). Player 0 holds a
+    // 1-cost star-spark and a 0/1 vanilla that cannot attack; their only
+    // artifact fires a Discover at the START of player 0's turn. The enemy
+    // has a stealthed 1/1 Charge that hits player 0's hero for 1 on its
+    // greedy turn (stealth keeps it off the anyCreature target lists). The
+    // hero power is rewritten to dmg(1, anyCreature) so its only variant is
+    // hitting our own creature — never the enemy hero (which would outscore
+    // everything).
+    //
+    // Hand-derived scores (evaluate weights: board atk*2+hp, foe *1.3, hp*2,
+    // hand*1.2, maxMana*0.3, board-length*0.5):
+    //   - playCard star-spark on our own 0/1: 0 - 3.9 - 0.5 + 0.6 = -3.8
+    //   - endTurn, sim exits WITHOUT resolving the choice (the old loop
+    //     stopped as soon as the current player was no longer the enemy):
+    //     board 1 - 3.9 - 2(hero hit) + 1.2(spark held) + 0.9 = -2.8
+    //   - hero power on our own 0/1 (spark stays in hand): -2.6
+    //   - endTurn, sim resolves the pending choice (hand +1.2):
+    //     1 - 3.9 - 2 + 1.2 + 1.2 + 0.9 = -1.6
+    // So WITHOUT the sim's pending-resolution branch Grandmaster picks the
+    // hero power (-2.6 > -2.8); WITH it, endTurn wins (-1.6 > -2.6).
+    const ids = expandDeck(DECK_DEFS.ember!);
+    const game = Game.create({ seed: 42, decks: [ids, ids], heroes: [HEROES[0]!, HEROES[6]!] }, pool);
+    game.state.phase = 'main';
+    game.state.players[0].hand = ['star-spark'];
+    game.state.players[0].mana = 2;
+    game.state.players[0].maxMana = 2;
+    game.state.players[0].deck = [];
+    game.state.players[0].hero.power = { name: 'Star Rite', cost: 2, effects: [{ kind: 'dealDamage', value: 1, target: 'anyCreature' }] };
+    game.state.players[1].hand = [];
+    game.state.players[1].deck = [];
+    game.state.players[1].mana = 0;
+    game.state.players[1].maxMana = 0;
+    pool.register({
+      id: 'disc-art', name: 'Discover Relic', type: 'artifact', cost: 0,
+      keywords: [], effects: [], triggers: [{ when: 'startOfTurn', effects: [{ kind: 'discover' }] }],
+      rarity: 'common', archetype: 'neutral',
+      art: { preset: 'arcane', palette: ['#141430', '#ffe9a8'], seed: 1 },
+      author: 'curated', version: 1,
+    });
+    game.state.players[0].artifacts.push({ id: 'a1', cardId: 'disc-art', owner: 0 });
+    addCreature(game, 0, { id: 'disc-c', attack: 0, health: 1 });           // exhausted: cannot attack
+    addCreature(game, 1, { id: 'disc-d', attack: 1, health: 1, keywords: ['charge', 'stealth'] });
+
+    expect(Grandmaster.chooseIntent(game, 0)).toMatchObject({ kind: 'endTurn' });
   });
 });

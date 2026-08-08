@@ -15,7 +15,7 @@ export type CardType = 'creature' | 'spell' | 'artifact';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Keyword = 'taunt' | 'rush' | 'charge' | 'windfury' | 'lifesteal' | 'ward' | 'shield' | 'venom' | 'stealth';
 export type Trigger = 'battlecry' | 'deathrattle' | 'startOfTurn' | 'endOfTurn' | 'onDamage';
-export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'consume' | 'silence' | 'returnToHand' | 'copyCard' | 'giveKeyword' | 'discountMostExpensive' | 'discountNextSpell' | 'spellPower' | 'overload';
+export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'consume' | 'silence' | 'returnToHand' | 'copyCard' | 'giveKeyword' | 'discountMostExpensive' | 'discountNextSpell' | 'spellPower' | 'overload' | 'discover';
 export type EffectTarget = 'any' | 'hero' | 'anyCreature' | 'enemyCreature' | 'friendlyCreature' | 'friendlyDragon' | 'allEnemies' | 'allEnemyCreatures' | 'allFriendlyCreatures' | 'randomEnemy' | 'randomEnemyCreature' | 'self';
 
 export interface EffectSpec { kind: EffectKind; value?: number; value2?: number; target?: EffectTarget; keyword?: Keyword; cardId?: string; }
@@ -70,6 +70,17 @@ export interface PlayerState {
 }
 export type Phase = 'mulligan' | 'main' | 'gameOver';
 
+/** An interrupting decision pending on a player (Task 1): the first intent
+ *  state that is not owned by the current turn. `cardIds` are the seeded
+ *  candidates; the owner resolves by index through the `discover` intent.
+ *  `pendingChoice` exposes the ACTIVE choice to legality/UI; overlapping
+ *  offers queue FIFO in `pendingChoiceQueue` and rotate on resolution. */
+export interface PendingChoice {
+  kind: 'discover';
+  player: PlayerIndex;
+  cardIds: string[];
+}
+
 export interface MatchStats { turns: number; damageDealt: [number, number]; cardsPlayed: [number, number]; }
 // MatchStats lives here (types.ts) so app/src/types.ts (Task 28) can import it; Task 35's stats.ts only implements summarize().
 export interface GameState {
@@ -79,6 +90,11 @@ export interface GameState {
   mulligansDone: boolean[];     // per-player mulligan progress (survives serialize/deserialize, Task 12)
   rngState: { seed: number; calls: number };   // deterministic RNG position (serialization/replay)
   log: GameEvent[];
+  /** Active interrupting choice (only state legality/UI reads; serialized as
+   *  ordinary GameState and cloned with the search state). */
+  pendingChoice: PendingChoice | null;
+  /** Later offers waiting in deterministic FIFO order behind pendingChoice. */
+  pendingChoiceQueue: PendingChoice[];
 }
 
 export type TargetRef = { type: 'hero'; player: PlayerIndex } | { type: 'creature'; id: string };
@@ -87,7 +103,8 @@ export type Intent =
   | { kind: 'playCard'; handIndex: number; target?: TargetRef }
   | { kind: 'attack'; attackerId: string; target: TargetRef }
   | { kind: 'heroPower'; target?: TargetRef }
-  | { kind: 'endTurn' };
+  | { kind: 'endTurn' }
+  | { kind: 'discover'; choice: number };
 
 export type GameEvent =
   | { type: 'turnStart'; player: PlayerIndex; mana: number }
@@ -104,6 +121,8 @@ export type GameEvent =
   | { type: 'cardDrawnExtra'; player: PlayerIndex; cardId: string }   // effect draws (visual distinction)
   | { type: 'tokenSummoned'; player: PlayerIndex; cardId: string; creatureId: string }
   | { type: 'effectResolved'; player: PlayerIndex; sourceCardId: string; kind: EffectKind }
+  | { type: 'discoverOffered'; choice: PendingChoice }
+  | { type: 'discoverResolved'; player: PlayerIndex; cardId: string }
   | { type: 'spellFizzled'; player: PlayerIndex; cardId: string; creatureId?: string } // ward
   | { type: 'heroPowerUsed'; player: PlayerIndex }
   | { type: 'frozen'; creatureId: string }

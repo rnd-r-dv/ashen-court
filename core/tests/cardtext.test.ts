@@ -76,6 +76,9 @@ describe('effectText — one template per EffectKind (Task 43)', () => {
   it('discountNextSpell', () => {
     expect(effectText({ kind: 'discountNextSpell', value: 2 })).toBe('Your next spell costs 2 less this turn.');
   });
+  it('discover (Task 1)', () => {
+    expect(effectText({ kind: 'discover' })).toBe('Discover a card.');
+  });
 });
 
 describe('cardText — target-name mapping through multi-effect cards (Task 43)', () => {

@@ -27,7 +27,7 @@ export const CARDS: Card[] = [
   creature('choir-acolyte', 'Acolyte', 1, 1, 2, 'common', [], [{ when: 'battlecry', effects: [heal(2)] }], 'She lights every candle in the chapel before dawn, whispering the names the choir has forgotten.'),
   spell('choir-mend', 'Mend', 1, 'common', [heal(3, 'any')], 'Where the lament is sung, torn flesh knits and spent breath returns.'),
   creature('choir-sergeant', 'Sergeant of the Pale', 2, 2, 3, 'common', ['ward'], [], 'He has stood guard since the bells first tolled, and he will stand guard after the last echo dies.'),
-  spell('choir-candle', 'Candlelight', 2, 'common', [draw(1), heal(2)], 'One flame for the living, one for the dead, and one to find the way home.'),
+  spell('choir-candle', 'Candlelight', 2, 'common', [{ kind: 'discover' }, heal(2)], 'One flame for the living, one for the dead, and one to find the way home.'),
   spell('choir-smite', 'Smite', 2, 'common', [dmg(2, 'enemyCreature')], 'The choir does not argue with the condemned; it strikes, and the pale light remembers why.'),
   creature('choir-warden', 'Warden', 3, 2, 4, 'common', ['taunt'], [], 'The gate of the pale cathedral has no lock. It has him.'),
   spell('choir-chant', 'Chant of Rest', 3, 'common', [heal(5)], 'Sleep is the choir\u2019s oldest hymn, and the dead sing it best.'),

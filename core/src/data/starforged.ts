@@ -27,7 +27,7 @@ export const CARDS: Card[] = [
   spell('star-spark', 'Spark', 1, 'common', [dmg(2, 'anyCreature')], 'A cinder torn from the Archon\'s forge falls where she wills it.'),
   spell('star-meteor', 'Meteor Shard', 2, 'common', [dmg(3, 'enemyCreature')], 'What the heavens discard, Stellara wields as a blade.'),
   creature('star-acolyte', 'Star Acolyte', 2, 2, 3, 'common', ['taunt'], [], 'Newest to the Archon\'s choir, they read destinies in the ash of dying stars.'),
-  spell('star-meditate', 'Meditate', 2, 'common', [draw(1), gainMana(1)], 'Silence, and the firmament answers: one whispered truth, one spark of power.'),
+  spell('star-meditate', 'Meditate', 2, 'common', [{ kind: 'discover' }, gainMana(1)], 'Silence, and the firmament answers: one whispered truth, one spark of power.'),
   spell('star-focus', 'Star Focus', 3, 'common', [gainMana(2)], 'Scattered starfire gathered into a lens — and the sky bends to her purpose.'),
   creature('star-guardian', 'Guardian', 3, 2, 4, 'common', ['taunt'], [], 'Wrought from a constellation\'s core, it stands where lesser lights would fall.'),
   creature('star-sentinel', 'Sentinel', 4, 3, 5, 'common', ['taunt'], [], 'It has watched the void since before the first spark was struck — and it watches still.'),

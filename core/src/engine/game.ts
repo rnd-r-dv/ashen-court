@@ -74,6 +74,7 @@ export class Game implements Resolver {
       players, turn: 0, phase: 'mulligan', seed: setup.seed,
       mulligansDone: [false, false],
       rngState: { seed: setup.seed, calls: 0 }, log: [],
+      pendingChoice: null, pendingChoiceQueue: [],
     };
   }
 
@@ -101,7 +102,22 @@ export class Game implements Resolver {
   }
 
   submit(intent: Intent): GameEvent[] {
-    const me = this.currentPlayer();
+    // Discover is an INTERRUPTING intent state (Task 1): while a choice is
+    // pending, only the pending owner may act — every other intent is rejected
+    // before any normal turn logic. The owner is the temporary actor even when
+    // they are not currentPlayer() (a start/end-of-turn trigger can create a
+    // valid out-of-turn choice), and the mulligan/main phase gates below do
+    // NOT apply to it. The engine cannot tell who submitted; LAN authorization
+    // (server) keys on pendingChoice.player.
+    const pending = this.state.pendingChoice;
+    let me: PlayerIndex;
+    if (pending !== null) {
+      if (intent.kind !== 'discover') throw new Error('Resolve Discover first');
+      me = pending.player;
+    } else {
+      if (intent.kind === 'discover') throw new Error('No Discover choice pending');
+      me = this.currentPlayer();
+    }
     if (!this.draining) {
       // Controlled top-level session: initialize the collector so EVERY event
       // applied during resolution (incl. applyEffect's internal nested drains)
@@ -125,6 +141,19 @@ export class Game implements Resolver {
   }
 
   private resolveIntent(intent: Intent, me: PlayerIndex): GameEvent[] {
+    if (intent.kind === 'discover') {
+      // Resolution is event-driven: validate the index against the ACTIVE
+      // choice, then emit discoverResolved; dispatch pushes the card to the
+      // pending owner's hand and rotates the FIFO queue. No phase or
+      // currentPlayer requirement — an out-of-turn choice is valid.
+      const pending = this.state.pendingChoice;
+      if (!pending) throw new Error('No Discover choice pending');
+      if (!Number.isInteger(intent.choice) || intent.choice < 0 || intent.choice >= pending.cardIds.length) {
+        throw new Error('Bad Discover choice');
+      }
+      this.emit({ type: 'discoverResolved', player: pending.player, cardId: pending.cardIds[intent.choice]! });
+      return runQueue(this);
+    }
     if (intent.kind === 'mulligan') {
       if (this.state.phase !== 'mulligan') throw new Error('Not in mulligan');
       // mulligan order: player 0, then player 1 (turn stays 0 during mulligan);
@@ -391,6 +420,20 @@ export class Game implements Resolver {
         break;
       case 'gameOver':
         this.state.phase = 'gameOver';
+        // A resolved game clears every interrupting choice (Task 1): nothing
+        // may remain pending once the match has ended.
+        this.state.pendingChoice = null;
+        this.state.pendingChoiceQueue = [];
+        break;
+      case 'discoverOffered':
+        // The first offer becomes the ACTIVE choice; later offers queue FIFO
+        // and rotate in when the active one resolves (Task 1).
+        if (this.state.pendingChoice === null) this.state.pendingChoice = evt.choice;
+        else this.state.pendingChoiceQueue.push(evt.choice);
+        break;
+      case 'discoverResolved':
+        this.state.players[evt.player].hand.push(evt.cardId);
+        this.state.pendingChoice = this.state.pendingChoiceQueue.shift() ?? null;
         break;
       case 'turnEnd':
         // endOfTurn triggers fire for the player ending their turn, BEFORE the

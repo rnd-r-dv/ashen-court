@@ -150,7 +150,23 @@ export const Veteran: BotPolicy = {
 function scoreAfterEnemyTurn(g: Game, me: PlayerIndex): number {
   const enemy = (1 - me) as PlayerIndex;
   let steps = 0;
-  while (g.state.phase !== 'gameOver' && g.currentPlayer() === enemy) {
+  while (g.state.phase !== 'gameOver') {
+    // A pending choice is resolved by its OWNER even when that owner differs
+    // from the simulated current player (Task 1): a start/end-of-turn trigger
+    // can offer a Discover to ME while the sim's current player is the enemy.
+    // Without this branch the enemy-keyed loop below would exit the moment
+    // currentPlayer left the enemy — leaving the clone scored with the choice
+    // UNRESOLVED (the discovered card never lands). Only exit when no choice
+    // is pending AND the simulated enemy turn has ended. greedyBest returns
+    // the discover intents for the owner via the suspended legalIntents.
+    const pending = g.state.pendingChoice;
+    if (pending !== null) {
+      const reply = greedyBest(g, pending.player, MAX_EVAL);
+      if (reply === null) break;
+      try { g.submit(reply); } catch { break; }
+      continue;
+    }
+    if (g.currentPlayer() !== enemy) break;
     if (steps++ >= MAX_ENEMY_TURN_INTENTS) break;
     const reply = greedyBest(g, enemy, MAX_EVAL);
     if (reply === null) break; // defensive: no legal intents (endTurn is always legal in main)

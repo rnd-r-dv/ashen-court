@@ -269,6 +269,27 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
     case 'overload':
       game.state.players[ctx.player].overload += spec.value ?? 0;
       break;
+    case 'discover': {
+      // Deterministic candidate generation (Task 1): every eligible card in
+      // the registry is offered EXCEPT tokens (summoned-only archetype) and
+      // the Coin (mana-surge, a setup fixture). Three candidates are selected
+      // by removing one seeded pickRandom draw at a time, so the chosen set
+      // and the RNG continuation are both byte-identical under the same seed.
+      // The eligibility check runs BEFORE any RNG is consumed — a registry
+      // too small to offer three cards must fail without advancing the stream.
+      const eligible = [...registryOf(game).pool().values()]
+        .filter(card => card.archetype !== 'token' && card.id !== 'mana-surge');
+      if (eligible.length < 3) throw new Error('Not enough eligible cards to Discover');
+      const bag = [...eligible];
+      const cardIds: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const pick = game.pickRandom(bag);
+        cardIds.push(pick.id);
+        bag.splice(bag.indexOf(pick), 1);
+      }
+      push(game, { type: 'discoverOffered', choice: { kind: 'discover', player: ctx.player, cardIds } });
+      break;
+    }
   }
   push(game, { type: 'effectResolved', player: ctx.player, sourceCardId: ctx.cardId, kind: spec.kind });
   runQueue(game);

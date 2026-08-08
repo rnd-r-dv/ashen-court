@@ -58,6 +58,14 @@
 	justify-content: space-between;
 }
 
+/* Picker chip row: children are .kwchip--picker (KeywordChip, keywordchip.css),
+   so only the row layout lives here. */
+.forge-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
 .forge-input {
 	background: #131220;
 	border: 1px solid #322f42;

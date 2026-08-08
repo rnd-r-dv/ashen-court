@@ -30,6 +30,17 @@
   color: var(--text-dim);
 }
 
+/* Generated hero portrait — fills the circle, cropped by the mask. Art is
+   requested at 1:1 (scripts/art/prompt.ts buildHeroPrompt) precisely so this
+   crop is a no-op. */
+.heroportrait-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
 .heroportrait--active .heroportrait-circle {
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.35), var(--glow-gold);
@@ -92,9 +103,28 @@
   transition: width 250ms ease;
 }
 
-.heroportrait-hpbar--ok .heroportrait-hpfill { background: linear-gradient(180deg, #7bc96f, #2f6d2a); }
-.heroportrait-hpbar--hurt .heroportrait-hpfill { background: linear-gradient(180deg, #e0b14d, #8a5f16); }
-.heroportrait-hpbar--critical .heroportrait-hpfill { background: linear-gradient(180deg, #e2604f, #8a1f14); }
+/* Carved gauge in the theme's own vocabulary. The old green-to-red bar was
+   generic game-UI and clashed with the gold-on-purple palette. Thresholds are
+   unchanged — only the colours moved into the theme. */
+.heroportrait-hpbar {
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.7);
+}
+
+.heroportrait-hpbar--ok .heroportrait-hpfill {
+  background: linear-gradient(180deg, #f0dba4, var(--gold) 55%, #6d4c10);
+}
+.heroportrait-hpbar--hurt .heroportrait-hpfill {
+  background: linear-gradient(180deg, #ffcf9a, var(--ember) 55%, #7a3d10);
+}
+.heroportrait-hpbar--critical .heroportrait-hpfill {
+  background: linear-gradient(180deg, #ff9c8c, #c0392b 55%, #5e1109);
+  animation: heroportrait-critical 1.4s ease-in-out infinite;
+}
+
+@keyframes heroportrait-critical {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 10px rgba(226, 96, 79, 0.8); }
+}
 
 .heroportrait-hpnum {
   position: absolute;

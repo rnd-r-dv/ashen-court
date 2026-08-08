@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { motion } from 'framer-motion';
 import { heroPowerText, type HeroState, type PlayerIndex } from '@ashen/core';
+import { resolveHeroArt } from '../art/resolveArt.js';
 import type { HeroFX } from './animations.js';
 import './heroportrait.css';
 
@@ -36,7 +37,7 @@ export interface HeroPortraitProps {
   animScale?: number;
 }
 
-const SIGIL = '\u2726'; // four-pointed star (matches the card back sigil)
+const SIGIL = '\u2726'; // four-pointed star (matches the card back sigil) — fallback for heroes without generated art
 
 /**
  * Tween a changing number toward its target (HP tick-down/up). Tick-based
@@ -70,7 +71,7 @@ function useTween(value: number, ms: number): number {
     const step = () => {
       i += 1;
       const p = Math.min(1, i / ticks);
-      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      const eased = 1 - (1 - p) ** 3; // ease-out cubic
       const next = Math.round(from + (value - from) * eased);
       displayRef.current = next;
       setDisplay(next);
@@ -122,11 +123,18 @@ export default function HeroPortrait({
   const fxActive = (fx?.flash ?? 0) > 0 || (fx?.heal ?? 0) > 0;
   const hpDisplay = useTween(hero.hp, 340 * animScale);
 
+  // Generated portrait (art-pipeline plan). SIGIL was used for all 12 heroes,
+  // so both portraits were identical every match; it is now the fallback for
+  // heroes whose art has not been generated, not the default.
+  const portrait = resolveHeroArt(hero.name);
+
   return (
     <div className={classes} data-player={player} onClick={(e) => onClick?.(e)}>
       <span className="heroportrait-name">{hero.name}</span>
       <div className="heroportrait-circle" aria-hidden="true">
-        <span className="heroportrait-sigil">{SIGIL}</span>
+        {portrait
+          ? <img className="heroportrait-portrait" src={portrait} alt="" />
+          : <span className="heroportrait-sigil">{SIGIL}</span>}
         <span className="heroportrait-player">P{player + 1}</span>
         {fxActive && (
           <motion.span

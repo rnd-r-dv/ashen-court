@@ -319,6 +319,14 @@ export function damageTarget(game: Resolver, ctx: EffectCtx, ref: TargetRef, amo
     push(game, { type: 'damageDealt', target: ref, amount: dmg, sourceCardId: ctx.cardId });
     if (c.health <= 0) {
       push(game, { type: 'creatureDied', player: c.owner, creatureId: c.id, cardId: c.cardId });
+    } else if (dmg > 0 && ctx.creatureId) {
+      // venom: a source creature that dealt real damage destroys what it hit,
+      // regardless of size. Gated on dmg > 0 so a shield absorb (which emits a
+      // 0-amount damageDealt) never kills, matching the onDamage trigger rule.
+      const source = findCreature(game, ctx.creatureId);
+      if (source && source.keywords.includes('venom')) {
+        push(game, { type: 'creatureDied', player: c.owner, creatureId: c.id, cardId: c.cardId });
+      }
     }
     return dmg;
   }

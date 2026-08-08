@@ -20,10 +20,10 @@ export function statBudget(cost: number): number { return 2 + 2 * cost; }
 export const STAT_BUDGET_SLACK = 4;
 
 export const KEYWORD_COST: Record<Keyword, number> = {
-  taunt: 1, rush: 1, charge: 2, windfury: 2, lifesteal: 1, ward: 1, shield: 1,
+  taunt: 1, rush: 1, charge: 2, windfury: 2, lifesteal: 1, ward: 1, shield: 1, venom: 2,
 };
 
-const CREATURE_ONLY_KEYWORDS: Keyword[] = ['taunt', 'rush', 'charge', 'windfury', 'lifesteal', 'ward', 'shield'];
+const CREATURE_ONLY_KEYWORDS: Keyword[] = ['taunt', 'rush', 'charge', 'windfury', 'lifesteal', 'ward', 'shield', 'venom'];
 const CREATURE_ONLY_TRIGGERS = ['battlecry', 'deathrattle', 'onDamage'];
 
 export function validateCard(card: Card): ValidationIssue[] {

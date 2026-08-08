@@ -41,6 +41,7 @@ export const KEYWORD_TEXT: Record<Keyword, string> = {
   lifesteal: 'Damage this creature deals also restores that much health to your hero.',
   ward: 'Absorbs the next enemy spell or effect that targets this creature.',
   shield: 'Absorbs the next instance of damage from any source.',
+  venom: 'Any creature damaged by this creature is destroyed.',
 };
 
 /** Player-facing names for every EffectTarget union member. */

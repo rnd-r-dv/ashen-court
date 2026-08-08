@@ -16,7 +16,9 @@ export function effectiveKeywords(creature: CreatureState): Set<Keyword> {
 
 /** True when any creature on the board has taunt (hero + non-taunt targets are then illegal). */
 export function tauntPresent(board: CreatureState[]): boolean {
-  return board.some(c => c.keywords.includes('taunt'));
+  // A stealthed taunt cannot be attacked, so it must not gate attacks either —
+  // otherwise it would make every enemy attack illegal.
+  return board.some(c => c.keywords.includes('taunt') && !c.keywords.includes('stealth'));
 }
 
 /**

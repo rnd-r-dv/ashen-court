@@ -188,7 +188,7 @@ describe('keyword text', () => {
   });
 
   it('covers every keyword', () => {
-    const keywords = ['taunt', 'rush', 'charge', 'windfury', 'lifesteal', 'ward', 'shield', 'venom'] as const;
+    const keywords = ['taunt', 'rush', 'charge', 'windfury', 'lifesteal', 'ward', 'shield', 'venom', 'stealth'] as const;
     for (const k of keywords) {
       expect(KEYWORD_TEXT[k].length).toBeGreaterThan(0);
     }

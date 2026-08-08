@@ -173,7 +173,10 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
 
   // 2. attacks: while the enemy has a taunt, ONLY taunt defenders are legal
   //    targets (hero excluded); otherwise every enemy creature + the hero.
-  const enemyBoard = game.state.players[enemy].board;
+  // Stealthed defenders are invisible to the attacker: skip them in BOTH the
+  // taunt and non-taunt branches (a stealthed taunt is also skipped here, and
+  // tauntPresent ignores it too — it cannot be attacked, so it gates nothing).
+  const enemyBoard = game.state.players[enemy].board.filter(c => !c.keywords.includes('stealth'));
   const taunt = tauntPresent(enemyBoard);
   for (const c of p.board) {
     if (!canAttack(c, game)) continue;

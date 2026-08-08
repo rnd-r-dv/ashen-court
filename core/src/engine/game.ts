@@ -183,13 +183,19 @@ export class Game implements Resolver {
         // the keyword test instead of crashing on an undefined find.
         const d = enemyBoard.find(c => c.id === target.id);
         if (!d) throw new Error('Defender not found');
-        if (!effectiveKeywords(d).has('taunt')) throw new Error('Taunt creature in the way');
+        // Stealth still applies inside the taunt gate: a stealthed taunt is
+        // untargetable (visibleToEnemy) and must not be reachable through the
+        // taunt check either (Task 8).
+        if (!effectiveKeywords(d).has('taunt') || d.keywords.includes('stealth')) throw new Error('Taunt creature in the way');
       }
       // resolve: attacksLeft is the swing counter (windfury 2 / normal 1).
       // exhausted stays summoning-sickness-only (set at summon, cleared in
       // beginTurn) — attacking does NOT exhaust, so a windfury creature can
       // swing twice (audit 01 C1).
       attacker.attacksLeft -= 1;
+      // Attacking reveals a stealthed creature (Task 8).
+      const stealthIdx = attacker.keywords.indexOf('stealth');
+      if (stealthIdx !== -1) attacker.keywords.splice(stealthIdx, 1);
       if (target.type === 'creature') {
         const defender = enemyBoard.find(c => c.id === target.id);
         if (!defender) throw new Error('Defender not found');

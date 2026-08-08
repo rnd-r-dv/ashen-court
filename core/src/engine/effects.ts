@@ -259,7 +259,11 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
 export function resolveTargets(game: Resolver, player: PlayerIndex, target: EffectTarget): TargetRef[] {
   const enemy = (1 - player) as PlayerIndex;
   const friendly = game.state.players[player].board;
-  const hostile = game.state.players[enemy].board;
+  // The enemy board is pre-filtered by visibleToEnemy so EVERY enemy-facing
+  // case (any/anyCreature/enemyCreature/allEnemies/allEnemyCreatures/
+  // randomEnemy/randomEnemyCreature) excludes stealthed creatures uniformly —
+  // the friendly board is untouched, so buffs/heals still reach them (Task 8).
+  const hostile = game.state.players[enemy].board.filter(visibleToEnemy);
   const creatureRefs = (board: readonly CreatureState[]): TargetRef[] =>
     board.map(c => ({ type: 'creature' as const, id: c.id }));
 
@@ -367,6 +371,14 @@ export function isDragon(game: Resolver, c: CreatureState): boolean {
   } catch {
     return false;   // unknown/synthetic card — not a dragon
   }
+}
+
+/** Enemy-facing target filter: a stealthed creature is not selectable by the
+ *  opponent. It stays fully selectable by its OWN controller (friendly buffs
+ *  and heals still reach it), so the filter is applied only where the refs
+ *  belong to the enemy. */
+function visibleToEnemy(c: CreatureState): boolean {
+  return !c.keywords.includes('stealth');
 }
 
 /** Find a creature by id across both boards. Exported for Game's dispatch handlers (Task 8). */

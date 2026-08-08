@@ -413,6 +413,15 @@ export class Game implements Resolver {
         if (dead) removeCreature(this, dead);
         break;
       }
+      case 'creatureReturned': {
+        const p = this.state.players[evt.player];
+        const idx = p.board.findIndex(c => c.id === evt.creatureId);
+        if (idx === -1) break;
+        p.board.splice(idx, 1);
+        // A full hand simply loses the card, matching how draw handles overflow.
+        p.hand.push(evt.cardId);
+        break;
+      }
       case 'spellFizzled':
       case 'heroHealed':
       case 'heroDamaged':   // log-only marker (hero hp already applied inline in damageTarget)

@@ -61,7 +61,7 @@ export function validateCard(card: Card): ValidationIssue[] {
         + `(vanilla budget ${budget} + ${STAT_BUDGET_SLACK} design slack) by ${spent - ceiling}.`);
     }
   }
-  const TARGET_KINDS: EffectKind[] = ['dealDamage', 'heal', 'buff', 'freeze', 'destroy', 'silence', 'giveKeyword'];
+  const TARGET_KINDS: EffectKind[] = ['dealDamage', 'heal', 'buff', 'freeze', 'destroy', 'silence', 'giveKeyword', 'returnToHand'];
   const allEffects = [...(card.effects ?? []), ...(card.triggers ?? []).flatMap(t => t.effects)];
   for (const e of allEffects) {
     if (TARGET_KINDS.includes(e.kind) && !e.target) err('effect', `${e.kind} requires a target.`);

@@ -209,6 +209,17 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
       }
       break;
     }
+    case 'returnToHand': {
+      for (const ref of refs) {
+        if (ref.type !== 'creature') continue;
+        const c = findCreature(game, ref.id);
+        if (!c) continue;
+        // NOT a death: no creatureDied, so no deathrattle. Bounce is removal
+        // that deliberately leaves the card playable again.
+        push(game, { type: 'creatureReturned', player: c.owner, creatureId: c.id, cardId: c.cardId });
+      }
+      break;
+    }
     case 'copyCard': {
       const p = game.state.players[ctx.player];
       const id = spec.cardId ?? randomEnemyCreatureCardId(game, ctx.player);

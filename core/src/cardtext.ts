@@ -107,6 +107,8 @@ export function effectText(effect: EffectSpec): string {
       return `Destroy ${target(effect.target)}.`;
     case 'silence':
       return `Silence ${target(effect.target)}.`;
+    case 'returnToHand':
+      return `Return ${target(effect.target)} to its owner's hand.`;
     case 'copyCard':
       return effect.cardId
         ? `Add a copy of ${tokenName(effect.cardId)} to your hand.`

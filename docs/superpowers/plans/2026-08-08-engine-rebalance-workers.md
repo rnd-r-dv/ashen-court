@@ -27,10 +27,12 @@
 `beginTurn` computes `maxMana`, emits `turnStart` (whose dispatch fires startOfTurn triggers, so a ramp artifact's `gainMana` lands), and *then* emits a `manaChanged` built from the **pre-trigger** value — overwriting the ramp. Sylvan Grove and Idol of Growth currently do nothing.
 
 **Files:**
+
 - Modify: `core/src/engine/game.ts:542-571`
 - Test: `core/tests/mana-ramp.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: correct `beginTurn` event ordering — Task 10 (`overload`) depends on `manaChanged` being emitted *before* `turnStart`.
 
@@ -99,8 +101,6 @@ Replace with:
     this.emit({ type: 'turnStart', player: me, mana: maxMana });
 ```
 
-
-
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run core/tests/mana-ramp.test.ts`
@@ -125,10 +125,12 @@ git commit -m "fix(engine): stop beginTurn clobbering startOfTurn mana ramp"
 Retaliation is gated on `defender.health > 0`, so a defender killed outright deals nothing back. No major TCG works this way. Make damage simultaneous.
 
 **Files:**
+
 - Modify: `core/src/engine/game.ts:193-200`
 - Test: `core/tests/combat-simultaneous.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: simultaneous combat. Task 7 (`venom`) and the whole of Task 12+ (rebalance) assume it.
 
@@ -250,6 +252,7 @@ git commit -m "feat(engine)!: make combat damage simultaneous"
 `summonTokens` clamps to `BOARD_CAP - board.length`, so Endless Swarm (9) on an empty board silently yields 7. Give tokens their own cap so summon counts stop lying.
 
 **Files:**
+
 - Modify: `core/src/types.ts` (CreatureState)
 - Modify: `core/src/engine/effects.ts:29` (caps), `:376-386` (summonTokens), `:391+` (makeCreature)
 - Modify: `core/src/engine/intents.ts:161` (playCard board-full guard)
@@ -257,6 +260,7 @@ git commit -m "feat(engine)!: make combat damage simultaneous"
 - Test: `core/tests/token-row.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `CreatureState.token: boolean`; `TOKEN_CAP` exported from `@ashen/core`. The app's Board rendering (main-thread plan) reads `creature.token` to pick a row.
 
@@ -380,10 +384,12 @@ git commit -m "feat(engine): give tokens their own row and cap"
 Ward currently fizzles targeted spells only (`game.ts:237-240`); Shield absorbs one damage instance. Neither is stated on any card, and the two read as the same thing. Give both generated text.
 
 **Files:**
+
 - Modify: `core/src/cardtext.ts`
 - Test: `core/tests/cardtext.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `KEYWORD_TEXT` exported from `core/src/cardtext.ts`, consumed by the app's card inspect panel (main-thread plan).
 
@@ -465,10 +471,12 @@ git commit -m "feat(core): generate keyword rules text, splitting ward from shie
 Strips a creature's keywords and triggers. The pool has seven `destroy` effects and no other answer to a trigger-based threat.
 
 **Files:**
+
 - Modify: `core/src/types.ts` (`EffectKind`), `core/src/engine/effects.ts`, `core/src/cardtext.ts`, `app/src/forge/formState.ts`
 - Test: `core/tests/effects-silence.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `EffectKind` member `'silence'`. `CreatureState.silenced: boolean`.
 
@@ -590,10 +598,12 @@ git commit -m "feat(core): add the silence effect kind"
 Bounce a creature to its owner's hand. Tempo removal that is not a seventh `destroy`.
 
 **Files:**
+
 - Modify: `core/src/types.ts`, `core/src/engine/effects.ts`, `core/src/cardtext.ts`, `app/src/forge/formState.ts`, `core/src/validate.ts`
 - Test: `core/tests/effects-bounce.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `EffectKind` member `'returnToHand'`.
 
@@ -721,10 +731,12 @@ git commit -m "feat(core): add the returnToHand effect kind"
 Any creature this damages is destroyed. Deliberately strong under simultaneous combat — it is the pressure release for the inverted stat curve.
 
 **Files:**
+
 - Modify: `core/src/types.ts` (`Keyword`), `core/src/engine/effects.ts` (`damageTarget`), `core/src/validate.ts` (`KEYWORD_COST`), `core/src/cardtext.ts` (`KEYWORD_TEXT`)
 - Test: `core/tests/keyword-venom.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: `KEYWORD_TEXT` from Task 4.
 - Produces: `Keyword` member `'venom'`, `KEYWORD_COST.venom = 2`.
 
@@ -819,10 +831,12 @@ git commit -m "feat(core): add the venom keyword"
 Untargetable by the enemy until this creature attacks.
 
 **Files:**
+
 - Modify: `core/src/types.ts`, `core/src/engine/effects.ts` (`resolveTargets`), `core/src/engine/game.ts` (clear on attack), `core/src/validate.ts`, `core/src/cardtext.ts`
 - Test: `core/tests/keyword-stealth.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: `KEYWORD_TEXT` from Task 4.
 - Produces: `Keyword` member `'stealth'`, `KEYWORD_COST.stealth = 1`.
 
@@ -936,10 +950,12 @@ git commit -m "feat(core): add the stealth keyword"
 A creature that adds to your spells' damage. Build-around for Ember, Storm, and Star.
 
 **Files:**
+
 - Modify: `core/src/types.ts`, `core/src/engine/effects.ts`, `core/src/cardtext.ts`, `core/src/validate.ts`, `app/src/forge/formState.ts`
 - Test: `core/tests/spell-power.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `EffectKind` member `'spellPower'`; `CreatureState.spellPower: number`.
 
@@ -1068,10 +1084,12 @@ git commit -m "feat(core): add spell power"
 A card is cheap now and locks mana next turn.
 
 **Files:**
+
 - Modify: `core/src/types.ts`, `core/src/engine/effects.ts`, `core/src/engine/game.ts` (`beginTurn`), `core/src/cardtext.ts`, `app/src/forge/formState.ts`
 - Test: `core/tests/overload.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: Task 1's event ordering (`manaChanged` before `turnStart`).
 - Produces: `EffectKind` member `'overload'`; `PlayerState.overload: number`.
 
@@ -1185,10 +1203,12 @@ git commit -m "feat(core): add overload"
 Destroy a friendly token for a payoff. Gives Vermin, Bone, and Pact a way to convert bodies into value.
 
 **Files:**
+
 - Modify: `core/src/types.ts`, `core/src/engine/effects.ts`, `core/src/cardtext.ts`, `app/src/forge/formState.ts`
 - Test: `core/tests/effects-consume.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: `CreatureState.token` from Task 3.
 - Produces: `EffectKind` member `'consume'`.
 
@@ -1289,9 +1309,11 @@ git commit -m "feat(core): add the consume effect kind"
 Before touching card data, write the test that defines "balanced". Every later rebalance task runs against it.
 
 **Files:**
+
 - Test: `core/tests/pool-balance.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: the guardrail every rebalance task (13-16) must satisfy.
 
@@ -1383,6 +1405,7 @@ Four tasks, three archetypes each, all with identical structure. Work only insid
 **Files (per task):** the three or four named files in `core/src/data/`.
 
 **Interfaces:**
+
 - Consumes: every effect kind and keyword from Tasks 5-11, and `TOKEN_CAP` from Task 3.
 - Produces: a pool that satisfies `core/tests/pool-balance.test.ts`.
 
@@ -1405,7 +1428,7 @@ For every creature the guardrail lists as under-budget, raise `attack` and/or `h
 Every vanilla creature costing 4 or more gets either a keyword or a trigger, using the archetype's identity:
 
 | Archetype | Payoff loop | Reach for |
-|---|---|---|
+| --- | --- | --- |
 | ember | spell damage burn | `spellPower`, `dealDamage`, `overload` |
 | choir | heal into value | `heal`, `draw`, `silence` |
 | vermin | token flood | `summon`, `consume`, `venom` |
@@ -1444,6 +1467,7 @@ git commit -m "balance(data): retune and de-vanilla <archetypes>"
 ### Task 17: Regenerate the card inventory
 
 **Files:**
+
 - Modify: `graphify-out/CARDS.md`
 
 - [ ] **Step 1: Verify the whole pool is green**
@@ -1471,10 +1495,12 @@ Tasks 12-16 fixed creature *bodies*. They did not catch a second failure class: 
 This task adds six assertions that make those classes impossible, then fixes every card they flag.
 
 **Files:**
+
 - Modify: `core/tests/pool-balance.test.ts`
 - Modify: `core/src/data/neutrals.ts`, `elder-roots.ts`, `hollow-choir.ts`, `shadow-dancers.ts`, `grave-pact.ts`, `eternal-vigil.ts`
 
 **Interfaces:**
+
 - Consumes: `stealth` (Task 8), `returnToHand` (Task 6), the `giveKeyword` field-mirror fix (Task 5), `TOKEN_CAP` (Task 3).
 - Produces: nothing downstream except a regenerated `graphify-out/CARDS.md`.
 
@@ -1583,7 +1609,9 @@ Append inside the existing `describe('pool balance', ...)` block in `core/tests/
 
 Run: `npx vitest run core/tests/pool-balance.test.ts`
 
-Expected: FAIL with exactly these thirteen cards named across the six new assertions —
+**Before pasting any replacement line below, read the card's current definition.** The lines in Steps 3-9 were written against the pre-rebalance pool; Tasks 13-16 have since edited these same files. Treat each replacement as the *intended shape* and apply it to whatever the card is now — never paste over a rebalance change. If a flagged card already satisfies its rule because Tasks 13-16 fixed it, leave it alone.
+
+Expected: FAIL with exactly these fourteen cards named across the six new assertions —
 `neutral-scroll`, `choir-truth`, `roots-bounty`, `dance-veil`, `dance-mirage` (pure draw);
 `roots-verdant`, `roots-awaken` (pure ramp);
 `pact-bargain` (refill);
@@ -1644,10 +1672,10 @@ In `core/src/data/shadow-dancers.ts`, replace the `dance-veil`, `dance-mirage`, 
 ```ts
   spell('dance-veil', 'Veil Dance', 4, 'common', [draw(2), { kind: 'giveKeyword', keyword: 'stealth', target: 'friendlyCreature' }], 'The veils rise and fall; what they conceal is never what the crowd believes it saw.'),
   spell('dance-mirage', 'Mirage', 5, 'rare', [draw(3), { kind: 'returnToHand', target: 'enemyCreature' }], 'The mirage shows you what you most desire, and charges you dearly for the glimpse.'),
-  spell('dance-finale', 'Finale', 5, 'rare', [dmg(6, 'randomEnemy')], 'The last step of the dance is the one nobody sees coming.'),
+  spell('dance-finale', 'Grand Finale', 5, 'rare', [dmg(6, 'randomEnemy')], 'The last bow, the last blade, the last secret — the audience will never forget a single step.'),
 ```
 
-Check `dance-finale`'s existing rarity and flavor in the file and keep them — only `cost` changes there.
+Only the cost changes on `dance-finale`: 7 to 5. Its name (`Grand Finale`), rarity, and flavor are reproduced above exactly as they already stand in the file — do not alter them. Renaming a card is never a balance fix.
 
 - [ ] **Step 7: Fix Grave Pact**
 

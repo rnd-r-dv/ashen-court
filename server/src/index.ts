@@ -4,6 +4,7 @@
 import { pathToFileURL } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { RawData } from 'ws';
+import { lanIpv4 } from './lanAddress.js';
 import type { ClientMessage, ServerMessage } from './protocol.js';
 import { RoomRegistry } from './rooms.js';
 
@@ -13,9 +14,14 @@ export interface LanServer {
   close(): Promise<void>;
 }
 
-export function startServer(port: number): LanServer {
+/**
+ * `hostAddress` is the LAN address embedded in every room code this server
+ * hands out (Task 46). Omit it to detect this machine's; pass null for bare
+ * 4-letter codes (tests, and any host that should not advertise an address).
+ */
+export function startServer(port: number, hostAddress: string | null = lanIpv4()): LanServer {
   const wss = new WebSocketServer({ port });
-  const registry = new RoomRegistry();
+  const registry = new RoomRegistry(hostAddress);
 
   wss.on('connection', (socket: WebSocket) => {
     console.log('[lan] client connected');
@@ -94,10 +100,19 @@ function handle(registry: RoomRegistry, socket: WebSocket, msg: ClientMessage): 
 const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   const port = Number(process.env.PORT ?? 8080);
-  const server = startServer(port);
+  const host = lanIpv4();
+  const server = startServer(port, host);
   server.wss.on('listening', () => {
     const addr = server.wss.address();
     const where = typeof addr === 'object' && addr ? `:${addr.port}` : '';
     console.log(`[lan] listening on ${where}`);
+    // Say which address is going into room codes. When it is null, codes are
+    // 4 letters and only this machine's own browsers can join — worth saying
+    // out loud rather than letting a player discover it from a failed join.
+    console.log(
+      host === null
+        ? '[lan] no LAN address found — room codes will not carry one, so only this machine can join'
+        : `[lan] room codes will carry this machine's address ${host}`,
+    );
   });
 }

@@ -37,41 +37,63 @@ npm run start -w server
 
 (`npm run server` is a shorthand alias for the same command.)
 
-> For LAN play the *host* machine runs both the app **and** the LAN server;
-> the *joiner* only needs the app (plus network access to the host's port
-> 8080).
-
-The dev server binds every interface (`server.host` in `app/vite.config.ts`),
-so it prints a `Network:` URL like `http://192.168.1.20:5173/` on start — that
-is the address the joiner opens. The joiner's client derives its WebSocket URL
-from `location.hostname`, so ports 5173 and 8080 must both be reachable at that
-same address.
-
-If the joiner's app loads but the join silently hangs on "Waiting for the game
-to start…", the WebSocket is not getting through. On macOS the most common
-cause is the Application Firewall blocking incoming connections for the `node`
-binary — it accepts the TCP connection and then drops it, so nothing reaches
-the server. Homebrew installs a new binary path on every version bump, and new
-paths default to blocked:
-
-```bash
-/usr/libexec/ApplicationFirewall/socketfilterfw --listapps | grep -A1 node
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(readlink -f "$(which node)")"
-```
-
-Restart the LAN server afterwards — a running process keeps the old verdict.
-Room state lives only in that process's memory, so restarting it invalidates
-every outstanding room code; the host must create a new room.
+> **Each player runs their own copy** — both `npm run dev` and `npm run server`,
+> on their own machine, each opening their own `localhost:5173`. Nobody loads
+> the other player's URL. The room code is what connects the two.
 
 ### LAN play
 
-1. Host: open the app, pick **LAN Host**, choose a deck, and share the
-   generated 4-letter room code.
-2. Joiner: open the app on a second machine on the same network, pick
-   **LAN Join**, and enter the code.
+1. Host: **LAN Host**, choose a deck, and read out the room code — e.g.
+   `MKBW-AXKZKZN`.
+2. Joiner: **LAN Join** on their own machine, type that code, choose a deck.
 3. The match starts when both players are in the room. If a player
    disconnects, the server holds the room for five minutes — rejoin with the
    same code to continue where the match left off.
+
+The code's second half is the host machine's address, encoded in the same
+letters (see `server/src/lanCode.ts`). That is what lets the joiner type one
+string and nothing else: a room id alone names a room inside the host's
+process, not the machine holding it, and a browser cannot discover that on its
+own. A code with no second half means the server found no LAN address, and only
+that machine's own browsers can join.
+
+#### When a join won't connect
+
+"Can't reach … — retrying" means the WebSocket never opened. In order of how
+often it is actually the cause:
+
+- **The browser is not allowed to reach local devices.** macOS 15+ gates this
+  per app, and a blocked app sees LAN addresses as simply *unreachable* — so
+  `curl` and `ping` succeed from the same machine while Chrome reports
+  `ERR_ADDRESS_UNREACHABLE` or `ERR_INTERNET_DISCONNECTED`. Fix in **System
+  Settings → Privacy & Security → Local Network**, then **fully quit and
+  relaunch the browser** — the permission only applies on launch. If the
+  browser is not listed it was never prompted; `tccutil reset LocalNetwork
+  com.google.Chrome` makes the prompt reappear.
+- **The host isn't running `npm run server`**, or restarted it. Room state
+  lives only in that process's memory, so a restart invalidates every
+  outstanding code and the host must create a new room.
+- **The macOS Application Firewall is blocking `node`'s incoming
+  connections** — it accepts the TCP connection and then drops it. Homebrew
+  installs a new binary path on every version bump, and new paths default to
+  blocked:
+
+  ```bash
+  /usr/libexec/ApplicationFirewall/socketfilterfw --listapps | grep -A1 node
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(readlink -f "$(which node)")"
+  ```
+
+  Restart the LAN server afterwards — a running process keeps the old verdict.
+
+To tell a browser-permission block from a genuine network problem, run this in
+the joiner's browser console, substituting the host's address:
+
+```js
+new WebSocket('ws://10.42.0.23:8080').onopen = () => console.log('reachable');
+```
+
+If that logs nothing but `nc -z 10.42.0.23 8080` succeeds from a terminal on the
+same machine, it is the browser permission, not the network.
 
 ### Match modes
 

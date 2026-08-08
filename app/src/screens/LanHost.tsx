@@ -192,6 +192,16 @@ export default function LanHost({ onSessionReady }: { onSessionReady: (s: LanSes
       </p>
       <p className="lan-label">Share this room code</p>
       <div className="lan-room-code gothic-frame">{code}</div>
+      {/* Task 46: the code's second half encodes this machine's address, which
+          is what lets the other player join by code alone. A code WITHOUT it
+          means the server found no LAN address — worth saying, because such a
+          code is joinable only from this machine and would otherwise fail with
+          a bare "can't reach". */}
+      <p className="lan-hint">
+        {code.includes('-')
+          ? "Read out the whole code — its second half tells your opponent's game which machine to reach."
+          : 'This server found no LAN address, so only browsers on this machine can join. Check that you are connected to a network, then restart npm run server.'}
+      </p>
       <div className="lan-row">
         <button type="button" className="shell-btn" onClick={copyCode}>
           {copied ? 'Copied!' : 'Copy code'}

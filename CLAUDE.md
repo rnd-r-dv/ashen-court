@@ -62,7 +62,7 @@ The key abstraction is **`MatchDriver`** (declared once in `app/src/types.ts`):
 
 Both feed `useMatch` (`game/useMatch.ts`), which mirrors state, queues events for animation, and auto-plays the bot opponent. The driver — not the hook or screen — owns LAN echo application, because the LAN screens unmount at match entry.
 
-Other pure, testable modules deliberately kept out of components: `game/matchSetup.ts` (deck pick → `MatchSetup`), `game/playerVisibility.ts` (hotseat hand hiding), `deckBuild.ts` (filters/copy limits), `forge/formState.ts`, `storage.ts` (localStorage keys `tcg.customCards`, `tcg.decks`, `tcg.settings`, `tcg.lanHost`), `components/animations.ts` (Framer Motion variant *factories* taking a duration scale + `useAnimationQueue`).
+Other pure, testable modules deliberately kept out of components: `game/matchSetup.ts` (deck pick → `MatchSetup`), `game/playerVisibility.ts` (hotseat hand hiding), `deckBuild.ts` (filters/copy limits), `forge/formState.ts`, `storage.ts` (localStorage keys `tcg.customCards`, `tcg.decks`, `tcg.settings`), `components/animations.ts` (Framer Motion variant *factories* taking a duration scale + `useAnimationQueue`).
 
 ### Server (`server/`) and the LAN contract
 
@@ -73,6 +73,8 @@ The server is authoritative: it holds the real `Game` per 4-letter room, gates i
 Reconnect (5-minute grace, `RECONNECT_GRACE_MS`) sends `joined` → the full append-only intent log → `gameStart`; the client rebuilds a fresh shadow from the seed and replays. There is no deep state transfer anywhere — determinism replaces it. Rematch: both players must request, then `seed += 1`, fresh game, intent log cleared.
 
 `heroId` on the wire is the hero **name** (`HeroSpec` has no id field); both sides resolve it against `HEROES` with a `HEROES[0]` fallback.
+
+**Room codes carry the host's address** (`server/src/lanCode.ts`, exported to the app as `@ashen/server/lanCode` — the one *runtime* import from the server package; `./protocol` is types only). A room id is just a key in the host process's in-memory `rooms` Map, so it names a room, not a machine — and each player runs their own app instance, so page JS has no way to discover which machine holds that Map. The code is therefore `RRRR-AAAAAAA`: 4 letters of room id plus the host's IPv4 in base-24 over `CODE_ALPHABET`. Seven letters because 24⁷ ≥ 2³², which covers any IPv4 with no class scheme. The client consumes the address half to pick which server to dial and sends only the room id; the server strips either form via `roomIdOf`. A bare 4-letter code means "this machine" — that is what a loopback-only host emits and what keeps two-browsers-on-one-box working. `pickLanIpv4` (`lanAddress.ts`) deliberately ranks private-on-a-real-NIC first: a VPN/`utun` or link-local address is valid and unreachable, and the guest has no field to correct it with.
 
 ## Conventions
 

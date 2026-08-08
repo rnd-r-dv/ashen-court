@@ -4,6 +4,7 @@
 // backoff (delay doubles 1s → 2s → … capped at 8s inside the 5-minute grace).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LAN_PORT, LanClient, RECONNECT_GRACE_MS, connectLan, lanUrl } from '../src/game/lanClient.js';
+import { formatJoinCode, parseJoinCode } from '@ashen/server/lanCode';
 import type { ServerMessage } from '@ashen/server/protocol';
 
 type MessageEventLike = { data: string };
@@ -273,5 +274,46 @@ describe('lanUrl', () => {
   it('connectLan builds its socket from the host override', () => {
     connectLan(() => {}, undefined, '10.42.0.116');
     expect(latest().url).toBe('ws://10.42.0.116:8080');
+  });
+});
+
+// Task 46: the join code carries the host, so the whole guest path is
+// code → parseJoinCode → lanUrl → socket. These pin the seam between the
+// server's codec and this client, which is where a guest ends up dialling
+// their OWN machine if it ever breaks.
+describe('join code → socket URL', () => {
+  it('dials the machine named by the code, not the one serving the page', () => {
+    const code = formatJoinCode('MKBW', '10.42.0.23');
+    const parsed = parseJoinCode(code);
+    expect(parsed).not.toBeNull();
+    expect(lanUrl(parsed!.host)).toBe(`ws://10.42.0.23:${LAN_PORT}`);
+    // The regression this exists to catch: location.hostname is the GUEST's
+    // own machine, so resolving to it is never a valid join.
+    expect(lanUrl(parsed!.host)).not.toBe(`ws://${location.hostname}:${LAN_PORT}`);
+  });
+
+  it('falls back to this machine for a bare room code', () => {
+    const parsed = parseJoinCode('MKBW');
+    expect(parsed).toEqual({ roomId: 'MKBW', host: null });
+    expect(lanUrl(parsed!.host)).toBe(`ws://${location.hostname}:${LAN_PORT}`);
+  });
+
+  it('survives the presentation a player actually types', () => {
+    const expected = `ws://192.168.1.20:${LAN_PORT}`;
+    // 'MKBW-SXYFJMN' is formatJoinCode('MKBW', '192.168.1.20') — written out
+    // literally so a change to the encoding fails here loudly rather than
+    // re-deriving itself and passing.
+    for (const typed of ['MKBW-SXYFJMN', 'mkbw-sxyfjmn', 'MKBWSXYFJMN', ' MKBW SXYFJMN ']) {
+      const parsed = parseJoinCode(typed);
+      expect(parsed?.roomId).toBe('MKBW');
+      expect(lanUrl(parsed?.host)).toBe(expected);
+    }
+  });
+
+  it('round-trips every private range a LAN uses', () => {
+    for (const ip of ['10.42.0.23', '192.168.1.20', '172.20.10.3']) {
+      const parsed = parseJoinCode(formatJoinCode('QRST', ip));
+      expect(lanUrl(parsed!.host)).toBe(`ws://${ip}:${LAN_PORT}`);
+    }
   });
 });

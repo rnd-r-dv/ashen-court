@@ -1,9 +1,15 @@
-// LAN join screen (Task 34 + fix round 2 + Task 45). Enter a 4-letter room
+// LAN join screen (Task 34 + fix round 2 + Task 45 + Task 46). Enter the room
 // code (auto-uppercased) → PICK YOUR OWN DECK (Task 45: same curated + custom
 // sources as the host, via the shared LanDeckGrid) → joinRoom carrying the
 // deck choice → wait for the host → 'joined' feeds the room params (seed,
 // both decks, hero names, full card registry) into useLanMatch → gameStart →
 // register the LAN session with App (onSessionReady) → Match.
+//
+// Task 46 — code-only join. The code now carries the host's address (see
+// server/src/lanCode.ts), so this screen asks for ONE thing. The previous
+// round's separate "host address" field is gone: the address it wanted is
+// exactly what the code already encodes, and asking a player to read an IP off
+// their friend's screen was the whole problem it was meant to solve.
 //
 // Fix round 2: the screen's own message handler is removed on unmount, the
 // client remembers the room code for reconnect re-attach, and onStatus
@@ -23,11 +29,26 @@ import type { DeckCard } from '../game/lanDecks.js';
 import { useLanMatch } from '../game/useLanMatch.js';
 import type { LanRoomParams } from '../game/useLanMatch.js';
 import type { ServerMessage } from '@ashen/server/protocol';
-import { loadCustomCards, loadDecks, loadLanHost, saveLanHost } from '../storage.js';
+import { ADDR_CODE_LENGTH, ROOM_CODE_LENGTH, parseJoinCode } from '@ashen/server/lanCode';
+import { loadCustomCards, loadDecks } from '../storage.js';
 import './shell.css';
 import './lan.css';
 
 type Stage = 'code' | 'deck' | 'joining';
+
+/** Letters a full code can hold, hyphen excluded (state stores letters only). */
+const MAX_CODE_LETTERS = ROOM_CODE_LENGTH + ADDR_CODE_LENGTH;
+
+/**
+ * Letters-only code as the player should SEE it: the hyphen is presentation,
+ * grouping room id and address so a long string stays readable when read aloud.
+ * parseJoinCode strips it again, so it never has to be typed.
+ */
+function displayCode(letters: string): string {
+  return letters.length > ROOM_CODE_LENGTH
+    ? `${letters.slice(0, ROOM_CODE_LENGTH)}-${letters.slice(ROOM_CODE_LENGTH)}`
+    : letters;
+}
 
 export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSession) => void }) {
   const { navigate } = useNav();
@@ -40,15 +61,13 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
   const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submittedCode, setSubmittedCode] = useState('');
-  // The host machine's address. Each player runs their own app instance, so
-  // the guest's page is served by the GUEST's machine — without this the
-  // client connected to the guest's own port 8080 and either hung forever or
-  // reported 'Room not found' against an empty local server.
-  // Defaults to this machine, which keeps the two-browsers-on-one-box flow
-  // working exactly as before (that is what the old hard-coded
-  // location.hostname meant). A guest on a second machine overwrites it once
-  // and it is remembered from then on.
-  const [hostAddr, setHostAddr] = useState(() => loadLanHost() || location.hostname);
+  // The host machine, DECODED FROM THE CODE (Task 46). Each player runs their
+  // own app instance, so the guest's page is served by the GUEST's machine —
+  // without an explicit host the client dialled the guest's own port 8080 and
+  // either hung forever or reported 'Room not found' against an empty local
+  // server. null means "this machine", which is what a bare 4-letter code
+  // means and what keeps the two-browsers-on-one-box flow working.
+  const [hostAddr, setHostAddr] = useState<string | null>(null);
   const [status, setStatus] = useState<LanStatus | null>(null);
 
   const { driver } = useLanMatch({ client, room, myPlayer });
@@ -113,17 +132,12 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
   // Unmount cleanup: drop this screen's pre-match handler from the client.
   useEffect(() => () => clientRef.current?.removeMessageHandler(handleMessage), [handleMessage]);
 
-  /** Code entry → deck pick: a valid 4-letter code and a host address move to
-   *  the deck stage. The address is required — a blank one silently means
-   *  "this machine", which is only ever right for the host. */
+  /** Code entry → deck pick. The code is the only input: parseJoinCode both
+   *  validates it and yields the host to dial, so there is nothing else to
+   *  ask for. */
   function next() {
-    const trimmed = code.trim();
-    if (trimmed.length !== 4) {
-      setError('Enter the 4-letter room code');
-      return;
-    }
-    if (hostAddr.trim() === '') {
-      setError("Enter the host machine's address (the IP they see in their LAN Host screen)");
+    if (parseJoinCode(code) === null) {
+      setError(`Enter the room code from the host's screen (${ROOM_CODE_LENGTH} letters, or ${ROOM_CODE_LENGTH}+${ADDR_CODE_LENGTH} with the address)`);
       return;
     }
     setError(null);
@@ -134,7 +148,13 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
    *  with the host), connect, remember the full join payload for reconnect and
    *  send the joinRoom carrying the guest's deck + hero (Task 45). */
   function pickDeck(deck: DeckCard) {
-    const trimmed = code.trim();
+    // Re-parsed here rather than carried from next(): the deck stage can be
+    // reached, backed out of and re-entered with a corrected code.
+    const parsed = parseJoinCode(code);
+    if (parsed === null) {
+      setError('That room code is not valid — go back and re-enter it');
+      return;
+    }
     const deckIds = deck.custom ? (loadDecks()[deck.slug] ?? []) : expandDeck(DECK_DEFS[deck.slug as keyof typeof DECK_DEFS]);
     const customCards = loadCustomCards();
     const heroId = heroNameForDeck(deckIds);
@@ -147,13 +167,16 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
       return;
     }
     setError(null);
-    setSubmittedCode(trimmed);
+    setSubmittedCode(displayCode(code));
+    setHostAddr(parsed.host);
     setStage('joining');
-    saveLanHost(hostAddr.trim());   // remembered so the next join skips the retype
-    const c = connectLan(handleMessage, onStatus, hostAddr);
-    c.setJoinPayload({ code: trimmed, deckIds, customCards, heroId }); // reconnect re-attach (fix round 2 + 45)
+    // The address half is consumed HERE, choosing which machine to dial; only
+    // the room id goes on the wire (the server accepts either, but the room is
+    // keyed by the id).
+    const c = connectLan(handleMessage, onStatus, parsed.host);
+    c.setJoinPayload({ code: parsed.roomId, deckIds, customCards, heroId }); // reconnect re-attach (fix round 2 + 45)
     setClient(c);
-    c.send({ type: 'joinRoom', code: trimmed, deckIds, customCards, heroId });
+    c.send({ type: 'joinRoom', code: parsed.roomId, deckIds, customCards, heroId });
   }
 
   function leave() {
@@ -166,49 +189,43 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
       {stage === 'code' ? (
         <>
           <h1 className="shell-title">LAN Join</h1>
-          <p className="shell-subtitle">Enter the host's address and room code to join.</p>
-          <label className="lan-label" htmlFor="lan-host-input">
-            Host address
-          </label>
-          <input
-            id="lan-host-input"
-            className="lan-host-input"
-            value={hostAddr}
-            onChange={(e) => setHostAddr(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') next();
-            }}
-            placeholder="192.168.1.20"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <p className="lan-hint">
-            The host's machine — shown on their LAN Host screen. A pasted browser URL works too.
-          </p>
+          <p className="shell-subtitle">Enter the room code from the host's screen.</p>
           <label className="lan-label" htmlFor="lan-code-input">
             Room code
           </label>
           <input
             id="lan-code-input"
             className="lan-code-input"
-            value={code}
+            // State holds letters only; the hyphen is added for display and
+            // stripped again by parseJoinCode, so it never has to be typed.
+            value={displayCode(code)}
             // M3 (audit 06): server codes use CODE_ALPHABET
             // 'ABCDEFGHJKLMNPQRSTUVWXYZ' (A-Z minus O/I) — filter to that
             // alphabet so typing O or I can never produce a guaranteed
-            // 'Room not found' code.
-            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-HJ-NP-Z]/g, '').slice(0, 4))}
+            // 'Room not found' code. The filter also drops the display hyphen
+            // back out on every keystroke.
+            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-HJ-NP-Z]/g, '').slice(0, MAX_CODE_LETTERS))}
             onKeyDown={(e) => {
               if (e.key === 'Enter') next();
             }}
-            placeholder="ABCD"
-            maxLength={4}
+            placeholder="ABCD-EFGHJKL"
+            maxLength={MAX_CODE_LETTERS + 1}
             autoCapitalize="characters"
             autoComplete="off"
             spellCheck={false}
             autoFocus
           />
+          <p className="lan-hint">
+            The whole code, exactly as the host sees it — the second half tells your game which machine to
+            connect to.
+          </p>
           <div className="lan-row">
-            <button type="button" className="shell-btn shell-btn-primary" onClick={next} disabled={code.length !== 4}>
+            <button
+              type="button"
+              className="shell-btn shell-btn-primary"
+              onClick={next}
+              disabled={parseJoinCode(code) === null}
+            >
               Next
             </button>
           </div>
@@ -221,7 +238,7 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
         <>
           <h1 className="shell-title">LAN Join — choose your deck</h1>
           <p className="shell-subtitle">
-            Room code <strong>{code}</strong> — pick the deck you'll play.
+            Room code <strong>{displayCode(code)}</strong> — pick the deck you'll play.
           </p>
           {error ? <p className="lan-error">{error}</p> : null}
           <LanDeckGrid onPick={pickDeck} />
@@ -233,7 +250,7 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
         <>
           <h1 className="shell-title">LAN Join</h1>
           <p className="shell-subtitle">
-            Joining room <strong>{submittedCode}</strong> on <strong>{hostAddr.trim()}</strong>…
+            Joining room <strong>{submittedCode}</strong> on <strong>{hostAddr ?? 'this machine'}</strong>…
           </p>
           <div className="lan-waiting">
             <span className="lan-spinner" aria-hidden="true" />
@@ -243,11 +260,18 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
               </p>
             ) : status === 'reconnecting' ? (
               // The socket dropped or never opened. Say so instead of spinning
-              // silently: a wrong address or an unstarted server is otherwise
-              // indistinguishable from a host who has not started the match.
+              // silently: an unreachable host is otherwise indistinguishable
+              // from a host who has not started the match.
+              //
+              // Task 46: the address is no longer typed, so "check the address"
+              // is not advice a player can act on. These are the two causes
+              // that remain — and the browser permission is the one that cost a
+              // full debugging session to find, because macOS reports a blocked
+              // app's LAN destinations as simply unreachable.
               <p className="lan-note">
-                Can't reach <strong>{hostAddr.trim()}</strong> — retrying. Check the address, and that the
-                host is running <code>npm run server</code>.
+                Can't reach <strong>{hostAddr ?? 'this machine'}</strong> — retrying. Check that the host is
+                running <code>npm run server</code>, and that this browser is allowed to reach local
+                devices (on macOS: System Settings → Privacy &amp; Security → Local Network).
               </p>
             ) : (
               <p className="lan-note">Waiting for the game to start…</p>

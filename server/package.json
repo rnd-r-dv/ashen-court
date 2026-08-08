@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./protocol": "./src/protocol.ts"
+    "./protocol": "./src/protocol.ts",
+    "./lanCode": "./src/lanCode.ts"
   },
   "dependencies": {
     "@ashen/core": "*",

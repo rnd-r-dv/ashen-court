@@ -13,14 +13,22 @@
 import { CardRegistry, Game, HEROES, buildPool } from '@ashen/core';
 import type { Card, GameEvent, HeroSpec, Intent, PlayerIndex } from '@ashen/core';
 import { WebSocket } from 'ws';
+import { CODE_ALPHABET, ROOM_CODE_LENGTH, formatJoinCode, roomIdOf } from './lanCode.js';
 import type { ClientMessage, ServerMessage } from './protocol.js';
 
 /** Reconnect grace window: rooms survive this long after a socket closes. */
 export const RECONNECT_GRACE_MS = 5 * 60 * 1000;
 
-/** 4-letter codes: A-Z minus O and I (O/1/0 collision avoidance; letters only). */
-const CODE_LENGTH = 4;
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+/**
+ * Rooms stay keyed by the 4-letter id. Task 46 appends the host's address to
+ * the code the PLAYER sees (formatJoinCode) so a guest can join by code alone,
+ * but that address is routing information for the client — it is not part of
+ * the room's identity, and the Map must never be keyed by it.
+ *
+ * The alphabet and length now come from lanCode.ts so the generator and the
+ * parser can never drift apart.
+ */
+const CODE_LENGTH = ROOM_CODE_LENGTH;
 
 export interface Room {
   code: string;
@@ -70,6 +78,14 @@ function playerIndex(room: Room, socket: WebSocket): PlayerIndex | null {
 export class RoomRegistry {
   private readonly rooms = new Map<string, Room>();
 
+  /**
+   * This machine's LAN address, embedded in every code this registry hands out
+   * (Task 46). null means "don't advertise one" — a loopback-only host, or a
+   * test that wants deterministic 4-letter codes. Codes then stay bare, which
+   * the client reads as "this machine".
+   */
+  constructor(private readonly hostAddress: string | null = null) {}
+
   roomOf(socket: WebSocket): Room | null {
     for (const room of this.rooms.values()) {
       if (room.hostSocket === socket || room.guestSocket === socket) return room;
@@ -108,7 +124,9 @@ export class RoomRegistry {
       expiry: null,
     };
     this.rooms.set(code, room);
-    send(hostSocket, { type: 'roomCreated', code, player: 0 });
+    // The wire code is the PLAYER-facing one: room id + this server's address,
+    // so the guest's instance learns where to dial from the code alone.
+    send(hostSocket, { type: 'roomCreated', code: formatJoinCode(code, this.hostAddress), player: 0 });
   }
 
   join(msg: Extract<ClientMessage, { type: 'joinRoom' }>, socket: WebSocket): void {
@@ -120,7 +138,11 @@ export class RoomRegistry {
       send(socket, { type: 'error', message: 'Already in a room' });
       return;
     }
-    const room = this.rooms.get(msg.code);
+    // Accept either form. The client strips the address itself (it needed it to
+    // pick WHICH server to dial), but a remembered reconnect payload — and the
+    // host's own, which is built from the full roomCreated code — still carries
+    // it. Looking up the raw string would fail to find a room that exists.
+    const room = this.rooms.get(roomIdOf(msg.code));
     if (!room) {
       send(socket, { type: 'error', message: 'Room not found' });
       return;

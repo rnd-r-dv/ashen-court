@@ -17,6 +17,7 @@ import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck, validateC
 import type { Card, GameEvent, HeroSpec, Intent } from '@ashen/core';
 import { startServer } from '../src/index.js';
 import type { LanServer } from '../src/index.js';
+import { formatJoinCode, parseJoinCode } from '../src/lanCode.js';
 import type { ClientMessage, ServerMessage } from '../src/protocol.js';
 
 // Deterministic 60-card ember deck + hero for every test.
@@ -41,8 +42,14 @@ const CUSTOM_CARD: Card = {
   author: 'custom', version: 1,
 };
 
-async function makeServer(): Promise<LanServer> {
-  const srv = startServer(0);
+/**
+ * Test servers advertise NO address (Task 46), so codes stay the deterministic
+ * 4 letters these tests assert on. Whatever interfaces the machine running the
+ * suite happens to have must not leak into the expectations; the address form
+ * gets its own explicit coverage below.
+ */
+async function makeServer(hostAddress: string | null = null): Promise<LanServer> {
+  const srv = startServer(0, hostAddress);
   await new Promise<void>((resolve, reject) => {
     srv.wss.once('listening', resolve);
     srv.wss.once('error', reject);
@@ -983,6 +990,122 @@ describe('LAN rooms', () => {
       const left = await leftP;
       if (left.type !== 'playerLeft') throw new Error('playerLeft never arrived');
       expect(left.reason).toMatch(/disconnected/i);
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+});
+
+// Task 46: the room code carries the host's address, so a guest running their
+// own app instance can join by typing one string and nothing else. The room
+// itself is still keyed by the 4-letter id — the address is routing
+// information for the client, never part of the room's identity.
+describe('LAN rooms — address-carrying join codes', () => {
+  it('embeds the advertised address in the code the host is shown', async () => {
+    const srv = await makeServer('192.168.1.20');
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      // Both sockets are created and both must be closed: wss.close() does not
+      // resolve while a client is still connected.
+      ({ host, guest } = await makeClients(srv));
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      expect(created.code).toMatch(/^[A-HJ-NP-Z]{4}-[A-HJ-NP-Z]{7}$/);
+      expect(parseJoinCode(created.code)).toEqual({
+        roomId: created.code.slice(0, 4),
+        host: '192.168.1.20',
+      });
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('omits the address group when the server advertises none', async () => {
+    const srv = await makeServer(null);
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      expect(created.code).toMatch(/^[A-HJ-NP-Z]{4}$/);
+      expect(parseJoinCode(created.code)).toEqual({ roomId: created.code, host: null });
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('accepts a joinRoom carrying the FULL code', async () => {
+    // The host's own reconnect payload is built from the full roomCreated code,
+    // so the server must find the room without the client stripping it first.
+    const srv = await makeServer('10.42.0.116');
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      expect(created.code).toContain('-');
+
+      const joinedP = guest.waitFor(m => m.type === 'joined');
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      expect(joined.player).toBe(1);
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('accepts a joinRoom carrying only the room id half', async () => {
+    // What the client actually sends: it consumed the address to choose which
+    // server to dial, so only the room id reaches the wire.
+    const srv = await makeServer('10.42.0.116');
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      const parsed = parseJoinCode(created.code);
+      expect(parsed).not.toBeNull();
+
+      const joinedP = guest.waitFor(m => m.type === 'joined');
+      guest.send({ type: 'joinRoom', code: parsed!.roomId, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      expect(joined.player).toBe(1);
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('still reports Room not found for a well-formed code naming no room', async () => {
+    const srv = await makeServer('10.42.0.116');
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await makeClients(srv));
+      const errP = guest.waitFor(m => m.type === 'error');
+      guest.send({ type: 'joinRoom', code: formatJoinCode('ZZZZ', '10.42.0.116'), deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const err = await errP;
+      if (err.type !== 'error') throw new Error('error never arrived');
+      expect(err.message).toBe('Room not found');
     } finally {
       host?.close();
       guest?.close();

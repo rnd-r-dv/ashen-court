@@ -62,7 +62,7 @@ The key abstraction is **`MatchDriver`** (declared once in `app/src/types.ts`):
 
 Both feed `useMatch` (`game/useMatch.ts`), which mirrors state, queues events for animation, and auto-plays the bot opponent. The driver — not the hook or screen — owns LAN echo application, because the LAN screens unmount at match entry.
 
-Other pure, testable modules deliberately kept out of components: `game/matchSetup.ts` (deck pick → `MatchSetup`), `game/playerVisibility.ts` (hotseat hand hiding), `deckBuild.ts` (filters/copy limits), `forge/formState.ts`, `storage.ts` (localStorage keys `tcg.customCards`, `tcg.decks`, `tcg.settings`), `components/animations.ts` (Framer Motion variant *factories* taking a duration scale + `useAnimationQueue`).
+Other pure, testable modules deliberately kept out of components: `game/matchSetup.ts` (deck pick → `MatchSetup`), `game/playerVisibility.ts` (hotseat hand hiding), `deckBuild.ts` (filters/copy limits), `forge/formState.ts`, `storage.ts` (localStorage keys `tcg.customCards`, `tcg.decks`, `tcg.settings`, `tcg.lanHost`), `components/animations.ts` (Framer Motion variant *factories* taking a duration scale + `useAnimationQueue`).
 
 ### Server (`server/`) and the LAN contract
 

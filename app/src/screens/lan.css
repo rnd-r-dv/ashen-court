@@ -44,6 +44,33 @@
   border-color: var(--gold);
 }
 
+/* Host address (LAN Join): free text, so it takes the body font and a wider
+   box than the 4-letter code field rather than its display-font letterspacing. */
+.lan-host-input {
+  font-size: 1rem;
+  text-align: center;
+  width: 18rem;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text);
+  background: var(--bg-2);
+  border: 2px double var(--gold-dim);
+  border-radius: var(--radius-md);
+}
+
+.lan-host-input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-color: var(--gold);
+}
+
+.lan-hint {
+  margin: var(--space-2) 0 var(--space-3);
+  max-width: 26rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
 .lan-row {
   margin: var(--space-3) 0;
   display: flex;

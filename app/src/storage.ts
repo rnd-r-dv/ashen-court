@@ -6,6 +6,7 @@ import { poolRuleIssues } from './forge/formState.js';
 const KEY_CARDS = 'tcg.customCards';
 const KEY_DECKS = 'tcg.decks';
 const KEY_SETTINGS = 'tcg.settings';
+const KEY_LAN_HOST = 'tcg.lanHost';
 
 /**
  * Custom-deck overlay namespace (audit 05 I4). Overlays are stored under
@@ -156,6 +157,23 @@ export function loadSettings(): Settings {
 
 export function saveSettings(s: Settings): boolean {
   return write(KEY_SETTINGS, s);
+}
+
+// ---- LAN host address ----
+
+/**
+ * The host machine's address, remembered between joins so a player does not
+ * retype it every match. Deliberately its OWN key rather than a Settings
+ * field: Menu.tsx and Match.tsx both call saveSettings({ fastMode }), which
+ * writes a whole fresh object and would drop any sibling field.
+ */
+export function loadLanHost(): string {
+  const raw = read<unknown>(KEY_LAN_HOST, '');
+  return typeof raw === 'string' ? raw : '';
+}
+
+export function saveLanHost(host: string): boolean {
+  return write(KEY_LAN_HOST, host);
 }
 
 // ---- JSON import/export ----

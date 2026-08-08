@@ -3,7 +3,7 @@
 // tests drive open/receive/drop through it. Fake timers drive the reconnect
 // backoff (delay doubles 1s → 2s → … capped at 8s inside the 5-minute grace).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LanClient, RECONNECT_GRACE_MS } from '../src/game/lanClient.js';
+import { LAN_PORT, LanClient, RECONNECT_GRACE_MS, connectLan, lanUrl } from '../src/game/lanClient.js';
 import type { ServerMessage } from '@ashen/server/protocol';
 
 type MessageEventLike = { data: string };
@@ -227,5 +227,51 @@ describe('LanClient', () => {
     latest().receive('{"type":"events","events":[]}'); // non-matching messages pass through
     expect(errors).toEqual(['Not your turn']);
     expect(left).toEqual(['Opponent disconnected']);
+  });
+});
+
+// lanUrl: the guest must be able to address the HOST's machine. The old
+// connectLan hard-coded ws://<location.hostname>:8080, which assumed the
+// guest's page was served by the host — it is not, since each player runs
+// their own instance. A guest with no local server then spun forever, and a
+// guest WITH one got 'Room not found' from its own empty room registry.
+describe('lanUrl', () => {
+  it('falls back to this machine when no host is given — the host\'s own path, unchanged', () => {
+    // Pins the pre-existing behaviour LanHost still relies on: it calls
+    // connectLan with no host because its server IS on this machine.
+    expect(lanUrl()).toBe(`ws://${location.hostname}:${LAN_PORT}`);
+    expect(lanUrl('')).toBe(`ws://${location.hostname}:${LAN_PORT}`);
+    expect(lanUrl('   ')).toBe(`ws://${location.hostname}:${LAN_PORT}`);
+    expect(lanUrl(null)).toBe(`ws://${location.hostname}:${LAN_PORT}`);
+  });
+
+  it('targets a bare host at the LAN port', () => {
+    expect(lanUrl('10.42.0.116')).toBe('ws://10.42.0.116:8080');
+    expect(lanUrl('  10.42.0.116  ')).toBe('ws://10.42.0.116:8080');
+    expect(lanUrl('lucas-macbook.local')).toBe('ws://lucas-macbook.local:8080');
+  });
+
+  it('honours a bare explicit port', () => {
+    expect(lanUrl('10.42.0.116:9000')).toBe('ws://10.42.0.116:9000');
+  });
+
+  it('ignores the port of a pasted browser URL', () => {
+    // The realistic paste is the Vite dev URL. Its port is the app's, never
+    // the WebSocket server's — honouring it would dial the dev server and
+    // hang, which is the failure this whole fix exists to remove.
+    expect(lanUrl('http://10.42.0.116:5173/')).toBe('ws://10.42.0.116:8080');
+    expect(lanUrl('http://10.42.0.116:5173')).toBe('ws://10.42.0.116:8080');
+    expect(lanUrl('ws://10.42.0.116:8080')).toBe('ws://10.42.0.116:8080');
+  });
+
+  it('keeps IPv6 literals bracketed', () => {
+    expect(lanUrl('[fe80::1]')).toBe('ws://[fe80::1]:8080');
+    expect(lanUrl('[fe80::1]:9000')).toBe('ws://[fe80::1]:9000');
+    expect(lanUrl('fe80::1')).toBe('ws://[fe80::1]:8080');
+  });
+
+  it('connectLan builds its socket from the host override', () => {
+    connectLan(() => {}, undefined, '10.42.0.116');
+    expect(latest().url).toBe('ws://10.42.0.116:8080');
   });
 });

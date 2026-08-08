@@ -23,7 +23,7 @@ import type { DeckCard } from '../game/lanDecks.js';
 import { useLanMatch } from '../game/useLanMatch.js';
 import type { LanRoomParams } from '../game/useLanMatch.js';
 import type { ServerMessage } from '@ashen/server/protocol';
-import { loadCustomCards, loadDecks } from '../storage.js';
+import { loadCustomCards, loadDecks, loadLanHost, saveLanHost } from '../storage.js';
 import './shell.css';
 import './lan.css';
 
@@ -40,6 +40,16 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
   const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submittedCode, setSubmittedCode] = useState('');
+  // The host machine's address. Each player runs their own app instance, so
+  // the guest's page is served by the GUEST's machine — without this the
+  // client connected to the guest's own port 8080 and either hung forever or
+  // reported 'Room not found' against an empty local server.
+  // Defaults to this machine, which keeps the two-browsers-on-one-box flow
+  // working exactly as before (that is what the old hard-coded
+  // location.hostname meant). A guest on a second machine overwrites it once
+  // and it is remembered from then on.
+  const [hostAddr, setHostAddr] = useState(() => loadLanHost() || location.hostname);
+  const [status, setStatus] = useState<LanStatus | null>(null);
 
   const { driver } = useLanMatch({ client, room, myPlayer });
 
@@ -78,8 +88,13 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
   }, []);
 
   // I1: a closed connection (grace window expired / intentional close) is
-  // surfaced as an error the joining screen can show.
+  // surfaced as an error the joining screen can show. 'reconnecting' is kept
+  // too: a socket that never opens (wrong address, server not running, port
+  // blocked) otherwise left this screen spinning "Waiting for the game to
+  // start…" for the full 5-minute grace window with no hint that nothing was
+  // getting through.
   const onStatus = useCallback((s: LanStatus) => {
+    setStatus(s);
     if (s === 'closed') setError('Connection closed — rejoin by code to continue.');
   }, []);
 
@@ -98,11 +113,17 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
   // Unmount cleanup: drop this screen's pre-match handler from the client.
   useEffect(() => () => clientRef.current?.removeMessageHandler(handleMessage), [handleMessage]);
 
-  /** Code entry → deck pick: a valid 4-letter code moves to the deck stage. */
+  /** Code entry → deck pick: a valid 4-letter code and a host address move to
+   *  the deck stage. The address is required — a blank one silently means
+   *  "this machine", which is only ever right for the host. */
   function next() {
     const trimmed = code.trim();
     if (trimmed.length !== 4) {
       setError('Enter the 4-letter room code');
+      return;
+    }
+    if (hostAddr.trim() === '') {
+      setError("Enter the host machine's address (the IP they see in their LAN Host screen)");
       return;
     }
     setError(null);
@@ -128,7 +149,8 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
     setError(null);
     setSubmittedCode(trimmed);
     setStage('joining');
-    const c = connectLan(handleMessage, onStatus);
+    saveLanHost(hostAddr.trim());   // remembered so the next join skips the retype
+    const c = connectLan(handleMessage, onStatus, hostAddr);
     c.setJoinPayload({ code: trimmed, deckIds, customCards, heroId }); // reconnect re-attach (fix round 2 + 45)
     setClient(c);
     c.send({ type: 'joinRoom', code: trimmed, deckIds, customCards, heroId });
@@ -144,7 +166,25 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
       {stage === 'code' ? (
         <>
           <h1 className="shell-title">LAN Join</h1>
-          <p className="shell-subtitle">Enter the host's room code to join.</p>
+          <p className="shell-subtitle">Enter the host's address and room code to join.</p>
+          <label className="lan-label" htmlFor="lan-host-input">
+            Host address
+          </label>
+          <input
+            id="lan-host-input"
+            className="lan-host-input"
+            value={hostAddr}
+            onChange={(e) => setHostAddr(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') next();
+            }}
+            placeholder="192.168.1.20"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="lan-hint">
+            The host's machine — shown on their LAN Host screen. A pasted browser URL works too.
+          </p>
           <label className="lan-label" htmlFor="lan-code-input">
             Room code
           </label>
@@ -193,13 +233,21 @@ export default function LanJoin({ onSessionReady }: { onSessionReady: (s: LanSes
         <>
           <h1 className="shell-title">LAN Join</h1>
           <p className="shell-subtitle">
-            Joining room <strong>{submittedCode}</strong>…
+            Joining room <strong>{submittedCode}</strong> on <strong>{hostAddr.trim()}</strong>…
           </p>
           <div className="lan-waiting">
             <span className="lan-spinner" aria-hidden="true" />
             {opponent ? (
               <p className="lan-note">
                 Playing against <strong>{opponent}</strong> — starting…
+              </p>
+            ) : status === 'reconnecting' ? (
+              // The socket dropped or never opened. Say so instead of spinning
+              // silently: a wrong address or an unstarted server is otherwise
+              // indistinguishable from a host who has not started the match.
+              <p className="lan-note">
+                Can't reach <strong>{hostAddr.trim()}</strong> — retrying. Check the address, and that the
+                host is running <code>npm run server</code>.
               </p>
             ) : (
               <p className="lan-note">Waiting for the game to start…</p>

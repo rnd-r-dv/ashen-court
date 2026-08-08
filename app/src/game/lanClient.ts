@@ -193,14 +193,63 @@ export class LanClient {
   }
 }
 
+/** The port server/src/index.ts listens on by default. */
+export const LAN_PORT = 8080;
+
 /**
- * Connect to the LAN server on this machine (the server listens on the same
- * host the page was served from, port 8080 — see server/src/index.ts).
+ * The WebSocket URL for a LAN server, given an optional host override.
+ *
+ * The old code hard-coded `ws://${location.hostname}:8080`, which silently
+ * assumed the guest's page was served BY the host machine. It is not: each
+ * player runs their own app instance, so a guest browsing their own
+ * localhost:5173 connected to their OWN port 8080 — reaching either nothing
+ * (socket never opens, the join screen spins forever) or their own empty
+ * server ('Room not found' for a code that only exists on the host). Only the
+ * host may omit the override; a guest must say where the host is.
+ *
+ * Accepted forms, all resolving to a ws:// URL on LAN_PORT:
+ *   '' / undefined     → location.hostname (the host's own instance)
+ *   '10.0.0.5'         → ws://10.0.0.5:8080
+ *   '10.0.0.5:9000'    → ws://10.0.0.5:9000   (explicit port honoured)
+ *   'http://10.0.0.5:5173/' → ws://10.0.0.5:8080
+ *   '[fe80::1]'        → ws://[fe80::1]:8080
+ *
+ * A port is honoured ONLY when typed bare. When the string carries a scheme it
+ * is a pasted browser URL — that port is the Vite dev port (5173), never the
+ * WebSocket port, so using it would connect to the dev server and hang.
+ */
+export function lanUrl(host?: string | null): string {
+  const raw = (host ?? '').trim();
+  if (raw === '') return `ws://${location.hostname}:${LAN_PORT}`;
+  const scheme = /^(wss?|https?):\/\//i.exec(raw);
+  const hadScheme = scheme !== null;
+  // Drop the scheme, then any path/query — 'http://h:5173/lan?x' → 'h:5173'.
+  const body = (hadScheme ? raw.slice(scheme[0].length) : raw).replace(/[/?#].*$/, '');
+  const bracketed = /^(\[[^\]]+\])(?::(\d+))?$/.exec(body);
+  if (bracketed) {
+    const port = !hadScheme && bracketed[2] ? Number(bracketed[2]) : LAN_PORT;
+    return `ws://${bracketed[1]}:${port}`;
+  }
+  // A bare IPv6 literal has multiple colons and cannot express a port; the URL
+  // form requires the brackets back.
+  if ((body.match(/:/g) ?? []).length > 1) return `ws://[${body}]:${LAN_PORT}`;
+  const parts = body.split(':');
+  const name = parts[0] ?? '';
+  const typedPort = parts[1] ?? '';
+  if (name === '') return `ws://${location.hostname}:${LAN_PORT}`;
+  const port = !hadScheme && /^\d+$/.test(typedPort) ? Number(typedPort) : LAN_PORT;
+  return `ws://${name}:${port}`;
+}
+
+/**
+ * Connect to a LAN server. `host` is the host machine's address as typed by a
+ * joining player; omit it when this instance IS the host (the server runs on
+ * the same machine that served the page).
  */
 export function connectLan(
   onMessage: (m: ServerMessage) => void,
   onStatus?: (s: LanStatus) => void,
+  host?: string | null,
 ): LanClient {
-  const url = `ws://${location.hostname}:8080`;
-  return new LanClient(url, onMessage, onStatus);
+  return new LanClient(lanUrl(host), onMessage, onStatus);
 }

@@ -7,7 +7,7 @@ export type * from './types.js';
 
 export { validateCard, validateDeck, RARITY_COPY_LIMIT, type ValidationIssue } from './validate.js';
 
-export { cardText, heroPowerText, effectText } from './cardtext.js';
+export { cardText, heroPowerText, effectText, KEYWORD_TEXT } from './cardtext.js';
 
 export {
   buildPool,
@@ -24,8 +24,10 @@ export { CardRegistry } from './cards.js';
 
 /** Board capacity (engine/effects.ts). Exported because the UI draws exactly
  *  this many creature slots — hardcoding 7 in the app would let the outline
- *  and the rule drift apart. No other engine internal is exported. */
-export { BOARD_CAP } from './engine/effects.js';
+ *  and the rule drift apart. TOKEN_CAP is the separate token row's capacity
+ *  (Task 3); the app's Board rendering reads `creature.token` to pick a row.
+ *  No other engine internal is exported. */
+export { BOARD_CAP, TOKEN_CAP } from './engine/effects.js';
 export { createBot, mulliganPolicy, type BotPolicy, type BotLevel } from './bot/index.js';
 export { Game, type MatchSetup } from './engine/game.js';
 export { summarize } from './engine/stats.js';

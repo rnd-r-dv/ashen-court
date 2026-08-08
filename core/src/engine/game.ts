@@ -92,7 +92,7 @@ export class Game implements Resolver {
         discountMostExpensive: 0, discountNextSpell: 0,
       },
       deck, hand: [], board: [], artifacts: [],
-      mana: 0, maxMana: 0, surged: false,
+      mana: 0, maxMana: 0, surged: false, overload: 0,
     };
   }
 
@@ -183,18 +183,47 @@ export class Game implements Resolver {
         // the keyword test instead of crashing on an undefined find.
         const d = enemyBoard.find(c => c.id === target.id);
         if (!d) throw new Error('Defender not found');
-        if (!effectiveKeywords(d).has('taunt')) throw new Error('Taunt creature in the way');
+        // Stealth still applies inside the taunt gate: a stealthed taunt is
+        // untargetable (visibleToEnemy) and must not be reachable through the
+        // taunt check either (Task 8).
+        if (!effectiveKeywords(d).has('taunt') || d.keywords.includes('stealth')) throw new Error('Taunt creature in the way');
+      }
+      // Submit-path legality, not just enumeration: legalIntents pre-filters
+      // stealthed defenders, but submit is the only legality gate the LAN
+      // server trusts (the engine cannot tell who submitted, so the server
+      // validates identity only and forwards the intent). A crafted intent
+      // must be rejected here too, or enumeration and validation diverge —
+      // same invariant as the taunt gate above. Placed BEFORE the swing
+      // decrement and the reveal so a rejected attack changes nothing.
+      if (target.type === 'creature') {
+        const d = enemyBoard.find(c => c.id === target.id);
+        if (!d) throw new Error('Defender not found');
+        if (effectiveKeywords(d).has('stealth')) throw new Error('Cannot target a stealthed creature');
       }
       // resolve: attacksLeft is the swing counter (windfury 2 / normal 1).
       // exhausted stays summoning-sickness-only (set at summon, cleared in
       // beginTurn) — attacking does NOT exhaust, so a windfury creature can
       // swing twice (audit 01 C1).
       attacker.attacksLeft -= 1;
+      // Attacking reveals a stealthed creature (Task 8).
+      const stealthIdx = attacker.keywords.indexOf('stealth');
+      if (stealthIdx !== -1) attacker.keywords.splice(stealthIdx, 1);
       if (target.type === 'creature') {
         const defender = enemyBoard.find(c => c.id === target.id);
         if (!defender) throw new Error('Defender not found');
-        this.dealDamage(attacker, defender, attacker.attack);       // uses effects internals
-        if (defender.health > 0) this.dealDamage(defender, attacker, defender.attack);  // retaliation (source = defender)
+        // Damage is SIMULTANEOUS: both values are captured BEFORE either lands,
+        // then applied unconditionally. Retaliation used to be gated on
+        // `defender.health > 0`, which made a clean kill free and diverged from
+        // every mainstream TCG. Capturing first also makes the second call safe:
+        // the defender may already be off the board (dispatch(creatureDied)
+        // removes it during the first drain), so re-reading defender.attack
+        // afterwards would read a removed creature.
+        const attackerPower = attacker.attack;
+        const defenderPower = defender.attack;
+        this.dealDamage(attacker, defender, attackerPower);
+        // Source stays the DEFENDER so retaliation lifesteal heals the
+        // defender's controller (EffectCtx.player = source.owner).
+        this.dealDamage(defender, attacker, defenderPower);
       } else {
         this.dealDamageToHero(attacker, enemy, attacker.attack);
       }
@@ -395,11 +424,20 @@ export class Game implements Resolver {
       case 'creatureDied': {
         // deathrattle resolves FIRST (effects apply via the card def), then the
         // creature is removed from the board. Removal lives here, not in
-        // dealDamage — retaliation is gated on the defender's health, so a dead
-        // creature never retaliates (see submit/attack).
+        // dealDamage — combat is simultaneous, so a creature that died to an
+        // attack still dealt its own damage back first (see submit/attack).
         this.fireTriggers('deathrattle', evt.player, evt.cardId, evt.creatureId);
         const dead = findCreature(this, evt.creatureId);
         if (dead) removeCreature(this, dead);
+        break;
+      }
+      case 'creatureReturned': {
+        const p = this.state.players[evt.player];
+        const idx = p.board.findIndex(c => c.id === evt.creatureId);
+        if (idx === -1) break;
+        p.board.splice(idx, 1);
+        // A full hand simply loses the card, matching how draw handles overflow.
+        p.hand.push(evt.cardId);
         break;
       }
       case 'spellFizzled':
@@ -446,6 +484,9 @@ export class Game implements Resolver {
    * because validateEffectTargets skips self/AoE specs by design.
    */
   private fireTriggers(when: Trigger, player: PlayerIndex, cardId: string, creatureId?: string, explicitRef?: TargetRef): void {
+    const creature = creatureId ? findCreature(this, creatureId) : undefined;
+    // A silenced creature has no triggers (Task 5).
+    if (creature && creature.silenced) return;
     for (const group of this.triggerGroups(cardId, when)) {
       for (const spec of group.effects) {
         applyEffect(this, { player, cardId, creatureId }, spec, specTargetRef(spec, explicitRef));
@@ -544,6 +585,11 @@ export class Game implements Resolver {
     // mana/draw are events (dispatch applies them); resets stay inline
     // (state maintenance, not events).
     const maxMana = Math.min(MAX_MANA, p.maxMana + 1);
+    // overload: the lock applies to THIS turn's pool and is then spent. It
+    // subtracts from the emitted mana rather than from maxMana, so the crystal
+    // count on screen stays truthful and the lock lasts exactly one turn.
+    const locked = Math.min(p.overload, maxMana);
+    p.overload = 0;
     p.hero.usedPower = false;
     p.hero.discountMostExpensive = 0;
     p.hero.discountNextSpell = 0;
@@ -561,8 +607,15 @@ export class Game implements Resolver {
       c.exhausted = false;
       c.attacksLeft = c.keywords.includes('windfury') ? 2 : 1;
     }
+    // ORDER IS LOAD-BEARING: manaChanged sets the turn's baseline FIRST, then
+    // turnStart's dispatch fires startOfTurn triggers on top of it. Emitting
+    // turnStart first meant a ramp artifact's gainMana landed during that
+    // dispatch and was then overwritten by this manaChanged, which carries the
+    // value computed BEFORE the trigger ran — so Sylvan Grove and Idol of
+    // Growth granted nothing at all. Any future effect that adjusts mana from
+    // a startOfTurn trigger (overload included) depends on this ordering.
+    this.emit({ type: 'manaChanged', player: me, mana: maxMana - locked, maxMana });
     this.emit({ type: 'turnStart', player: me, mana: maxMana });
-    this.emit({ type: 'manaChanged', player: me, mana: maxMana, maxMana });
     // draw 1 (empty deck: no cardDrawn event, fatigue arrives in a later task)
     if (p.deck.length > 0) {
       const cardId = p.deck[p.deck.length - 1]!;   // pre-view; dispatch pops

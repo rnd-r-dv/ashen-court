@@ -30,19 +30,19 @@ export const CARDS: Card[] = [
   creature('coven-bog', 'Bog Hag', 3, 2, 4, 'common', [], [], 'She rose from the marsh with reeds braided in her hair and debts older than the moon. The bog keeps what it takes, and so does she.'),
   spell('coven-doom', 'Doom', 3, 'common', [dmg(3, 'enemyCreature')], 'Some futures are fixed before the first step is taken. Morwenna merely reads them aloud.'),
   spell('coven-nightmare', 'Nightmare', 4, 'common', [buff(-3, -3, 'enemyCreature')], 'Sleep offers no refuge from the coven. Their dreams ride in on your own.'),
-  creature('coven-raven', 'Raven', 4, 3, 4, 'common', [], [], "The raven knows the way home, and the way to the enemy's window. It counts the coven's debts in caws and graves."),
-  creature('coven-scare', 'Scarecrow', 4, 0, 6, 'common', ['taunt'], [], "The coven's fields are planted with worse than grain. What stands among them does not frighten crows — it feeds them."),
+  creature('coven-raven', 'Raven', 4, 4, 4, 'common', [], [{ when: 'battlecry', effects: [buff(-1, -1, 'enemyCreature')] }], "The raven knows the way home, and the way to the enemy's window. It counts the coven's debts in caws and graves."),
+  creature('coven-scare', 'Scarecrow', 4, 1, 7, 'common', ['taunt'], [], "The coven's fields are planted with worse than grain. What stands among them does not frighten crows — it feeds them."),
   spell('coven-drain', 'Drain', 5, 'common', [dmg(2, 'enemyCreature'), heal(2)], 'Life is a loan the coven collects with interest. The wound closes on one side of the circle; on the other, a harvest is taken.'),
   // Rares (5)
   spell('coven-decay', 'Decay', 5, 'rare', [buff(-2, -2, 'allEnemyCreatures')], "Rot is patient, and it preaches to everything that stands too proud. The rite of decay is the coven's oldest sermon."),
-  creature('coven-eldritch', 'Eldritch Horror', 6, 6, 6, 'rare', [], [], 'It was not summoned so much as noticed. Something this old resents being seen.'),
+  creature('coven-eldritch', 'Eldritch Horror', 6, 6, 6, 'rare', ['venom'], [], 'It was not summoned so much as noticed. Something this old resents being seen.'),
   spell('coven-transfix', 'Transfix', 3, 'rare', [freeze('enemyCreature'), buff(-1, -1, 'enemyCreature')], 'The winter hex slows blood and stills breath, leaving motion a fading memory. The cold takes what it touches and keeps it.'),
   spell('coven-mirrorhex', 'Mirror Hex', 5, 'rare', [buff(-4, -4, 'enemyCreature')], 'See yourself as the coven sees you — small, fading, already forgotten. The looking glass makes the curse fourfold.'),
   spell('coven-veil', 'Veil of Night', 6, 'rare', [draw(3), dmg(1, 'self')], 'Beneath the veil, secrets surface like drowned things. The price of sight is a sliver of self.'),
   // Epics (3)
   spell('coven-apathy', 'Apathy', 7, 'epic', [buff(-3, -3, 'allEnemyCreatures')], 'The cruellest hex is not hatred but indifference. Fists uncurl, shields lower, and the battle simply ends.'),
   spell('coven-glare', "Morwenna's Glare", 8, 'epic', [destroy('enemyCreature'), buff(-1, -1, 'allEnemyCreatures')], "Some curses are spoken; others are merely looked at. Morwenna's glare is a death sentence with no appeal."),
-  creature('coven-abyss', 'Abyssal Gaze', 9, 8, 8, 'epic', [], [], 'Staring into it is not the danger. The danger is that it stares back and remembers your face.'),
+  creature('coven-abyss', 'Abyssal Gaze', 9, 8, 9, 'epic', [], [{ when: 'battlecry', effects: [buff(-2, -2, 'enemyCreature')] }], 'Staring into it is not the danger. The danger is that it stares back and remembers your face.'),
   // Legendaries (2)
   creature('coven-queen', 'The Hex Queen', 10, 7, 10, 'legendary', [], [{ when: 'battlecry', effects: [buff(-2, -2, 'allEnemyCreatures')] }], 'Morwenna Hex, sovereign of the night coven, whose throne is a circle of fading candles. When she is crowned, the whole world begins to wither.'),
   artifact('coven-eternal', 'Eternal Night', 7, 'legendary', [{ when: 'startOfTurn', effects: [buff(-1, -1, 'allEnemyCreatures')] }], 'An hourglass of black glass that never empties. While it turns, the sun remains only a rumor.'),

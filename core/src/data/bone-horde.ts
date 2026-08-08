@@ -34,12 +34,12 @@ export const CARDS: Card[] = [
   creature('bone-necromancer', 'Necromancer', 5, 3, 4, 'rare', [], [{ when: 'startOfTurn', effects: [summon('token-skeleton')] }], 'Each dawn it counts its army. Each dusk it adds one more.'),
   spell('bone-legion', 'Legion Call', 5, 'rare', [summon('token-skeleton', 3)], 'Three names spoken into the cold earth — three ranks answer.'),
   spell('bone-horde', 'Bone Horde', 6, 'rare', [summon('token-skeleton', 4)], 'They do not march in step. They march as one tide.'),
-  creature('bone-warlord', 'Warlord', 6, 5, 5, 'rare', [], [], 'It commands a host that never tires, never falters, never negotiates.'),
+  creature('bone-warlord', 'Warlord', 6, 6, 6, 'rare', [], [{ when: 'deathrattle', effects: [summon('token-skeleton', 2)] }], 'It commands a host that never tires, never falters, never negotiates.'),
   creature('bone-behemoth', 'Behemoth', 7, 7, 7, 'rare', ['taunt'], [], "The barrow's mountain, risen to keep its brothers safe."),
   // Epics (3)
   creature('bone-whisper', 'Whisperer', 5, 3, 6, 'epic', [], [{ when: 'endOfTurn', effects: [summon('token-skeleton')] }], 'It speaks to the sleeping dead in a voice only they can hear.'),
   spell('bone-cataclysm', 'Cataclysm', 8, 'epic', [dmg(3, 'allEnemies')], "When the whole horde rattles at once, the world's bones tremble too."),
-  creature('bone-overlord', 'Overlord', 9, 8, 8, 'epic', [], [], 'Beneath the crowns of a hundred dead kings, one will still rules.'),
+  creature('bone-overlord', 'Overlord', 9, 8, 10, 'epic', [], [{ when: 'deathrattle', effects: [summon('token-skeleton', 2)] }], 'Beneath the crowns of a hundred dead kings, one will still rules.'),
   // Legendaries (2)
   creature('bone-king', 'The Bone King', 10, 8, 10, 'legendary', ['taunt'], [{ when: 'deathrattle', effects: [summon('token-skeleton', 3)] }], 'Death has a throne, and it is built from what it conquered. When the King falls, his court rises in his place.'),
   spell('bone-army', 'Risen Army', 7, 'legendary', [summon('token-skeleton', 6)], 'From every unmarked grave and forgotten war, they answer the call.'),

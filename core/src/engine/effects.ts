@@ -27,6 +27,9 @@ export interface EffectCtx {
 }
 
 export const BOARD_CAP = 7;
+/** Tokens fill their own row. Same size as the creature cap so a full board
+ *  of both reads symmetrically on screen. */
+export const TOKEN_CAP = 7;
 const MAX_MANA = 15;
 
 /** Targets that resolve to one ref (caller supplies an explicit ref via the
@@ -99,7 +102,8 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
   const refs = resolveRefs(game, ctx.player, spec, explicitRef);
   switch (spec.kind) {
     case 'dealDamage': {
-      const amount = spec.value ?? 0;
+      const bonus = ctx.creatureId ? 0 : spellPowerOf(game, ctx.player);
+      const amount = (spec.value ?? 0) + bonus;
       if (amount > 0) {
         let dealt = 0;
         for (const ref of refs) dealt += damageTarget(game, ctx, ref, amount);
@@ -181,6 +185,53 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
       }
       break;
     }
+    case 'consume': {
+      const p = game.state.players[ctx.player];
+      // Oldest tokens first, so a player's most recent summons survive — the
+      // board reads left-to-right and eating the newest looks like a bug.
+      const eligible = p.board.filter(c => c.token).slice(0, spec.value ?? 1);
+      for (const c of eligible) {
+        // A real death: deathrattles on tokens still fire.
+        push(game, { type: 'creatureDied', player: c.owner, creatureId: c.id, cardId: c.cardId });
+      }
+      break;
+    }
+    case 'silence': {
+      for (const ref of refs) {
+        if (ref.type !== 'creature') continue;
+        const c = findCreature(game, ref.id);
+        if (!c) continue;
+        // Keywords live on the creature (an array we can empty); triggers live
+        // on the CARD DEF, shared by every copy, so they must never be mutated
+        // — the flag is what Game.fireTriggers checks instead. The mirrored
+        // state fields (shields, warded, attacksLeft) must be stripped too:
+        // the engine reads those FIELDS, not the keyword array.
+        c.keywords.length = 0;
+        c.silenced = true;
+        // Keywords are mirrored into state fields at creation (shields, warded,
+        // attacksLeft) and the engine reads those FIELDS, not the array — so
+        // emptying the array alone left a silenced shield/ward minion protected.
+        c.shields = 0;
+        c.warded = false;
+        // Clamp, never set: attacksLeft 1 would refund a swing to a windfury
+        // minion that already swung twice (attacksLeft 0). beginTurn recomputes
+        // attacksLeft from keywords every turn, so this only governs the turn
+        // silence was cast on.
+        c.attacksLeft = Math.min(c.attacksLeft, 1);
+      }
+      break;
+    }
+    case 'returnToHand': {
+      for (const ref of refs) {
+        if (ref.type !== 'creature') continue;
+        const c = findCreature(game, ref.id);
+        if (!c) continue;
+        // NOT a death: no creatureDied, so no deathrattle. Bounce is removal
+        // that deliberately leaves the card playable again.
+        push(game, { type: 'creatureReturned', player: c.owner, creatureId: c.id, cardId: c.cardId });
+      }
+      break;
+    }
     case 'copyCard': {
       const p = game.state.players[ctx.player];
       const id = spec.cardId ?? randomEnemyCreatureCardId(game, ctx.player);
@@ -193,6 +244,11 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
         const c = findCreature(game, ref.id);
         if (!c || c.keywords.includes(spec.keyword)) continue;
         c.keywords.push(spec.keyword);
+        // Mirrored fields must follow the keyword — the engine reads the fields
+        // (shield absorb, ward fizzle, windfury swings), not the array.
+        if (spec.keyword === 'shield') c.shields += 1;
+        if (spec.keyword === 'ward') c.warded = true;
+        if (spec.keyword === 'windfury') c.attacksLeft += 1;  // this turn; beginTurn recomputes
       }
       break;
     }
@@ -202,9 +258,27 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
     case 'discountNextSpell':
       game.state.players[ctx.player].hero.discountNextSpell += spec.value ?? 0;
       break;
+    case 'spellPower': {
+      for (const ref of refs) {
+        if (ref.type !== 'creature') continue;
+        const c = findCreature(game, ref.id);
+        if (c) c.spellPower += spec.value ?? 0;
+      }
+      break;
+    }
+    case 'overload':
+      game.state.players[ctx.player].overload += spec.value ?? 0;
+      break;
   }
   push(game, { type: 'effectResolved', player: ctx.player, sourceCardId: ctx.cardId, kind: spec.kind });
   runQueue(game);
+}
+
+/** Total spell power on a player's board. Applied only when the damage source
+ *  is a SPELL — an EffectCtx with no creatureId. A creature's own battlecry
+ *  carries creatureId, so a board full of mages never inflates battlecries. */
+function spellPowerOf(game: Resolver, player: PlayerIndex): number {
+  return game.state.players[player].board.reduce((s, c) => s + c.spellPower, 0);
 }
 
 /**
@@ -215,7 +289,11 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
 export function resolveTargets(game: Resolver, player: PlayerIndex, target: EffectTarget): TargetRef[] {
   const enemy = (1 - player) as PlayerIndex;
   const friendly = game.state.players[player].board;
-  const hostile = game.state.players[enemy].board;
+  // The enemy board is pre-filtered by visibleToEnemy so EVERY enemy-facing
+  // case (any/anyCreature/enemyCreature/allEnemies/allEnemyCreatures/
+  // randomEnemy/randomEnemyCreature) excludes stealthed creatures uniformly —
+  // the friendly board is untouched, so buffs/heals still reach them (Task 8).
+  const hostile = game.state.players[enemy].board.filter(visibleToEnemy);
   const creatureRefs = (board: readonly CreatureState[]): TargetRef[] =>
     board.map(c => ({ type: 'creature' as const, id: c.id }));
 
@@ -275,6 +353,14 @@ export function damageTarget(game: Resolver, ctx: EffectCtx, ref: TargetRef, amo
     push(game, { type: 'damageDealt', target: ref, amount: dmg, sourceCardId: ctx.cardId });
     if (c.health <= 0) {
       push(game, { type: 'creatureDied', player: c.owner, creatureId: c.id, cardId: c.cardId });
+    } else if (dmg > 0 && ctx.creatureId) {
+      // venom: a source creature that dealt real damage destroys what it hit,
+      // regardless of size. Gated on dmg > 0 so a shield absorb (which emits a
+      // 0-amount damageDealt) never kills, matching the onDamage trigger rule.
+      const source = findCreature(game, ctx.creatureId);
+      if (source && source.keywords.includes('venom')) {
+        push(game, { type: 'creatureDied', player: c.owner, creatureId: c.id, cardId: c.cardId });
+      }
     }
     return dmg;
   }
@@ -315,6 +401,14 @@ export function isDragon(game: Resolver, c: CreatureState): boolean {
   } catch {
     return false;   // unknown/synthetic card — not a dragon
   }
+}
+
+/** Enemy-facing target filter: a stealthed creature is not selectable by the
+ *  opponent. It stays fully selectable by its OWN controller (friendly buffs
+ *  and heals still reach it), so the filter is applied only where the refs
+ *  belong to the enemy. */
+function visibleToEnemy(c: CreatureState): boolean {
+  return !c.keywords.includes('stealth');
 }
 
 /** Find a creature by id across both boards. Exported for Game's dispatch handlers (Task 8). */
@@ -376,7 +470,13 @@ function summonTokens(game: Resolver, ctx: EffectCtx, spec: EffectSpec): void {
   if (!spec.cardId) return;
   const card = registryOf(game).get(spec.cardId);
   const p = game.state.players[ctx.player];
-  const count = Math.min(spec.value ?? 1, BOARD_CAP - p.board.length);
+  // Task 3: tokens occupy their own row — count against TOKEN_CAP using only
+  // the same-kind creatures, so a swarm card (Endless Swarm 9) is not silently
+  // truncated by the creature cap (old behavior: BOARD_CAP - board.length = 0).
+  const isToken = card.archetype === 'token';
+  const cap = isToken ? TOKEN_CAP : BOARD_CAP;
+  const used = p.board.filter(c => c.token === isToken).length;
+  const count = Math.min(spec.value ?? 1, cap - used);
   for (let i = 0; i < count; i++) {
     const creature = makeCreature(game, card, ctx.player);
     p.board.push(creature);
@@ -386,8 +486,8 @@ function summonTokens(game: Resolver, ctx: EffectCtx, spec: EffectSpec): void {
 }
 
 /** Build a CreatureState from a card def (exhausted = !(rush||charge), attacksLeft = windfury?2:1,
- *  shields/warded from keywords). Exported so hand plays (game.ts) summon through the same
- *  path as effect summons (Task 9). */
+ *  shields/warded from keywords, token = archetype 'token' — Task 3 token row). Exported so hand
+ *  plays (game.ts) summon through the same path as effect summons (Task 9). */
 export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): CreatureState {
   const keywords: Keyword[] = [...card.keywords];
   return {
@@ -403,6 +503,9 @@ export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): Cr
     shields: keywords.includes('shield') ? 1 : 0,
     warded: keywords.includes('ward'),
     frozen: false,
+    silenced: false,
+    token: card.archetype === 'token',
+    spellPower: 0,
   };
 }
 

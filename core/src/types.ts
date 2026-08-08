@@ -13,9 +13,9 @@ export const MANA_SURGE = 'mana-surge';
 export const MAX_TURNS = 200;
 export type CardType = 'creature' | 'spell' | 'artifact';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
-export type Keyword = 'taunt' | 'rush' | 'charge' | 'windfury' | 'lifesteal' | 'ward' | 'shield';
+export type Keyword = 'taunt' | 'rush' | 'charge' | 'windfury' | 'lifesteal' | 'ward' | 'shield' | 'venom' | 'stealth';
 export type Trigger = 'battlecry' | 'deathrattle' | 'startOfTurn' | 'endOfTurn' | 'onDamage';
-export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'copyCard' | 'giveKeyword' | 'discountMostExpensive' | 'discountNextSpell';
+export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'consume' | 'silence' | 'returnToHand' | 'copyCard' | 'giveKeyword' | 'discountMostExpensive' | 'discountNextSpell' | 'spellPower' | 'overload';
 export type EffectTarget = 'any' | 'hero' | 'anyCreature' | 'enemyCreature' | 'friendlyCreature' | 'friendlyDragon' | 'allEnemies' | 'allEnemyCreatures' | 'allFriendlyCreatures' | 'randomEnemy' | 'randomEnemyCreature' | 'self';
 
 export interface EffectSpec { kind: EffectKind; value?: number; value2?: number; target?: EffectTarget; keyword?: Keyword; cardId?: string; }
@@ -43,6 +43,18 @@ export interface CreatureState {
   attack: number; health: number; maxHealth: number;
   keywords: Keyword[]; exhausted: boolean; attacksLeft: number;
   shields: number; warded: boolean; frozen: boolean;
+  /** Set by the `silence` effect. Keywords are emptied on application; this
+   *  flag additionally suppresses the card def's triggers, which live on the
+   *  CARD not the creature and so cannot be removed by clearing an array. */
+  silenced: boolean;
+  /** True for creatures summoned by an effect from a `token` archetype card.
+   *  Tokens occupy a SEPARATE row with its own cap (TOKEN_CAP) so a big
+   *  swarm card is not silently truncated by the creature cap. Serialization
+   *  is a plain JSON round-trip, so a state saved before this field existed
+   *  deserializes with `token` undefined, which is correctly falsy. */
+  token: boolean;
+  /** Added to the controller's SPELL damage while this creature is on board. */
+  spellPower: number;
 }
 export interface ArtifactState { id: string; cardId: string; owner: PlayerIndex; }
 export interface HeroState {
@@ -53,6 +65,8 @@ export interface HeroState {
 export interface PlayerState {
   hero: HeroState; deck: string[]; hand: string[]; board: CreatureState[]; artifacts: ArtifactState[];
   mana: number; maxMana: number; surged: boolean;
+  /** Mana locked at the start of this player's NEXT turn, then cleared. */
+  overload: number;
 }
 export type Phase = 'mulligan' | 'main' | 'gameOver';
 
@@ -83,6 +97,7 @@ export type GameEvent =
   | { type: 'creatureSummoned'; player: PlayerIndex; creatureId: string; cardId: string }
   | { type: 'damageDealt'; target: TargetRef; amount: number; sourceCardId: string }
   | { type: 'creatureDied'; player: PlayerIndex; creatureId: string; cardId: string }
+  | { type: 'creatureReturned'; player: PlayerIndex; creatureId: string; cardId: string }
   | { type: 'heroDamaged'; player: PlayerIndex; amount: number; hp: number }
   | { type: 'heroHealed'; player: PlayerIndex; amount: number; hp: number }
   | { type: 'buffApplied'; creatureId: string; attack: number; health: number }

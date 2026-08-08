@@ -150,10 +150,10 @@ export const EFFECT_PRESETS: { label: string; spec: EffectSpec }[] = [
   { label: 'Give a friendly creature Spell Power +1', spec: { kind: 'spellPower', value: 1, target: 'friendlyCreature' } },
   { label: 'Overload 1', spec: { kind: 'overload', value: 1 } },
   { label: 'Next spell costs 1 less', spec: { kind: 'discountNextSpell', value: 1 } },
-  { label: 'Gain 2 Mana', spec: { kind: 'gainMana', value: 2 } },
+  { label: 'Gain 2 empty mana crystals', spec: { kind: 'gainMana', value: 2 } },
   { label: 'Refill 2 Mana', spec: { kind: 'refillMana', value: 2 } },
   { label: 'Copy a random enemy creature card', spec: { kind: 'copyCard' } },
-  { label: 'Your most expensive card costs 2 less', spec: { kind: 'discountMostExpensive', value: 2 } },
+  { label: 'Your most expensive creature costs 2 less', spec: { kind: 'discountMostExpensive', value: 2 } },
 ];
 
 /**

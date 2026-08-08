@@ -193,8 +193,19 @@ export class Game implements Resolver {
       if (target.type === 'creature') {
         const defender = enemyBoard.find(c => c.id === target.id);
         if (!defender) throw new Error('Defender not found');
-        this.dealDamage(attacker, defender, attacker.attack);       // uses effects internals
-        if (defender.health > 0) this.dealDamage(defender, attacker, defender.attack);  // retaliation (source = defender)
+        // Damage is SIMULTANEOUS: both values are captured BEFORE either lands,
+        // then applied unconditionally. Retaliation used to be gated on
+        // `defender.health > 0`, which made a clean kill free and diverged from
+        // every mainstream TCG. Capturing first also makes the second call safe:
+        // the defender may already be off the board (dispatch(creatureDied)
+        // removes it during the first drain), so re-reading defender.attack
+        // afterwards would read a removed creature.
+        const attackerPower = attacker.attack;
+        const defenderPower = defender.attack;
+        this.dealDamage(attacker, defender, attackerPower);
+        // Source stays the DEFENDER so retaliation lifesteal heals the
+        // defender's controller (EffectCtx.player = source.owner).
+        this.dealDamage(defender, attacker, defenderPower);
       } else {
         this.dealDamageToHero(attacker, enemy, attacker.attack);
       }
@@ -395,8 +406,8 @@ export class Game implements Resolver {
       case 'creatureDied': {
         // deathrattle resolves FIRST (effects apply via the card def), then the
         // creature is removed from the board. Removal lives here, not in
-        // dealDamage — retaliation is gated on the defender's health, so a dead
-        // creature never retaliates (see submit/attack).
+        // dealDamage — combat is simultaneous, so a creature that died to an
+        // attack still dealt its own damage back first (see submit/attack).
         this.fireTriggers('deathrattle', evt.player, evt.cardId, evt.creatureId);
         const dead = findCreature(this, evt.creatureId);
         if (dead) removeCreature(this, dead);

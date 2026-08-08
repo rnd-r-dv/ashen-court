@@ -31,7 +31,7 @@ export const CARDS: Card[] = [
   spell('ember-searing', 'Searing Wave', 2, 'common', [dmg(1, 'allEnemies')], 'The court\'s opening argument: heat enough to crack shields and curl banners before the first blade is drawn.'),
   creature('ember-flamewhelp', 'Flamewhelp', 2, 2, 1, 'common', ['rush'], [], 'Born hungry and taught to charge, the whelps throw themselves at whatever stands — the court calls it eagerness.'),
   spell('ember-blast', 'Blast', 3, 'common', [dmg(4, 'any')], 'A fist of fire hurled from the high galleries. There is no diplomacy in it.'),
-  creature('ember-firebrand', 'Firebrand', 3, 3, 3, 'common', [], [{ when: 'battlecry', effects: [spellPower(1, 'friendlyCreature')] }], 'Snatched burning from a dying pyre and given a sword, the firebrand carries the court\'s anger into the line.'),
+  creature('ember-firebrand', 'Firebrand', 3, 3, 3, 'common', [], [{ when: 'battlecry', effects: [spellPower(1, 'allFriendlyCreatures')] }], 'Snatched burning from a dying pyre and given a sword, the firebrand carries the court\'s anger into the line.'),
   creature('ember-igniter', 'Igniter', 3, 2, 3, 'common', [], [{ when: 'battlecry', effects: [dmg(1, 'any')] }], 'Every siege begins with one small flame where no flame should be.'),
   spell('ember-cauterize', 'Cauterize', 4, 'common', [dmg(3, 'any'), heal(3)], 'The court\'s surgeons know a seared wound cannot bleed again — and they let the enemy pay for the flame.'),
   creature('ember-hellhound', 'Hellhound', 4, 4, 3, 'common', ['charge'], [], 'Bred in the kennels beneath the Throne of Ash, the hounds answer only to the scent of fear.'),

@@ -14,9 +14,10 @@ import { describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import type { AddressInfo, RawData } from 'ws';
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck, validateCard } from '@ashen/core';
-import type { Card, GameEvent, HeroSpec, Intent } from '@ashen/core';
+import type { Card, GameEvent, HeroSpec, Intent, PendingChoice } from '@ashen/core';
 import { startServer } from '../src/index.js';
 import type { LanServer } from '../src/index.js';
+import type { Room } from '../src/rooms.js';
 import { formatJoinCode, parseJoinCode } from '../src/lanCode.js';
 import type { ClientMessage, ServerMessage } from '../src/protocol.js';
 
@@ -33,6 +34,13 @@ const CHOIR_HERO = HEROES[1]!;
 const SEED = 2;
 const PLAY_INDEX = 1;
 const PLAY_CARD = 'neutral-boar';
+// Seed 79 (fixed by test): after both mulligans keep [], player 0's hand is
+// [ember-firebrand, neutral-scroll, ember-searing, ember-cinderling] — Scroll
+// of Lore sits at index 1 with 1 mana available. Playing it NATURALLY offers
+// a Discover (Task 2 replay path: the discover must come from a real playCard
+// so both intents land in the append-only log — an injected event replays
+// nothing).
+const SEED_DISCOVER = 79;
 
 /** Simple valid custom card (1-cost 1/1 creature) — passes validateCard. */
 const CUSTOM_CARD: Card = {
@@ -202,12 +210,17 @@ function eventsEq(expected: GameEvent[]): (m: ServerMessage) => boolean {
   return m => m.type === 'events' && JSON.stringify(m.events) === JSON.stringify(expected);
 }
 
+/** Content-exact intent predicate: matches the intent echo for `intent`. */
+function intentEq(intent: Intent): (m: ServerMessage) => boolean {
+  return m => m.type === 'intent' && JSON.stringify(m.intent) === JSON.stringify(intent);
+}
+
 /** Full create + join + gameStart for both sockets. */
-async function startRoom(srv: LanServer): Promise<{ host: TestClient; guest: TestClient; code: string }> {
+async function startRoom(srv: LanServer, seed: number = SEED): Promise<{ host: TestClient; guest: TestClient; code: string }> {
   const { host, guest } = await makeClients(srv);
   host.send({
     type: 'createRoom', name: 'Hosty',
-    deckIds: DECK, customCards: [], heroId: HERO_NAME, seed: SEED,
+    deckIds: DECK, customCards: [], heroId: HERO_NAME, seed,
   });
   const created = await host.waitFor(m => m.type === 'roomCreated');
   if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
@@ -233,6 +246,22 @@ function mirrorGame(
   heroes: [HeroSpec, HeroSpec] = [HERO, HERO],
 ): Game {
   return Game.create({ decks, heroes, seed }, new CardRegistry([...buildPool(), ...customCards]));
+}
+
+/**
+ * The authoritative Room behind a test server (Task 2). RoomRegistry keys
+ * sockets on the SERVER side (the objects in wss.clients) — those are distinct
+ * from the client 'ws' instances, so roomOf() can never resolve a client
+ * socket. Every seated member of the room resolves to it, so scanning the
+ * server's clients finds the room; with only host + guest connected either
+ * socket works.
+ */
+function roomOf(srv: LanServer): Room | undefined {
+  for (const socket of srv.wss.clients) {
+    const room = srv.registry.roomOf(socket);
+    if (room) return room;
+  }
+  return undefined;
 }
 
 describe('LAN rooms', () => {
@@ -993,6 +1022,198 @@ describe('LAN rooms', () => {
     } finally {
       host?.close();
       guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('Discover: only the pending owner may resolve the choice; endTurn is rejected while pending', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    try {
+      ({ host, guest } = await startRoom(srv));
+      const mirror = mirrorGame([DECK, DECK], SEED);
+      // Both mulligans complete (player 0 first, then player 1): we are in
+      // player 0's main turn before the choice is injected.
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = host.waitFor(eventsEq(m1));
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+      const m2 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m2P = guest.waitFor(eventsEq(m2));
+      guest.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m2P).type).toBe('events');
+
+      // Inject a pending Discover owned by the GUEST (player 1) while player
+      // 0 is still the current player — the out-of-turn shape the LAN gate
+      // must honor (a start/end-of-turn trigger creates such choices). The
+      // mirror receives the same injected event so the owner's resolution
+      // broadcast can be matched byte-for-byte.
+      const choice: PendingChoice = {
+        kind: 'discover', player: 1,
+        cardIds: ['neutral-militia', 'neutral-scroll', 'neutral-boar'],
+      };
+      const room = roomOf(srv);
+      if (!room || !room.game) throw new Error('room not found');
+      room.game.applyEvent({ type: 'discoverOffered', choice });
+      mirror.applyEvent({ type: 'discoverOffered', choice });
+      expect(room.game.state.pendingChoice).toEqual(choice);
+
+      // The HOST is the current player but NOT the pending owner: its
+      // Discover must be rejected — error reply to the host ONLY, nothing
+      // broadcast, pending untouched. (Task 2: the gate must authorize the
+      // pending owner, not currentPlayer().)
+      const hostErrP = host.waitFor(m => m.type === 'error');
+      const guestSilenceP = guest.expectNoMessage();
+      host.send({ type: 'intent', intent: { kind: 'discover', choice: 1 } });
+      const hostErr = await hostErrP;
+      if (hostErr.type !== 'error') throw new Error('error never arrived');
+      expect(hostErr.message).toMatch(/not your turn/i);
+      await guestSilenceP;
+      expect(room.game.state.pendingChoice).toEqual(choice);
+
+      // endTurn from EITHER socket is rejected while pending: the host by the
+      // owner gate, the owner (guest) by the engine ('Resolve Discover first').
+      const hostEndErrP = host.waitFor(m => m.type === 'error');
+      host.send({ type: 'intent', intent: { kind: 'endTurn' } });
+      const hostEndErr = await hostEndErrP;
+      if (hostEndErr.type !== 'error') throw new Error('error never arrived');
+      expect(hostEndErr.message).toMatch(/not your turn/i);
+      expect(room.game.state.pendingChoice).toEqual(choice);
+
+      const guestEndErrP = guest.waitFor(m => m.type === 'error');
+      const hostSilenceP = host.expectNoMessage();
+      guest.send({ type: 'intent', intent: { kind: 'endTurn' } });
+      const guestEndErr = await guestEndErrP;
+      if (guestEndErr.type !== 'error') throw new Error('error never arrived');
+      expect(guestEndErr.message).toMatch(/discover/i);   // 'Resolve Discover first'
+      await hostSilenceP;
+      expect(room.game.state.pendingChoice).toEqual(choice);
+
+      // The owner's Discover resolves: both sockets receive the exact mirror
+      // events and the intent echo; the choice clears and the picked card
+      // joins the guest's hand.
+      const resolved = mirror.submit({ kind: 'discover', choice: 1 });
+      expect(resolved.some(e => e.type === 'discoverResolved' && e.cardId === 'neutral-scroll')).toBe(true);
+      const hostResP = host.waitFor(eventsEq(resolved));
+      const guestResP = guest.waitFor(eventsEq(resolved));
+      const hostIntentP = host.waitFor(intentEq({ kind: 'discover', choice: 1 }));
+      const guestIntentP = guest.waitFor(intentEq({ kind: 'discover', choice: 1 }));
+      guest.send({ type: 'intent', intent: { kind: 'discover', choice: 1 } });
+      const hostRes = await hostResP;
+      const guestRes = await guestResP;
+      if (hostRes.type !== 'events' || guestRes.type !== 'events') throw new Error('events never arrived');
+      expect(guestRes.events).toEqual(hostRes.events);
+      expect(await hostIntentP).toMatchObject({ type: 'intent', intent: { kind: 'discover', choice: 1 } });
+      expect(await guestIntentP).toMatchObject({ type: 'intent', intent: { kind: 'discover', choice: 1 } });
+      expect(room.game.state.pendingChoice).toBeNull();
+      const guestHand = room.game.state.players[1].hand;
+      expect(guestHand[guestHand.length - 1]).toBe('neutral-scroll');
+    } finally {
+      host?.close();
+      guest?.close();
+      await srv.close();
+    }
+  });
+
+  it('Discover: playCard + discover intents enter the log and reconnect replays them to the same state', async () => {
+    const srv = await makeServer();
+    let host: TestClient | undefined;
+    let guest: TestClient | undefined;
+    let re: TestClient | undefined;
+    let code = '';
+    try {
+      // SEED_DISCOVER puts Scroll of Lore in player 0's post-mulligan hand at
+      // index 1 with 1 mana: the Discover comes from a REAL playCard through
+      // the socket, so both intents land in the append-only log. Injected
+      // events are deliberately never used here — they are not part of the
+      // log and would replay nothing.
+      ({ host, guest, code } = await startRoom(srv, SEED_DISCOVER));
+      const mirror = mirrorGame([DECK, DECK], SEED_DISCOVER);
+      const m1 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m1P = host.waitFor(eventsEq(m1));
+      host.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m1P).type).toBe('events');
+      const m2 = mirror.submit({ kind: 'mulligan', keep: [] });
+      const m2P = guest.waitFor(eventsEq(m2));
+      guest.send({ type: 'intent', intent: { kind: 'mulligan', keep: [] } });
+      expect((await m2P).type).toBe('events');
+
+      // The host plays Scroll of Lore; the play itself offers the Discover to
+      // the player who cast it (player 0, also the current player).
+      const handIndex = mirror.state.players[0].hand.indexOf('neutral-scroll');
+      expect(handIndex).toBe(1);
+      const play = mirror.submit({ kind: 'playCard', handIndex });
+      const offered = play.find((e): e is Extract<GameEvent, { type: 'discoverOffered' }> => e.type === 'discoverOffered');
+      if (!offered) throw new Error('playCard never offered a Discover');
+      expect(offered.choice.player).toBe(0);
+      const playP = host.waitFor(eventsEq(play));
+      host.send({ type: 'intent', intent: { kind: 'playCard', handIndex } });
+      expect((await playP).type).toBe('events');
+
+      // The owner resolves the choice through the socket.
+      const picked = offered.choice.cardIds[1]!;
+      const disc = mirror.submit({ kind: 'discover', choice: 1 });
+      expect(disc.some(e => e.type === 'discoverResolved' && e.cardId === picked)).toBe(true);
+      const discP = host.waitFor(eventsEq(disc));
+      host.send({ type: 'intent', intent: { kind: 'discover', choice: 1 } });
+      expect((await discP).type).toBe('events');
+
+      // Both intents are in the append-only log, in submission order.
+      const room = roomOf(srv);
+      if (!room) throw new Error('room not found');
+      expect(room.intents).toEqual([
+        { kind: 'mulligan', keep: [] },
+        { kind: 'mulligan', keep: [] },
+        { kind: 'playCard', handIndex },
+        { kind: 'discover', choice: 1 },
+      ]);
+
+      // The guest drops and reconnects: the burst replays the FULL log in
+      // order (replay:true — catch-up, not live), then gameStart. The
+      // reconnecting client rebuilds its shadow from seed + this exact log.
+      const leftP = host.waitFor(m => m.type === 'playerLeft');
+      guest.close();
+      expect((await leftP).type).toBe('playerLeft');
+      re = new TestClient(await connect(urlOf(srv)));
+      const joinedP = re.waitFor(m => m.type === 'joined');
+      re.send({ type: 'joinRoom', code, deckIds: DECK, customCards: [], heroId: HERO_NAME });
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      expect(joined.player).toBe(1);
+      const r1 = re.waitFor(intentEq({ kind: 'mulligan', keep: [] }));
+      const r2 = re.waitFor(intentEq({ kind: 'mulligan', keep: [] }));
+      const r3 = re.waitFor(intentEq({ kind: 'playCard', handIndex }));
+      const r4 = re.waitFor(intentEq({ kind: 'discover', choice: 1 }));
+      const startP = re.waitFor(m => m.type === 'gameStart');
+      for (const p of [r1, r2, r3, r4]) {
+        const msg = await p;
+        if (msg.type !== 'intent') throw new Error('replayed intent never arrived');
+        expect(msg.replay).toBe(true);
+      }
+      expect((await startP).type).toBe('gameStart');
+
+      // The game continues byte-for-byte after the reconnect: the reconnected
+      // guest's next play matches a mirror that replayed the SAME intent log
+      // — the shadow the client rebuilt from the burst is identical to the
+      // authoritative state (LAN-mirroring determinism contract).
+      const end = mirror.submit({ kind: 'endTurn' });
+      const endP = re.waitFor(eventsEq(end));
+      host.send({ type: 'intent', intent: { kind: 'endTurn' } });
+      expect((await endP).type).toBe('events');
+      const guestPlayIndex = mirror.state.players[1].hand.indexOf('ember-bolt');
+      expect(guestPlayIndex).toBeGreaterThanOrEqual(0);
+      // Ember Bolt is single-target ('any'): the guest fires it at the host's
+      // hero — an explicit target also rides the intent through the log.
+      const guestPlay = mirror.submit({ kind: 'playCard', handIndex: guestPlayIndex, target: { type: 'hero', player: 0 } });
+      expect(guestPlay.some(e => e.type === 'cardPlayed')).toBe(true);
+      const guestPlayP = re.waitFor(eventsEq(guestPlay));
+      re.send({ type: 'intent', intent: { kind: 'playCard', handIndex: guestPlayIndex, target: { type: 'hero', player: 0 } } });
+      expect((await guestPlayP).type).toBe('events');
+    } finally {
+      host?.close();
+      guest?.close();
+      re?.close();
       await srv.close();
     }
   });

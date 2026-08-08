@@ -447,3 +447,97 @@
 .card--board .card__body {
   display: none;
 }
+
+/* ============================================================
+   Full-bleed treatment — epic and legendary cards WITH generated
+   art (cardTreatment.ts). Art fills the box; the name row and the
+   text well float over it on gradient scrims.
+
+   The card box is unchanged: same --card-w / --card-h as a banded
+   card. Only the internal layout differs, so the fixed-box
+   invariant still holds across both treatments.
+   ============================================================ */
+
+.card--bleed .card__frame {
+  padding: 0;
+}
+
+/* Art is the backdrop, not a band: it fills the frame and everything
+   else stacks on top of it.
+
+   Deliberately NO z-index here. Setting one would make this element a
+   stacking context, which would trap .card__stats (its child) beneath
+   .card__body's z-index — the pips would vanish behind the bottom
+   scrim on exactly the cards meant to look premium. Positioned with
+   z-index:auto, it paints below the relatively-positioned rows by DOM
+   order, and .card__stats stays free to out-rank them. */
+.card--bleed .card__artwrap {
+  position: absolute;
+  inset: 0;
+  flex: none;
+  height: auto;
+}
+
+.card--bleed .card__art {
+  border-radius: inherit;
+}
+
+.card--bleed .card__top,
+.card--bleed .card__ribbon,
+.card--bleed .card__body {
+  position: relative;
+  z-index: 1;
+}
+
+/* Top scrim: dark at the very top, clear by the time it reaches the art. */
+.card--bleed .card__top {
+  margin: 0;
+  padding: var(--card-pad) var(--card-pad) 14px;
+  background: linear-gradient(180deg, rgba(8, 6, 14, 0.92) 0%, rgba(8, 6, 14, 0) 100%);
+}
+
+/* Bottom scrim: carries the rules text, so it is the denser of the two.
+   Pushed to the bottom of the frame by the auto margin. */
+.card--bleed .card__ribbon {
+  margin: auto var(--card-pad) 0;
+  background: rgba(20, 18, 28, 0.82);
+}
+
+/* padding-bottom reserves the pip row (32px pip + breathing room), so
+   rules text can never run underneath the stats. */
+.card--bleed .card__body {
+  flex: 0 0 auto;
+  padding: 6px var(--card-pad) 44px;
+  background: linear-gradient(180deg, rgba(8, 6, 14, 0) 0%, rgba(8, 6, 14, 0.9) 26%, rgba(8, 6, 14, 0.96) 100%);
+}
+
+/* Legibility is a hard requirement, not a nice-to-have: rules text must
+   survive the BRIGHTEST image in the generated set. The scrim does most
+   of the work; the shadow covers the rest. */
+.card--bleed .card__text,
+.card--bleed .card__flavor {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.7);
+}
+
+.card--bleed .card__text {
+  color: #f2ecdc;
+}
+
+/* Pips sit in the card's bottom corners, over the scrim. Anchored to the
+   bottom rather than offset from the top — a top offset would be a magic
+   number that silently breaks if --card-h ever changes. z-index out-ranks
+   .card__body (1) so the pips paint above the scrim; this works only
+   because .card__artwrap has no z-index of its own (see above). */
+.card--bleed .card__stats {
+  top: auto;
+  bottom: 6px;
+  left: 8px;
+  right: 8px;
+  z-index: 3;
+}
+
+/* Full-bleed board minis: art plus the name row only, same as banded minis. */
+.card--board.card--bleed .card__ribbon,
+.card--board.card--bleed .card__body {
+  display: none;
+}

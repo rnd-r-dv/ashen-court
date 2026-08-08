@@ -3,7 +3,7 @@ import { Game } from '../src/engine/game.js';
 import { applyEffect } from '../src/engine/effects.js';
 import type { EffectCtx } from '../src/engine/effects.js';
 import { summarize } from '../src/engine/stats.js';
-import { makeTestSetup } from './helpers.js';
+import { makeTestSetup, addCreature } from './helpers.js';
 
 const g = () => Game.create(makeTestSetup());
 const ctx: EffectCtx = { player: 0, cardId: 't-001' };
@@ -138,5 +138,30 @@ describe('heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
     c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false });
     applyEffect(game, ctx, { kind: 'giveKeyword', keyword: 'taunt', target: 'anyCreature' });
     expect(c.board[0]!.keywords).toContain('taunt');
+  });
+  it('giveKeyword shield grants a real absorb — the shields field increments and damage is absorbed', () => {
+    const game = g(); game.state.phase = 'main';
+    const c = addCreature(game, 0, { id: 't-gks', attack: 3, health: 3 });
+    expect(c.shields).toBe(0);
+    applyEffect(game, ctx, { kind: 'giveKeyword', keyword: 'shield', target: 'anyCreature' }, { type: 'creature', id: c.id });
+    expect(c.shields).toBe(1);
+    applyEffect(game, ctx, { kind: 'dealDamage', value: 1, target: 'anyCreature' }, { type: 'creature', id: c.id });
+    expect(c.health).toBe(3);   // absorbed
+    expect(c.shields).toBe(0);
+  });
+  it('giveKeyword ward sets warded', () => {
+    const game = g(); game.state.phase = 'main';
+    const c = addCreature(game, 0, { id: 't-gkw', attack: 2, health: 2 });
+    expect(c.warded).toBe(false);
+    applyEffect(game, ctx, { kind: 'giveKeyword', keyword: 'ward', target: 'anyCreature' }, { type: 'creature', id: c.id });
+    expect(c.warded).toBe(true);
+  });
+  it('giveKeyword windfury increments attacksLeft for an immediate extra swing', () => {
+    const game = g(); game.state.phase = 'main';
+    const c = addCreature(game, 0, { id: 't-gkf', attack: 2, health: 2, exhausted: false });
+    expect(c.attacksLeft).toBe(1);
+    applyEffect(game, ctx, { kind: 'giveKeyword', keyword: 'windfury', target: 'anyCreature' }, { type: 'creature', id: c.id });
+    expect(c.attacksLeft).toBe(2);
+    expect(c.keywords).toContain('windfury');
   });
 });

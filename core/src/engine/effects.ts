@@ -191,9 +191,21 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
         if (!c) continue;
         // Keywords live on the creature (an array we can empty); triggers live
         // on the CARD DEF, shared by every copy, so they must never be mutated
-        // — the flag is what Game.fireTriggers checks instead.
+        // — the flag is what Game.fireTriggers checks instead. The mirrored
+        // state fields (shields, warded, attacksLeft) must be stripped too:
+        // the engine reads those FIELDS, not the keyword array.
         c.keywords.length = 0;
         c.silenced = true;
+        // Keywords are mirrored into state fields at creation (shields, warded,
+        // attacksLeft) and the engine reads those FIELDS, not the array — so
+        // emptying the array alone left a silenced shield/ward minion protected.
+        c.shields = 0;
+        c.warded = false;
+        // Clamp, never set: attacksLeft 1 would refund a swing to a windfury
+        // minion that already swung twice (attacksLeft 0). beginTurn recomputes
+        // attacksLeft from keywords every turn, so this only governs the turn
+        // silence was cast on.
+        c.attacksLeft = Math.min(c.attacksLeft, 1);
       }
       break;
     }
@@ -209,6 +221,11 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
         const c = findCreature(game, ref.id);
         if (!c || c.keywords.includes(spec.keyword)) continue;
         c.keywords.push(spec.keyword);
+        // Mirrored fields must follow the keyword — the engine reads the fields
+        // (shield absorb, ward fizzle, windfury swings), not the array.
+        if (spec.keyword === 'shield') c.shields += 1;
+        if (spec.keyword === 'ward') c.warded = true;
+        if (spec.keyword === 'windfury') c.attacksLeft += 1;  // this turn; beginTurn recomputes
       }
       break;
     }

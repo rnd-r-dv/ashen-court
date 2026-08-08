@@ -188,6 +188,18 @@ export class Game implements Resolver {
         // taunt check either (Task 8).
         if (!effectiveKeywords(d).has('taunt') || d.keywords.includes('stealth')) throw new Error('Taunt creature in the way');
       }
+      // Submit-path legality, not just enumeration: legalIntents pre-filters
+      // stealthed defenders, but submit is the only legality gate the LAN
+      // server trusts (the engine cannot tell who submitted, so the server
+      // validates identity only and forwards the intent). A crafted intent
+      // must be rejected here too, or enumeration and validation diverge —
+      // same invariant as the taunt gate above. Placed BEFORE the swing
+      // decrement and the reveal so a rejected attack changes nothing.
+      if (target.type === 'creature') {
+        const d = enemyBoard.find(c => c.id === target.id);
+        if (!d) throw new Error('Defender not found');
+        if (effectiveKeywords(d).has('stealth')) throw new Error('Cannot target a stealthed creature');
+      }
       // resolve: attacksLeft is the swing counter (windfury 2 / normal 1).
       // exhausted stays summoning-sickness-only (set at summon, cleared in
       // beginTurn) — attacking does NOT exhaust, so a windfury creature can

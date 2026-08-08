@@ -18,6 +18,10 @@ export function effectiveKeywords(creature: CreatureState): Set<Keyword> {
 export function tauntPresent(board: CreatureState[]): boolean {
   // A stealthed taunt cannot be attacked, so it must not gate attacks either —
   // otherwise it would make every enemy attack illegal.
+  //
+  // Reads raw c.keywords while attack paths use effectiveKeywords(d): harmless
+  // today because giveKeyword and silence both mutate the array directly, but
+  // the two would diverge if effectiveKeywords ever gained an aura source.
   return board.some(c => c.keywords.includes('taunt') && !c.keywords.includes('stealth'));
 }
 

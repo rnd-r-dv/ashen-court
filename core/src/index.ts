@@ -21,6 +21,11 @@ export {
 } from './data/index.js';
 
 export { CardRegistry } from './cards.js';
+
+/** Board capacity (engine/effects.ts). Exported because the UI draws exactly
+ *  this many creature slots — hardcoding 7 in the app would let the outline
+ *  and the rule drift apart. No other engine internal is exported. */
+export { BOARD_CAP } from './engine/effects.js';
 export { createBot, mulliganPolicy, type BotPolicy, type BotLevel } from './bot/index.js';
 export { Game, type MatchSetup } from './engine/game.js';
 export { summarize } from './engine/stats.js';

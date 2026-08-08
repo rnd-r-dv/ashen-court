@@ -5,7 +5,10 @@
 
 export type * from './types.js';
 
-export { validateCard, validateDeck, RARITY_COPY_LIMIT, type ValidationIssue } from './validate.js';
+// KEYWORD_COST is exported because the Forge implements the same card-authoring
+// contract validate.ts enforces: it needs the keyword SET as data rather than
+// as a hand-copied literal, and a keyword's cost is part of that contract.
+export { validateCard, validateDeck, RARITY_COPY_LIMIT, KEYWORD_COST, type ValidationIssue } from './validate.js';
 
 export { cardText, heroPowerText, effectText, KEYWORD_TEXT } from './cardtext.js';
 

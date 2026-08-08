@@ -17,6 +17,7 @@ import {
 	draftIssues,
 	draftToCard,
 	EFFECT_PRESETS,
+	KEYWORDS,
 } from "../forge/formState.js";
 import {
 	deleteCustomCard,
@@ -25,6 +26,7 @@ import {
 } from "../storage.js";
 import Card from "../components/Card.js";
 import ImportExport from "../components/ImportExport.js";
+import KeywordChip from "../components/KeywordChip.js";
 import "./forge.css";
 
 /**
@@ -36,15 +38,6 @@ import "./forge.css";
 
 const TYPES: CardType[] = ["creature", "spell", "artifact"];
 const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
-const KEYWORDS: Keyword[] = [
-	"taunt",
-	"rush",
-	"charge",
-	"windfury",
-	"lifesteal",
-	"ward",
-	"shield",
-];
 const TRIGGERS: Trigger[] = [
 	"battlecry",
 	"deathrattle",
@@ -435,26 +428,22 @@ export default function Forge() {
 						<section className="forge-section">
 							<span className="forge-label">Keywords</span>
 							<div className="forge-chips">
-								{KEYWORDS.map((k) => {
-									const active = form.keywords.includes(k);
-									return (
-										<button
-											key={k}
-											type="button"
-											className={`forge-chip${active ? " active" : ""}`}
-											onClick={() =>
-												set(
-													"keywords",
-													active
-														? form.keywords.filter((x) => x !== k)
-														: [...form.keywords, k],
-												)
-											}
-										>
-											{k}
-										</button>
-									);
-								})}
+								{KEYWORDS.map((k) => (
+									<KeywordChip
+										key={k}
+										keyword={k}
+										variant="picker"
+										selected={form.keywords.includes(k)}
+										onToggle={() =>
+											set(
+												"keywords",
+												form.keywords.includes(k)
+													? form.keywords.filter((x) => x !== k)
+													: [...form.keywords, k],
+											)
+										}
+									/>
+								))}
 							</div>
 							{issuesFor("keywords").map((i, n) => (
 								<p className="forge-error" key={n}>

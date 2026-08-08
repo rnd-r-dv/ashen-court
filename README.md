@@ -41,6 +41,28 @@ npm run start -w server
 > the *joiner* only needs the app (plus network access to the host's port
 > 8080).
 
+The dev server binds every interface (`server.host` in `app/vite.config.ts`),
+so it prints a `Network:` URL like `http://192.168.1.20:5173/` on start — that
+is the address the joiner opens. The joiner's client derives its WebSocket URL
+from `location.hostname`, so ports 5173 and 8080 must both be reachable at that
+same address.
+
+If the joiner's app loads but the join silently hangs on "Waiting for the game
+to start…", the WebSocket is not getting through. On macOS the most common
+cause is the Application Firewall blocking incoming connections for the `node`
+binary — it accepts the TCP connection and then drops it, so nothing reaches
+the server. Homebrew installs a new binary path on every version bump, and new
+paths default to blocked:
+
+```bash
+/usr/libexec/ApplicationFirewall/socketfilterfw --listapps | grep -A1 node
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(readlink -f "$(which node)")"
+```
+
+Restart the LAN server afterwards — a running process keeps the old verdict.
+Room state lives only in that process's memory, so restarting it invalidates
+every outstanding room code; the host must create a new room.
+
 ### LAN play
 
 1. Host: open the app, pick **LAN Host**, choose a deck, and share the

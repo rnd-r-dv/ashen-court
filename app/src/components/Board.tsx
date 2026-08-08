@@ -168,6 +168,8 @@ export default function Board({
           size="board"
           faceDown={!friendly && !enemyRevealed}
           stats={{ attack: c.attack, health: c.health }}
+          keywords={c.keywords}
+          silenced={c.silenced}
           status={{ exhausted: c.exhausted, frozen: c.frozen, shields: c.shields }}
           targetable={targetable}
           selected={selected}

@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import type { Card as CardSpec } from '@ashen/core';
+import type { Card as CardSpec, Keyword } from '@ashen/core';
 import Card from './Card.js';
 import type { CardSize } from './Card.js';
 import './cardview.css';
@@ -50,6 +50,14 @@ export interface CardViewProps {
   muted?: boolean;
   /** Live board stats override (damage/buffs) — board creatures only. */
   stats?: { attack: number; health: number };
+  /** Live board keywords override — board creatures only (Task 0). Hand
+   *  cards omit it and keep the immutable card-definition chips. */
+  keywords?: readonly Keyword[];
+  /** Live silenced flag — board creatures only (Task 0). A silenced creature
+   *  renders no rules text: its triggers live on the CARD, not the creature,
+   *  so the engine clears CreatureState.keywords AND sets this flag, and only
+   *  the flag can suppress the def's generated text. */
+  silenced?: boolean;
   status?: CardViewStatus;
   /** Click handler; receives the event so parents can stopPropagation. */
   onClick?: (e: ReactMouseEvent<HTMLDivElement>) => void;
@@ -64,6 +72,8 @@ export default function CardView({
   targetable = false,
   muted = false,
   stats,
+  keywords,
+  silenced,
   status,
   onClick,
 }: CardViewProps) {
@@ -97,6 +107,8 @@ export default function CardView({
         faceDown={faceDown}
         playable={playable && !muted && !faceDown}
         selected={selected}
+        keywords={keywords}
+        silenced={silenced}
       />
       {badges.map((b) => (
         <span className="cardview-badge" key={b}>

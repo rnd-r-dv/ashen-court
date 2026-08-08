@@ -33,9 +33,14 @@ export interface CardFrameProps {
   /** Creature stats — attack/health pips render only for creatures. */
   attack?: number;
   health?: number;
+  /** Keyword chips — card-definition keywords, unless Card.tsx overrides them
+   *  with the creature's LIVE board keywords (silence empties the engine's
+   *  array, giveKeyword appends). Hand cards always pass the definition. */
   keywords?: readonly Keyword[];
   flavor?: string;
-  /** Generated rules text (Task 43) — Card.tsx passes cardText(card). */
+  /** Rules text (Task 43) — Card.tsx passes cardText(card), or '' for a
+   *  silenced board creature: its triggers live on the CARD, so only a flag
+   *  can suppress the def's generated text. */
   text?: string;
   /** Unrevealed enemy card: grayscale silhouette, no name/art (spec §12). */
   faceDown?: boolean;

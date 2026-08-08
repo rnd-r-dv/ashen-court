@@ -35,13 +35,13 @@ const artifact = (
 
 export const NEUTRAL_CARDS: Card[] = [
   // Common creatures
-  creature('neutral-militia', 'Village Militia', 1, 1, 2, 'common', [],
+  creature('neutral-militia', 'Village Militia', 1, 1, 2, 'common', ['taunt'],
     'Militia spears rise as the horn sounds across the hollows. The Court takes what it needs — and what it needs is bodies.'),
-  creature('neutral-boar', 'Wild Boar', 1, 2, 1, 'common', [],
+  creature('neutral-boar', 'Wild Boar', 1, 2, 1, 'common', ['rush'],
     'The boar does not ask who rules the Court. It knows only the scent of blood and the weight of its tusks.'),
-  creature('neutral-hound', 'Feral Hound', 2, 2, 2, 'common', [],
+  creature('neutral-hound', 'Feral Hound', 2, 2, 2, 'common', ['rush'],
     'Bred from the stray packs that gnaw the bones of the dead, the hound answers to hunger alone.'),
-  creature('neutral-golem', 'Stone Golem', 3, 3, 3, 'common', [],
+  creature('neutral-golem', 'Stone Golem', 3, 3, 3, 'common', ['taunt'],
     'Carved from the granite of the Ashlands and woken by a word older than the Court, it neither tires nor questions.'),
   creature('neutral-squire', 'Vanguard Squire', 2, 2, 1, 'common', ['taunt'],
     'The vanguard marches first so that others might live. A squire learns that lesson one scar at a time.'),

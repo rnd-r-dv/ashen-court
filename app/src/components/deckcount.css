@@ -1,0 +1,36 @@
+/* DeckCount — cards remaining, beside each hero. Theme tokens only. */
+
+.deckcount {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.deckcount-icon {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.deckcount-num {
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Close to fatigue — this is a losing condition, so it should be loud. */
+.deckcount--low {
+  border-color: var(--ember-dim);
+  color: var(--ember);
+}
+.deckcount--low .deckcount-num,
+.deckcount--low .deckcount-icon {
+  color: var(--ember);
+}

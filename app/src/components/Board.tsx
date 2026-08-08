@@ -5,6 +5,7 @@ import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, T
 import { BOARD_CAP } from '@ashen/core';
 import CardView, { FACE_DOWN_CARD } from './CardView.js';
 import HeroPortrait from './HeroPortrait.js';
+import DeckCount from './DeckCount.js';
 import ManaTray from './ManaTray.js';
 import { deathFade, playSlam } from './animations.js';
 import type { HeroFX } from './animations.js';
@@ -210,6 +211,7 @@ export default function Board({
             animScale={animScale}
             onClick={foeHeroTarget ? targetClick({ type: 'hero', player: foe }) : undefined}
           />
+          <DeckCount remaining={foeP.deck.length} label="Enemy deck" />
           <div className="board-enemyhand" aria-label={`Enemy hand: ${foeP.hand.length} cards`}>
             {foeP.hand.map((id, i) => (
               <CardView key={`${id}-${i}`} card={FACE_DOWN_CARD} size="board" faceDown />
@@ -247,6 +249,7 @@ export default function Board({
             onPowerClick={onHeroPower}
             powerEnabled={myTurn && heroPowerLegal && !inTargeting}
           />
+          <DeckCount remaining={meP.deck.length} label="Your deck" />
           <ManaTray mana={meP.mana} maxMana={meP.maxMana} pulse={manaPulse} animScale={animScale} />
           <button
             type="button"

@@ -322,26 +322,19 @@
   align-items: center;
 }
 
-/* ---- keyword chips -------------------------------------------- */
+/* ---- keyword chips --------------------------------------------
+   Chips used to be `nowrap; overflow: hidden`, which silently ATE
+   the second and third keyword. venom and stealth make multi-keyword
+   creatures common, and a keyword you cannot see is a rule you cannot
+   play around. The well is a flex column now (see .card__body), so a
+   wrapped second row costs flavor space, not rules text.            */
 .card__keywords {
   display: flex;
-  flex-wrap: nowrap;      /* a second chip row would eat the rules text */
+  flex-wrap: wrap;
   justify-content: center;
-  overflow: hidden;
   gap: 3px;
   margin-top: 5px;
-}
-.card__keyword {
   flex: 0 0 auto;
-  padding: 1px 6px;
-  border-radius: 8px;
-  background: #2c2c36;
-  border: 1px solid #43434f;
-  color: #d8d2c2;
-  font-family: system-ui, sans-serif;
-  font-size: 11px;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
 }
 
 /* ---- creature stats pips --------------------------------------
@@ -458,6 +451,10 @@
      Derived, so it tracks --card-art-h automatically. */
   --card-h: calc(20px + 38px + var(--card-art-h));   /* 205px at 3:2 */
 }
+/* Board minis hide the whole text well: at zoom 0.5 an 11px chip is 5.5px,
+   which is unreadable and unclickable. A board creature's keywords and rules
+   text are reached through the inspect panel instead — see the main-thread
+   plan, Task 7. Do not un-hide this; make the inspect panel better. */
 .card--board .card__ribbon,
 .card--board .card__body {
   display: none;

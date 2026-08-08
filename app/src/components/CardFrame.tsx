@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { CardType, Keyword, Rarity } from '@ashen/core';
 import type { Treatment } from './cardTreatment.js';
+import KeywordChip from './KeywordChip.js';
 import './card.css';
 
 /**
@@ -170,9 +171,7 @@ export default function CardFrame({
               {keywords && keywords.length > 0 && (
                 <div className="card__keywords">
                   {keywords.map((k) => (
-                    <span className="card__keyword" key={k}>
-                      {k}
-                    </span>
+                    <KeywordChip key={k} keyword={k} />
                   ))}
                 </div>
               )}

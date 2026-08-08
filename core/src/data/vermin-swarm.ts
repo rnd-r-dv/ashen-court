@@ -1,6 +1,11 @@
-import type { Card, HeroSpec } from '../types.js';
+import type { Card, EffectSpec, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
-import { archetypeCards, dmg, summon } from './builders.js';
+import { archetypeCards, buff, dmg, summon } from './builders.js';
+
+/** Token-eater (vermin identity): the oldest friendly tokens die (deathrattles
+ *  fire) — the payoff on a consume card is board space plus whatever the
+ *  companion effect grants. */
+const consume = (value: number): EffectSpec => ({ kind: 'consume', value });
 
 /**
  * Vermin Swarm (Task 14): Rat King Moulder's token flood deck. Signature
@@ -19,16 +24,16 @@ export const HERO: HeroSpec = {
 
 export const CARDS: Card[] = [
   // Commons (11)
-  creature('vermin-squeaker', 'Squeaker', 1, 1, 1, 'common', [], [], 'The first rat through the wall is always the smallest. It is also the only one you ever see.'),
+  creature('vermin-squeaker', 'Squeaker', 1, 1, 1, 'common', ['venom'], [], 'The first rat through the wall is always the smallest. It is also the only one you ever see.'),
   spell('vermin-nibble', 'Nibble', 1, 'common', [dmg(1, 'anyCreature')], 'One nibble means nothing. That is precisely what the swarm is counting on.'),
-  creature('vermin-scavenger', 'Scavenger', 1, 2, 1, 'common', [], [], 'The battlefield belongs to the dead — and the dead belong to the scavengers.'),
+  creature('vermin-scavenger', 'Scavenger', 1, 2, 1, 'common', [], [{ when: 'deathrattle', effects: [summon('token-rat')] }], 'The battlefield belongs to the dead — and the dead belong to the scavengers.'),
   spell('vermin-packcall', 'Pack Call', 2, 'common', [summon('token-rat', 2)], 'One cry in the dark, and the shadows answer two at a time.'),
-  creature('vermin-brute', 'Mangy Brute', 2, 3, 2, 'common', [], [], 'Rats the size of hounds, with the patience of graves and the appetite of famine.'),
-  creature('vermin-swarmlord', 'Swarmlord', 3, 2, 4, 'common', [], [], 'It does not lead from the front. It leads by being everywhere at once.'),
+  creature('vermin-brute', 'Mangy Brute', 2, 3, 2, 'common', [], [{ when: 'battlecry', effects: [summon('token-rat')] }], 'Rats the size of hounds, with the patience of graves and the appetite of famine.'),
+  creature('vermin-swarmlord', 'Swarmlord', 3, 2, 4, 'common', [], [{ when: 'battlecry', effects: [consume(2), buff(1, 1, 'allFriendlyCreatures')] }], 'It does not lead from the front. It leads by being everywhere at once.'),
   spell('vermin-frenzy', 'Frenzy', 3, 'common', [{ kind: 'buff', value: 2, value2: 0, target: 'allFriendlyCreatures' }], 'Hunger is the only war horn the swarm has ever needed.'),
-  creature('vermin-gnawer', 'Gnawer', 3, 3, 3, 'common', [], [], 'Bone, timber, iron, faith — given time, the gnawers wear through all of it.'),
+  creature('vermin-gnawer', 'Gnawer', 3, 3, 3, 'common', ['venom'], [], 'Bone, timber, iron, faith — given time, the gnawers wear through all of it.'),
   spell('vermin-army', 'Vermin Army', 4, 'common', [summon('token-rat', 3)], 'They do not march in columns. They march in everything.'),
-  creature('vermin-warband', 'Warband', 4, 4, 3, 'common', [], [], 'A hundred throats share one hunger, and the hunger decides where they go.'),
+  creature('vermin-warband', 'Warband', 4, 5, 4, 'common', ['rush'], [], 'A hundred throats share one hunger, and the hunger decides where they go.'),
   spell('vermin-pestilence', 'Pestilence', 5, 'common', [dmg(2, 'allEnemyCreatures')], 'The plague does not announce itself. It arrives, and the city begins counting its dead.'),
   // Rares (5)
   creature('vermin-alpha', 'Alpha Rat', 4, 3, 3, 'rare', [], [{ when: 'battlecry', effects: [{ kind: 'buff', value: 1, value2: 1, target: 'allFriendlyCreatures' }] }], 'Where the alpha walks, the pack grows bolder — and larger.'),
@@ -42,7 +47,7 @@ export const CARDS: Card[] = [
   creature('vermin-rattus', 'Rattus the God', 8, 8, 8, 'epic', ['taunt'], [], 'Rats worship nothing but hunger. When hunger learned to walk, they called it Rattus.'),
   // Legendaries (2)
   creature('vermin-plagueking', 'Plague King', 7, 6, 6, 'legendary', [], [{ when: 'startOfTurn', effects: [summon('token-rat', 2)] }], 'The king does not fight. He sheds plague like a cloak and lets his children do the rest.'),
-  spell('vermin-endless', 'The Endless Swarm', 9, 'legendary', [summon('token-rat', 9)], 'Count them, if you like. The swarm has already finished counting you.'),
+  spell('vermin-endless', 'The Endless Swarm', 9, 'legendary', [summon('token-rat', 7), buff(1, 1, 'allFriendlyCreatures')], 'Count them, if you like. The swarm has already finished counting you.'),
 ];
 
 // sig: 3x each common (11), 2x each rare (5), 1x each epic (3), 1x each legendary (2)

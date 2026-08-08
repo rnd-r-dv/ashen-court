@@ -185,6 +185,17 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
       }
       break;
     }
+    case 'consume': {
+      const p = game.state.players[ctx.player];
+      // Oldest tokens first, so a player's most recent summons survive — the
+      // board reads left-to-right and eating the newest looks like a bug.
+      const eligible = p.board.filter(c => c.token).slice(0, spec.value ?? 1);
+      for (const c of eligible) {
+        // A real death: deathrattles on tokens still fire.
+        push(game, { type: 'creatureDied', player: c.owner, creatureId: c.id, cardId: c.cardId });
+      }
+      break;
+    }
     case 'silence': {
       for (const ref of refs) {
         if (ref.type !== 'creature') continue;

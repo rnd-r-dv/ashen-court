@@ -107,6 +107,10 @@ export function effectText(effect: EffectSpec): string {
       return `Freeze ${target(effect.target)}.`;
     case 'destroy':
       return `Destroy ${target(effect.target)}.`;
+    case 'consume': {
+      const n = effect.value ?? 1;
+      return `Consume ${n} friendly ${plural(n, 'token')}.`;
+    }
     case 'silence':
       return `Silence ${target(effect.target)}.`;
     case 'returnToHand':

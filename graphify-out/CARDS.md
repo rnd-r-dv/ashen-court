@@ -31,12 +31,12 @@ Generated from `buildPool()` + `cardText()` (`core/src/cardtext.ts`) — rules t
 | Cost | Card | Type | Stats | Keywords | Rarity | Text |
 |---|---|---|---|---|---|---|
 | 1 | **Herbal Remedy** <br>`neutral-herb` | spell | — | — | common | Restore 3 health to your hero. |
+| 1 | **Scroll of Lore** <br>`neutral-scroll` | spell | — | — | common | Draw a card. |
 | 1 | **Village Militia** <br>`neutral-militia` | creature | 1/2 | taunt | common | *vanilla* |
 | 1 | **Wild Boar** <br>`neutral-boar` | creature | 2/1 | rush | common | *vanilla* |
 | 2 | **Feral Hound** <br>`neutral-hound` | creature | 2/2 | rush | common | *vanilla* |
 | 2 | **Frostbind** <br>`neutral-frostbind` | spell | — | — | epic | Deal 2 damage to a creature. Freeze a creature. |
 | 2 | **Mana Bloom** <br>`neutral-bloom` | spell | — | — | common | Gain 1 empty mana crystal. |
-| 2 | **Scroll of Lore** <br>`neutral-scroll` | spell | — | — | common | Draw a card. |
 | 2 | **Swiftblade** <br>`neutral-swift` | creature | 2/1 | rush | rare | *vanilla* |
 | 2 | **Vanguard Squire** <br>`neutral-squire` | creature | 2/1 | taunt | common | *vanilla* |
 | 2 | **War Drums** <br>`neutral-drums` | spell | — | — | common | Give all friendly creatures +1/+1. |
@@ -108,9 +108,9 @@ Generated from `buildPool()` + `cardText()` (`core/src/cardtext.ts`) — rules t
 | 6 | **Exorcist** <br>`choir-exorcist` | creature | 4/7 | — | epic | Battlecry: Destroy an enemy creature. |
 | 6 | **Mirror of Souls** <br>`choir-mirror` | artifact | — | — | legendary | End of Turn: Summon 1 Choir Spirit. |
 | 6 | **Seraph of Lament** <br>`choir-seraph` | creature | 5/6 | lifesteal | rare | *vanilla* |
+| 6 | **Truth Unveiled** <br>`choir-truth` | spell | — | — | epic | Draw 4 cards. Restore 4 health to your hero. |
 | 7 | **Lightbringer** <br>`choir-lightbringer` | creature | 6/8 | taunt | epic | *vanilla* |
 | 8 | **Final Verdict** <br>`choir-verdict` | spell | — | — | rare | Destroy an enemy creature. Restore 5 health to your hero. |
-| 8 | **Truth Unveiled** <br>`choir-truth` | spell | — | — | epic | Draw 4 cards. |
 | 9 | **Lady of the Pale Choir** <br>`choir-lady` | creature | 6/8 | taunt | legendary | Start of Turn: Restore 4 health to your hero. |
 
 ## Vermin Swarm (`vermin`) — 21 cards
@@ -171,28 +171,28 @@ Generated from `buildPool()` + `cardText()` (`core/src/cardtext.ts`) — rules t
 
 ## Elder Roots (`roots`) — 21 cards
 
-**Hero:** Oldroot — *Roots of the World* (2 mana): Gain 1 empty mana crystal.
+**Hero:** Oldroot — *Roots of the World* (2 mana): Gain 1 empty mana crystal. Gain 1 Mana.
 
 | Cost | Card | Type | Stats | Keywords | Rarity | Text |
 |---|---|---|---|---|---|---|
+| 1 | **Creeping Vine** <br>`roots-vine` | spell | — | — | common | Deal 1 damage to a creature. |
 | 1 | **Grow** <br>`roots-grow` | spell | — | — | common | Gain 1 empty mana crystal. |
 | 1 | **Sapling** <br>`roots-sapling` | creature | 1/2 | taunt | common | *vanilla* |
 | 2 | **Sprout** <br>`roots-sprout` | creature | 2/2 | taunt | common | *vanilla* |
-| 2 | **Vine Snare** <br>`roots-vine` | spell | — | — | common | Deal 1 damage to a creature. |
 | 3 | **Barkhide** <br>`roots-barkhide` | creature | 2/4 | taunt | common | *vanilla* |
 | 3 | **Bloom** <br>`roots-bloom` | spell | — | — | common | Gain 2 empty mana crystals. |
 | 3 | **Forager** <br>`roots-forager` | creature | 3/3 | — | common | Battlecry: Gain 1 empty mana crystal. |
 | 3 | **Regrowth** <br>`roots-regen` | spell | — | — | rare | Restore 4 health to your hero. |
+| 3 | **Thornlash** <br>`roots-thorn` | spell | — | — | common | Deal 3 damage to a creature. |
+| 3 | **Verdant Bloom** <br>`roots-verdant` | spell | — | — | rare | Gain 2 empty mana crystals. Draw a card. |
 | 4 | **Ancient's Wrath** <br>`roots-ancients` | creature | 4/4 | taunt | common | *vanilla* |
-| 4 | **Thorn Barrage** <br>`roots-thorn` | spell | — | — | common | Deal 3 damage to a creature. |
+| 4 | **Nature's Bounty** <br>`roots-bounty` | spell | — | — | rare | Draw 2 cards. Gain 1 empty mana crystal. |
+| 4 | **Sylvan Grove** <br>`roots-sylvan` | artifact | — | — | common | Start of Turn: Gain 1 empty mana crystal. Gain 1 Mana. |
 | 5 | **Ironwood** <br>`roots-ironwood` | creature | 4/6 | taunt | common | *vanilla* |
-| 5 | **Nature's Bounty** <br>`roots-bounty` | spell | — | — | rare | Draw 2 cards. |
-| 5 | **Sylvan Grove** <br>`roots-sylvan` | artifact | — | — | common | Start of Turn: Gain 1 empty mana crystal. |
-| 6 | **Verdant Bloom** <br>`roots-verdant` | spell | — | — | rare | Gain 3 empty mana crystals. |
 | 6 | **Worldtree Sapling** <br>`roots-worldtree` | creature | 5/5 | — | rare | Battlecry: Gain 2 empty mana crystals. |
 | 7 | **Elder Treant** <br>`roots-treant` | creature | 7/7 | taunt | rare | *vanilla* |
 | 7 | **Heart of the Forest** <br>`roots-heart` | artifact | — | — | legendary | End of Turn: Summon 1 Root Treant. |
-| 8 | **Awakening** <br>`roots-awaken` | spell | — | — | epic | Gain 4 empty mana crystals. |
+| 8 | **Awakening** <br>`roots-awaken` | spell | — | — | epic | Gain 2 empty mana crystals. Summon 3 Root Treants. |
 | 8 | **Goliath** <br>`roots-goliath` | creature | 8/8 | — | epic | Battlecry: Gain 2 empty mana crystals. |
 | 10 | **Titan of the Deep Roots** <br>`roots-titan` | creature | 10/10 | taunt | epic | *vanilla* |
 | 12 | **Worldmother** <br>`roots-worldmother` | creature | 12/12 | — | legendary | Battlecry: Give all friendly creatures +2/+2. |
@@ -214,12 +214,12 @@ Generated from `buildPool()` + `cardText()` (`core/src/cardtext.ts`) — rules t
 | 3 | **Vanish** <br>`dance-vanish` | spell | — | — | common | Deal 3 damage to a creature. |
 | 4 | **Bladeweaver** <br>`dance-bladeweaver` | creature | 4/4 | stealth | common | *vanilla* |
 | 4 | **Flurry** <br>`dance-flurry` | spell | — | — | rare | Deal 4 damage to a random enemy creature. |
-| 4 | **Veil Dance** <br>`dance-veil` | spell | — | — | common | Draw 2 cards. |
-| 5 | **Mirage** <br>`dance-mirage` | spell | — | — | rare | Draw 3 cards. |
+| 4 | **Veil Dance** <br>`dance-veil` | spell | — | — | common | Draw 2 cards. Give a friendly creature Stealth. |
+| 5 | **Grand Finale** <br>`dance-finale` | spell | — | — | rare | Deal 6 damage to a random enemy. |
+| 5 | **Mirage** <br>`dance-mirage` | spell | — | — | rare | Draw 3 cards. Return an enemy creature to its owner's hand. |
 | 5 | **Trickster** <br>`dance-trickster` | creature | 4/4 | — | rare | Battlecry: Draw a card. |
 | 6 | **Illusionist** <br>`dance-illusionist` | creature | 5/5 | — | rare | Battlecry: Return an enemy creature to its owner's hand. |
 | 6 | **Infinite Shadows** <br>`dance-infinite` | artifact | — | — | legendary | End of Turn: Draw a card. |
-| 7 | **Grand Finale** <br>`dance-finale` | spell | — | — | rare | Deal 6 damage to a random enemy. |
 | 7 | **Puppet Master** <br>`dance-puppet` | creature | 6/6 | — | epic | Battlecry: Draw 2 cards. |
 | 7 | **Shadow Dancer** <br>`dance-shadow` | creature | 5/5 | — | epic | Deathrattle: Draw 2 cards. |
 | 8 | **The Ultimate Trick** <br>`dance-trick` | spell | — | — | epic | Deal 8 damage to any target. |
@@ -261,23 +261,23 @@ Generated from `buildPool()` + `cardText()` (`core/src/cardtext.ts`) — rules t
 |---|---|---|---|---|---|---|
 | 1 | **Blood Thirst** <br>`pact-thirst` | spell | — | — | common | Deal 2 damage to a creature. |
 | 1 | **Bloodrite** <br>`pact-bloodrite` | spell | — | — | common | Deal 1 damage to your hero. Draw a card. |
+| 2 | **Bargain** <br>`pact-bargain` | spell | — | — | rare | Deal 3 damage to your hero. Gain 5 Mana. |
 | 2 | **Blood Imp** <br>`pact-imp` | creature | 3/2 | — | common | *vanilla* |
 | 2 | **Leech** <br>`pact-leech` | creature | 2/2 | lifesteal | common | *vanilla* |
 | 2 | **Sacrifice** <br>`pact-sacrifice` | spell | — | — | common | Destroy a friendly creature. Draw 2 cards. |
 | 3 | **Blood Bond** <br>`pact-bond` | spell | — | — | common | Give a friendly creature +3/+3. Deal 2 damage to your hero. |
 | 3 | **Dark Pact** <br>`pact-darkpact` | spell | — | — | rare | Destroy a friendly creature. Draw 2 cards. |
 | 3 | **Masochist** <br>`pact-masochist` | creature | 3/4 | — | common | On Damage: Draw a card. |
+| 4 | **Ascension** <br>`pact-ascend` | spell | — | — | epic | Gain 5 Mana. Draw 3 cards. Deal 5 damage to your hero. |
 | 4 | **Cultist** <br>`pact-cultist` | creature | 4/4 | — | common | Deathrattle: Draw a card. |
 | 4 | **Life Leech** <br>`pact-lifeleech` | spell | — | — | common | Deal 3 damage to an enemy creature. Restore 3 health to your hero. |
 | 4 | **Ravager** <br>`pact-ravager` | creature | 5/3 | — | common | Battlecry: Deal 2 damage to your hero. Draw a card. |
 | 5 | **Fiend** <br>`pact-fiend` | creature | 6/4 | — | rare | Battlecry: Deal 2 damage to your hero. Draw 2 cards. |
 | 5 | **Hemorrhage** <br>`pact-hemorrhage` | spell | — | — | common | Deal 5 damage to any target. |
 | 5 | **Torment** <br>`pact-torment` | spell | — | — | rare | Deal 3 damage to all enemies. Deal 2 damage to your hero. |
-| 6 | **Bargain** <br>`pact-bargain` | spell | — | — | rare | Deal 4 damage to your hero. Gain 4 Mana. |
 | 6 | **Dreadknight** <br>`pact-dread` | creature | 6/6 | — | rare | Battlecry: Deal 2 damage to your hero. Gain 2 Mana. |
 | 6 | **Immortal Bargain** <br>`pact-immortal` | artifact | — | — | legendary | Start of Turn: Deal 1 damage to your hero. Draw a card. |
 | 7 | **Mirror of Blood** <br>`pact-mirror` | spell | — | — | epic | Deal 7 damage to a random enemy. Deal 3 damage to your hero. |
-| 8 | **Ascension** <br>`pact-ascend` | spell | — | — | epic | Gain 3 empty mana crystals. Draw 3 cards. Deal 5 damage to your hero. |
 | 8 | **Lord of the Pact** <br>`pact-lord` | creature | 8/8 | — | epic | Start of Turn: Deal 1 damage to your hero. Draw a card. |
 | 9 | **Morticia Gravefall** <br>`pact-morticia` | creature | 7/9 | — | legendary | Battlecry: Deal 3 damage to your hero. Deal 3 damage to all enemies. |
 
@@ -352,16 +352,16 @@ Generated from `buildPool()` + `cardText()` (`core/src/cardtext.ts`) — rules t
 | 3 | **Monk** <br>`vigil-monk` | creature | 3/3 | lifesteal | common | *vanilla* |
 | 3 | **Paladin** <br>`vigil-paladin` | creature | 2/4 | taunt | common | *vanilla* |
 | 3 | **Smite** <br>`vigil-smite` | spell | — | — | common | Deal 3 damage to an enemy creature. |
-| 4 | **Hymn** <br>`vigil-hymn` | spell | — | — | common | Restore 6 health to your hero. |
+| 4 | **Hymn of Dawn** <br>`vigil-hymn` | spell | — | — | common | Restore 6 health to your hero. Give a friendly creature Lifesteal. |
 | 4 | **Shieldbearer** <br>`vigil-shieldbearer` | creature | 1/6 | taunt, shield | common | *vanilla* |
 | 5 | **Avenger** <br>`vigil-avenger` | creature | 5/4 | rush | rare | *vanilla* |
 | 5 | **Crusader** <br>`vigil-crusader` | creature | 4/5 | rush | common | *vanilla* |
-| 5 | **Lay on Hands** <br>`vigil-layhands` | spell | — | — | rare | Restore 8 health to your hero. |
-| 6 | **Sanctify** <br>`vigil-sanctify` | spell | — | — | rare | Restore 10 health to your hero. |
+| 5 | **Lay on Hands** <br>`vigil-layhands` | spell | — | — | rare | Restore 8 health to your hero. Draw a card. |
+| 5 | **Radiance** <br>`vigil-radiance` | spell | — | — | epic | Restore 5 health to your hero. Draw 2 cards. |
+| 6 | **Sanctify** <br>`vigil-sanctify` | spell | — | — | rare | Restore 10 health to your hero. Give all friendly creatures Shield. |
 | 6 | **The Eternal Vigil** <br>`vigil-eternal` | artifact | — | — | legendary | Start of Turn: Restore 3 health to your hero. |
 | 6 | **Warden of Dawn** <br>`vigil-warden` | creature | 5/6 | lifesteal | rare | *vanilla* |
 | 7 | **Archon of Dawn** <br>`vigil-archon` | creature | 6/7 | taunt, lifesteal | epic | *vanilla* |
-| 7 | **Radiance** <br>`vigil-radiance` | spell | — | — | epic | Restore 5 health to your hero. Draw 2 cards. |
 | 8 | **Saint** <br>`vigil-saint` | creature | 6/9 | lifesteal | epic | *vanilla* |
 | 9 | **Ser Aldric** <br>`vigil-aldric` | creature | 8/8 | taunt, lifesteal | legendary | *vanilla* |
 
@@ -431,7 +431,7 @@ Each deck = 21 signature cards (with copy counts) + 12 neutral cards.
 
 **Elder Roots** (60 cards)
 
-- Signature: Sapling x3, Grow x3, Vine Snare x3, Sprout x3, Bloom x3, Barkhide x3, Forager x3, Thorn Barrage x3, Ancient's Wrath x3, Sylvan Grove x3, Ironwood x3, Regrowth x2, Worldtree Sapling x2, Verdant Bloom x2, Elder Treant x2, Nature's Bounty x2, Goliath x1, Awakening x1, Titan of the Deep Roots x1, Worldmother x1, Heart of the Forest x1
+- Signature: Sapling x3, Grow x3, Creeping Vine x3, Sprout x3, Bloom x3, Barkhide x3, Forager x3, Thornlash x3, Ancient's Wrath x3, Sylvan Grove x3, Ironwood x3, Regrowth x2, Worldtree Sapling x2, Verdant Bloom x2, Elder Treant x2, Nature's Bounty x2, Goliath x1, Awakening x1, Titan of the Deep Roots x1, Worldmother x1, Heart of the Forest x1
 - Neutrals: Village Militia, Stone Golem, Crack of Thunder, Scroll of Lore, Rite of Remembering, Sanctuary Light, Wall Sentinel, Ironclad Bear, Bulwark Knight, Execute, Colossus, Idol of Growth
 
 **Shadow Dancers** (60 cards)
@@ -461,10 +461,11 @@ Each deck = 21 signature cards (with copy counts) + 12 neutral cards.
 
 **Eternal Vigil** (60 cards)
 
-- Signature: Bless x3, Guard x3, Prayer x3, Squire x3, Lights x3, Paladin x3, Smite x3, Monk x3, Shieldbearer x3, Hymn x3, Crusader x3, Divine Shield x2, Lay on Hands x2, Avenger x2, Warden of Dawn x2, Sanctify x2, Archon of Dawn x1, Radiance x1, Saint x1, Ser Aldric x1, The Eternal Vigil x1
+- Signature: Bless x3, Guard x3, Prayer x3, Squire x3, Lights x3, Paladin x3, Smite x3, Monk x3, Shieldbearer x3, Hymn of Dawn x3, Crusader x3, Divine Shield x2, Lay on Hands x2, Avenger x2, Warden of Dawn x2, Sanctify x2, Archon of Dawn x1, Radiance x1, Saint x1, Ser Aldric x1, The Eternal Vigil x1
 - Neutrals: Village Militia, Stone Golem, Crack of Thunder, Scroll of Lore, Rite of Remembering, Sanctuary Light, Wall Sentinel, Ironclad Bear, Bulwark Knight, Relic of Restoration, Titan of Ash, Execute
 
 **Stormwrought** (60 cards)
 
 - Signature: Arc x3, Bolt x3, Adept x3, Storm Charge x3, Emberwitch x3, Squall x3, Storm Rider x3, Gust x3, Sorcerer x3, Downpour x3, Cyclone x3, Mistweaver x2, Echoes x2, Stormcaller x2, Leviathan x2, Eye of the Storm x2, Tempest x1, Siren x1, Thunderhead x1, Zephyra x1, Boreas, Eye of the Storm x1
 - Neutrals: Wild Boar, Feral Hound, Swiftblade, Scroll of Lore, Rite of Remembering, Crack of Thunder, Frostbind, Shadow Lance, Banner of Courage, Execute, War Ogre, Soul Mirror
+

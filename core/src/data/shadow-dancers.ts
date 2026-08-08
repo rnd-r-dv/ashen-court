@@ -29,12 +29,12 @@ export const CARDS: Card[] = [
   spell('dance-echo', 'Echo', 3, 'common', [draw(2)], 'Every performance echoes twice — once in the hall, and once in the shadows that remember it.'),
   spell('dance-spin', 'Spinning Blade', 3, 'common', [dmg(2, 'allEnemies')], 'A single blade spun into a ring of steel. Step inside the circle, and pray the music ends first.'),
   creature('dance-bladeweaver', 'Bladeweaver', 4, 4, 4, 'common', ['stealth'], [], 'Threads of shadow, needles of steel — the battlefield is the loom, and blades are the thread.'),
-  spell('dance-veil', 'Veil Dance', 4, 'common', [draw(2)], 'The veils rise and fall; what they conceal is never what the crowd believes it saw.'),
+  spell('dance-veil', 'Veil Dance', 4, 'common', [draw(2), { kind: 'giveKeyword', keyword: 'stealth', target: 'friendlyCreature' }], 'The veils rise and fall; what they conceal is never what the crowd believes it saw.'),
   // Rares (5)
   spell('dance-flurry', 'Flurry', 4, 'rare', [dmg(4, 'randomEnemyCreature')], 'Every dagger bets on a different mark. The flurry cares only that one of them lands.'),
   creature('dance-trickster', 'Trickster', 5, 4, 4, 'rare', [], [{ when: 'battlecry', effects: [draw(1)] }], 'Watch the hands, not the eyes. Even the watchful leave poorer, unsure of what they lost.'),
-  spell('dance-finale', 'Grand Finale', 7, 'rare', [dmg(6, 'randomEnemy')], 'The last bow, the last blade, the last secret — the audience will never forget a single step.'),
-  spell('dance-mirage', 'Mirage', 5, 'rare', [draw(3)], 'The mirage shows you what you most desire, and charges you dearly for the glimpse.'),
+  spell('dance-finale', 'Grand Finale', 5, 'rare', [dmg(6, 'randomEnemy')], 'The last bow, the last blade, the last secret — the audience will never forget a single step.'),
+  spell('dance-mirage', 'Mirage', 5, 'rare', [draw(3), { kind: 'returnToHand', target: 'enemyCreature' }], 'The mirage shows you what you most desire, and charges you dearly for the glimpse.'),
   creature('dance-illusionist', 'Illusionist', 6, 5, 5, 'rare', [], [{ when: 'battlecry', effects: [{ kind: 'returnToHand', target: 'enemyCreature' }] }], 'No light bends that the Illusionist cannot command, and no shadow that will not answer her call.'),
   // Epics (3)
   creature('dance-puppet', 'Puppet Master', 7, 6, 6, 'epic', [], [{ when: 'battlecry', effects: [draw(2)] }], 'Strings unseen, audience unknowing — everyone dances to a tune only one can hear.'),

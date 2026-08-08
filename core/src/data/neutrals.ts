@@ -52,7 +52,7 @@ export const NEUTRAL_CARDS: Card[] = [
   // Common spells
   spell('neutral-crack', 'Crack of Thunder', 3, 'common', [{ kind: 'dealDamage', value: 3, target: 'enemyCreature' }],
     'The sky splits, and those who hear the thunder know the storm has already chosen its victims.'),
-  spell('neutral-scroll', 'Scroll of Lore', 2, 'common', [{ kind: 'draw', value: 1 }],
+  spell('neutral-scroll', 'Scroll of Lore', 1, 'common', [{ kind: 'draw', value: 1 }],
     'Every doctrine of the Ashen Court begins the same way: knowledge is a weapon, and weapons remember their bearers.'),
   spell('neutral-bloom', 'Mana Bloom', 2, 'common', [{ kind: 'gainMana', value: 1 }],
     'Where the Court’s will touches the earth, pale blooms drink the ambient mana and swell with stolen light.'),

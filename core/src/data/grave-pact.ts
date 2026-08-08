@@ -34,11 +34,11 @@ export const CARDS: Card[] = [
   spell('pact-darkpact', 'Dark Pact', 3, 'rare', [destroy('friendlyCreature'), draw(2)], 'Some contracts are sealed with a creature’s final breath.'),
   spell('pact-torment', 'Torment', 5, 'rare', [dmg(3, 'allEnemies'), dmg(2, 'self')], 'Torment does not spare its bearer; it only shares the pain around.'),
   creature('pact-fiend', 'Fiend', 5, 6, 4, 'rare', [], [{ when: 'battlecry', effects: [dmg(2, 'self'), draw(2)] }], 'Bound by blood and kept by suffering, it bites the hand that feeds it — then asks for more.'),
-  spell('pact-bargain', 'Bargain', 6, 'rare', [dmg(4, 'self'), { kind: 'refillMana', value: 4 }], 'Life is the only coin the pact accepts. Four drops buy four favors.'),
+  spell('pact-bargain', 'Bargain', 2, 'rare', [dmg(3, 'self'), { kind: 'refillMana', value: 5 }], 'Life is the only coin the pact accepts. Three drops buy five favors.'),
   creature('pact-dread', 'Dreadknight', 6, 6, 6, 'rare', [], [{ when: 'battlecry', effects: [dmg(2, 'self'), { kind: 'refillMana', value: 2 }] }], 'It rides at the head of the procession every pact eventually joins.'),
   // Epics (3)
   spell('pact-mirror', 'Mirror of Blood', 7, 'epic', [dmg(7, 'randomEnemy'), dmg(3, 'self')], 'The mirror shows your enemy’s face — and charges you for the looking.'),
-  spell('pact-ascend', 'Ascension', 8, 'epic', [{ kind: 'gainMana', value: 3 }, draw(3), dmg(5, 'self')], 'Every step upward is bought with a piece of what you were.'),
+  spell('pact-ascend', 'Ascension', 4, 'epic', [{ kind: 'refillMana', value: 5 }, draw(3), dmg(5, 'self')], 'Every step upward is bought with a piece of what you were.'),
   creature('pact-lord', 'Lord of the Pact', 8, 8, 8, 'epic', [], [{ when: 'startOfTurn', effects: [dmg(1, 'self'), draw(1)] }], 'The Lord wrote the first clause in his own blood, and has been paying for it ever since.'),
   // Legendaries (2)
   creature('pact-morticia', 'Morticia Gravefall', 9, 7, 9, 'legendary', [], [{ when: 'battlecry', effects: [dmg(3, 'self'), dmg(3, 'allEnemies')] }], 'Morticia Gravefall pays the blood toll herself — and the field answers in kind.'),

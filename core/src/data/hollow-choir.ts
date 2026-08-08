@@ -43,7 +43,7 @@ export const CARDS: Card[] = [
   artifact('choir-sanctum', 'Sanctum of Echoes', 5, 'rare', [{ when: 'startOfTurn', effects: [draw(1)] }], 'Every prayer ever spoken still hangs in this hall, waiting to be heard again.'),
   // Epics (3)
   creature('choir-exorcist', 'Exorcist', 6, 4, 7, 'epic', [], [{ when: 'battlecry', effects: [destroy('enemyCreature')] }], 'He has cast out worse than you, and he remembers them all by name.'),
-  spell('choir-truth', 'Truth Unveiled', 8, 'epic', [draw(4)], 'The veil was never meant to hold. It was only ever meant to delay.'),
+  spell('choir-truth', 'Truth Unveiled', 6, 'epic', [draw(4), heal(4)], 'The veil was never meant to hold. It was only ever meant to delay.'),
   creature('choir-lightbringer', 'Lightbringer', 7, 6, 8, 'epic', ['taunt'], [], 'He bears the light not because it is his, but because it is needed.'),
   // Legendaries (2)
   creature('choir-lady', 'Lady of the Pale Choir', 9, 6, 8, 'legendary', ['taunt'], [{ when: 'startOfTurn', effects: [heal(4)] }], 'The choir began as her lament, and it will end the same way \u2014 softly, and only when she wills it.'),

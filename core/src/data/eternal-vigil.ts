@@ -32,17 +32,17 @@ export const CARDS: Card[] = [
   spell('vigil-smite', 'Smite', 3, 'common', [dmg(3, 'enemyCreature')], "Righteous fury, measured and swift."),
   creature('vigil-monk', 'Monk', 3, 3, 3, 'common', ['lifesteal'], [], "Discipline is the monk's blade; stillness is his armor."),
   creature('vigil-shieldbearer', 'Shieldbearer', 4, 1, 6, 'common', ['taunt', 'shield'], [], "Their shields have outlasted a hundred sieges of the dark."),
-  spell('vigil-hymn', 'Hymn', 4, 'common', [heal(6)], "A chorus that mends what war has broken."),
+  spell('vigil-hymn', 'Hymn of Dawn', 4, 'common', [heal(6), { kind: 'giveKeyword', keyword: 'lifesteal', target: 'friendlyCreature' }], 'Sung at first light, it asks the wounded to stand once more.'),
   creature('vigil-crusader', 'Crusader', 5, 4, 5, 'common', ['rush'], [], "He marches where the light burns thinnest."),
   // Rares (5)
   spell('vigil-divine', 'Divine Shield', 2, 'rare', [giveK('shield', 'friendlyCreature')], "Faith made visible: armor woven from conviction alone."),
-  spell('vigil-layhands', 'Lay on Hands', 5, 'rare', [heal(8)], "Aldric's touch closes wounds no surgeon dare approach."),
+  spell('vigil-layhands', 'Lay on Hands', 5, 'rare', [heal(8), draw(1)], 'The oldest rite of the order, and the one it can least afford to spend.'),
   creature('vigil-avenger', 'Avenger', 5, 5, 4, 'rare', ['rush'], [], "Vengeance rides ahead of the host; mercy follows behind."),
   creature('vigil-warden', 'Warden of Dawn', 6, 5, 6, 'rare', ['lifesteal'], [], "Every wound he takes, the dawn repays tenfold."),
-  spell('vigil-sanctify', 'Sanctify', 6, 'rare', [heal(10)], "The ground remembers the light long after the rites are done."),
+  spell('vigil-sanctify', 'Sanctify', 6, 'rare', [heal(10), { kind: 'giveKeyword', keyword: 'shield', target: 'allFriendlyCreatures' }], 'The ground itself is consecrated; what stands upon it does not fall easily.'),
   // Epics (3)
   creature('vigil-archon', 'Archon of Dawn', 7, 6, 7, 'epic', ['taunt', 'lifesteal'], [], "An immovable pillar of first light."),
-  spell('vigil-radiance', 'Radiance', 7, 'epic', [heal(5), draw(2)], "In its glow the faithful find both solace and clarity."),
+  spell('vigil-radiance', 'Radiance', 5, 'epic', [heal(5), draw(2)], "In its glow the faithful find both solace and clarity."),
   creature('vigil-saint', 'Saint', 8, 6, 9, 'epic', ['lifesteal'], [], "Suffering passes through her and returns as mercy."),
   // Legendaries (2)
   creature('vigil-aldric', 'Ser Aldric', 9, 8, 8, 'legendary', ['taunt', 'lifesteal'], [], "He has stood guard so long that dawn itself waits on his word."),

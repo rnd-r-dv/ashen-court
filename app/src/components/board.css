@@ -66,10 +66,42 @@
   min-height: clamp(90px, 13vh, 152px);
 }
 
-.board-empty {
-  color: var(--text-faint);
-  font-family: var(--font-body);
-  font-size: 14px;
+/* ---- battlefield surface -------------------------------------
+   Each side gets a defined play area instead of a bare em dash, so
+   an empty board reads as "your side, room for N" rather than
+   "nothing here". Also gives summon animations somewhere to land. */
+.board-zone--top .board-row,
+.board-zone--bottom .board-row {
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(143, 107, 255, 0.05), rgba(0, 0, 0, 0.18)),
+    var(--bg-1);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 2px 14px rgba(0, 0, 0, 0.45);
+}
+
+/* Empty capacity marker, sized to a board mini so the row does not reflow
+   when a creature lands in a slot.
+   
+   These are literal px on purpose. A board mini is 240 x 205 at zoom 0.5
+   (card.css: --card-w, and .card--board's derived --card-h), but those
+   custom properties are scoped to .card and are not in scope here. Copying
+   them into :root would create a second copy of a DERIVED value that drifts
+   the moment the art ratio changes — the exact failure the card-frame plan
+   avoids by deriving --card-art-h. A decorative outline being a few px off
+   is harmless; a silently stale duplicate is not. */
+.board-slot {
+  width: 120px;
+  height: 103px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  background: rgba(255, 255, 255, 0.015);
+  flex: 0 0 auto;
+}
+
+/* The viewer's own side reads as the active one. */
+.board-zone--bottom .board-row {
+  border-color: var(--gold-dim);
 }
 
 /* End Turn button */

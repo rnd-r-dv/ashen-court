@@ -2,12 +2,24 @@ import { useMemo } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, TargetRef } from '@ashen/core';
+import { BOARD_CAP } from '@ashen/core';
 import CardView, { FACE_DOWN_CARD } from './CardView.js';
 import HeroPortrait from './HeroPortrait.js';
 import ManaTray from './ManaTray.js';
 import { deathFade, playSlam } from './animations.js';
 import type { HeroFX } from './animations.js';
 import './board.css';
+
+/**
+ * How many empty slot outlines to draw beside the creatures already down.
+ * An empty row used to render a bare em dash, which reads as "nothing here"
+ * instead of "your side, room for N" — and gave summon animations nowhere to
+ * land. Clamped at zero so a transient over-cap board cannot produce a
+ * negative repeat count.
+ */
+export function slotCount(occupied: number): number {
+  return Math.max(0, BOARD_CAP - occupied);
+}
 
 /**
  * Board (Task 31): the battlefield. Enemy zone on top (enemy hero, enemy
@@ -205,16 +217,20 @@ export default function Board({
           </div>
         </div>
         <div className="board-row board-row--top">
-          {foeP.board.length === 0 && <p className="board-empty">—</p>}
           <AnimatePresence>{foeP.board.map((c) => creatureSlot(c, false))}</AnimatePresence>
+          {Array.from({ length: slotCount(foeP.board.length) }, (_, i) => (
+            <span className="board-slot" key={`empty-${i}`} aria-hidden="true" />
+          ))}
         </div>
       </section>
 
       {/* friendly zone (bottom) */}
       <section className="board-zone board-zone--bottom" aria-label="Your side">
         <div className="board-row board-row--bottom">
-          {meP.board.length === 0 && <p className="board-empty">—</p>}
           <AnimatePresence>{meP.board.map((c) => creatureSlot(c, true))}</AnimatePresence>
+          {Array.from({ length: slotCount(meP.board.length) }, (_, i) => (
+            <span className="board-slot" key={`empty-${i}`} aria-hidden="true" />
+          ))}
         </div>
         <div className="board-side board-side--bottom">
           <HeroPortrait

@@ -13,12 +13,26 @@ const css = readFileSync(
   'utf8',
 );
 
-/** Body of a single CSS rule, e.g. block('.card__text') -> the declarations. */
+/** Escape a selector for literal use inside a regex. */
+function esc(selector: string): string {
+  return selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Body of the FIRST rule for a selector, e.g. block('.card__text'). */
 function block(selector: string): string {
-  // Escape the selector for use in a regex, then take everything to the first `}`.
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const m = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(css);
+  const m = new RegExp(`${esc(selector)}\\s*\\{([^}]*)\\}`).exec(css);
   return m ? m[1]! : '';
+}
+
+/** Bodies of EVERY rule whose selector list contains this selector.
+ *  A selector can appear more than once — `.card--bleed .card__body` has one
+ *  rule for stacking and another for the scrim — and asserting on only the
+ *  first would silently miss the one that carries the layout. */
+function blocks(selector: string): string[] {
+  // Either the selector ends the list and `{` follows, or a `,` and the rest
+  // of the list come between. No nested braces in this stylesheet.
+  const re = new RegExp(`${esc(selector)}(?:\\s*,[^{}]*)?\\s*\\{([^}]*)\\}`, 'g');
+  return [...css.matchAll(re)].map((m) => m[1]!);
 }
 
 describe('card text well', () => {
@@ -29,10 +43,15 @@ describe('card text well', () => {
     expect(block('.card__text')).not.toMatch(/line-clamp/);
   });
 
-  it('does not clamp flavor to a single line in hand', () => {
-    // 279 of 285 cards have flavor longer than one line, so the one-line hand
-    // clamp truncated almost the entire pool while leaving the card half empty.
-    expect(block('.card--hand .card__flavor')).not.toMatch(/line-clamp/);
+  it('clamps by line count nowhere in the stylesheet', () => {
+    // Asserting on `.card--hand .card__flavor` specifically is the obvious
+    // shape and the wrong one: that rule was DELETED, so block() returns ''
+    // and the assertion passes against an empty stylesheet — it guards
+    // nothing. 279 of 285 cards have flavor longer than one line, so the
+    // one-line hand clamp truncated almost the entire pool while leaving the
+    // card half empty. Scan the whole file: any new clamp, on any selector,
+    // reintroduces that bug.
+    expect(css).not.toMatch(/line-clamp/);
   });
 
   it('keeps the card box fixed', () => {
@@ -42,6 +61,19 @@ describe('card text well', () => {
     const card = block('.card');
     expect(card).toMatch(/--card-w:\s*240px/);
     expect(card).toMatch(/--card-h:\s*336px/);
+  });
+
+  it('leaves the full-bleed well able to shrink', () => {
+    // Full-bleed cards float the well over a bottom scrim inside a fixed,
+    // overflow-hidden frame, with the slack held in the ribbon's
+    // `margin-top: auto`. Unclamped text eventually outgrows that slack; if
+    // the panel cannot shrink it runs off the bottom edge and is cut there —
+    // mid-line, across the stat pips, with no ellipsis. Shrinking keeps the
+    // overflow inside .card__body, which already clips, so flavor yields
+    // instead of the card breaking.
+    const bleed = blocks('.card--bleed .card__body');
+    expect(bleed.length).toBeGreaterThan(0);
+    for (const b of bleed) expect(b).not.toMatch(/flex:\s*0\s+0\s/);
   });
 
   it('lets the body well distribute its own space', () => {

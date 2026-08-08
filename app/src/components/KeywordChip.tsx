@@ -43,7 +43,13 @@ export default function KeywordChip({
 }: KeywordChipProps) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
+  // On the WRAPPER, not the chip button. In the picker the describe control is
+  // the sibling `?` button, so a ref on the chip alone would treat a click on
+  // `?` as an outside click and close the popover the same click just opened.
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  // Two controls in the picker (select + describe), one on a card (describe).
+  const isPicker = onToggle !== undefined;
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -53,7 +59,7 @@ export default function KeywordChip({
     // Any click that is not on this chip dismisses it. Capture phase so it
     // runs before a card's own handler can act on the same click.
     const onDocClick = (e: globalThis.MouseEvent) => {
-      if (!btnRef.current?.contains(e.target as Node)) close();
+      if (!wrapRef.current?.contains(e.target as Node)) close();
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('click', onDocClick, true);
@@ -93,20 +99,26 @@ export default function KeywordChip({
   ].filter(Boolean).join(' ');
 
   return (
-    <span className="kwchip-wrap">
+    <span className="kwchip-wrap" ref={wrapRef}>
       {/* In the picker the chip has TWO jobs — choose the keyword, and explain
-          it — so they get two separate controls. On a card there is only one. */}
+          it — so they get two separate controls. On a card there is only one.
+
+          The two jobs need different semantics, not just different handlers.
+          In the picker this button is a toggle, so it announces `aria-pressed`;
+          `aria-expanded` there would claim it controls the popover, which the
+          sibling `?` owns. On a card the button IS the describe control, so it
+          announces `aria-expanded` and says so in its label. */}
       <button
         type="button"
-        ref={btnRef}
         className={classes}
-        aria-expanded={open}
-        aria-label={`${keyword} — what does this do?`}
-        onClick={onToggle ? toggle : describe}
+        {...(isPicker
+          ? { 'aria-pressed': selected, 'aria-label': keyword }
+          : { 'aria-expanded': open, 'aria-label': `${keyword} — what does this do?` })}
+        onClick={isPicker ? toggle : describe}
       >
         {keyword}
       </button>
-      {onToggle && (
+      {isPicker && (
         <button
           type="button"
           className="kwchip__help"

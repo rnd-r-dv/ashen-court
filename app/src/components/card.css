@@ -516,9 +516,22 @@
 }
 
 /* padding-bottom reserves the pip row (32px pip + breathing room), so
-   rules text can never run underneath the stats. */
+   rules text can never run underneath the stats.
+
+   `0 1 auto`, not `0 0 auto`. The panel sizes to its content, but it must
+   still be ABLE to shrink. .card__frame is a fixed-height column with
+   overflow: hidden, and the ribbon above holds the slack in a
+   `margin-top: auto`. Once the well's content outgrows that slack the auto
+   margin resolves to 0, and with shrink disabled the panel would run past
+   the bottom edge of the card and be cut there — mid-line, over the pips,
+   with no ellipsis. That is strictly worse than the line clamp this well
+   replaced. Shrinking instead keeps the overflow INSIDE .card__body, whose
+   base rule already clips it, and .card__flavor is the only child that
+   yields (`flex: 0 1 auto`) — so the copy that gets clipped is the copy
+   that does not affect play. */
 .card--bleed .card__body {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-height: 0;
   padding: 6px var(--card-pad) 44px;
   background: linear-gradient(180deg, rgba(8, 6, 14, 0) 0%, rgba(8, 6, 14, 0.9) 26%, rgba(8, 6, 14, 0.96) 100%);
 }

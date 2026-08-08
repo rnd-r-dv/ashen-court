@@ -280,20 +280,11 @@ Keep the existing `--space-*` and `--radius-*` scales, but drop `--radius-lg` to
 - [ ] **Step 2: Key the stats.** Attack and health pips gain small-caps labels from Cardo. No number on a board creature may appear bare.
 - [ ] **Step 3: Tincture by house.** `data-archetype` on the card root selects `--house-*` as the plate's field colour. The art window keeps its own neutral mount so tinctures never tint the committed illustration.
 - [ ] **Step 4: Flatten the frame.** Remove every gradient, inset shadow, and bevel from `card.css`. Rarity is expressed as hairline weight and, for legendary only, an `--or` rule.
-- [ ] **Step 5: Rebuild the text well — the truncation defect.**
+- [x] **Step 5: Rebuild the text well — the truncation defect. — DONE, superseded.**
 
-  `card.css:385-425` clamps by fixed line count: `.card__text` to 4 lines, `.card__flavor` to 2, and `.card--hand .card__flavor` to 1. Those counts were chosen for the worst case and are then applied to every card regardless of the room actually left, while `--card-h: 336px` is fixed. The result is a card that prints "…" with roughly 40% of its own body empty beneath.
+  Shipped in `docs/superpowers/plans/2026-08-09-keyword-glossary-and-text-well.md` Task 1, merged as `3e3b2a9` / `0267058`. The line clamps are gone: `.card__text` is `flex: 0 0 auto` and never clamped, `.card__flavor` is `flex: 0 1 auto` and yields first, the `.card--hand .card__flavor` one-line override is deleted, and `.card--bleed .card__body` shrinks rather than running off the bottom of the frame. `app/tests/cardTextWell.test.ts` guards all of it — including a whole-file scan for `line-clamp`, so re-adding one anywhere fails CI.
 
-  Measured against the real pool: **279 of 285 cards** carry flavor longer than one line at 11.5px in the 220px well, so the one-line hand clamp truncates essentially the entire game. The comment at `card.css:412-417` justifies the clamp as stopping flavor from crowding rules text — but the mechanism it chose makes writing that already exists invisible on 98% of cards.
-
-  Fix the mechanism, not the numbers:
-
-  - `.card__body` becomes a flex column. Rules text sizes to its content and takes priority; flavor takes the remaining space and clips only if it genuinely does not fit.
-  - **Remove `-webkit-line-clamp` from `.card__text` entirely.** Generated rules text is what the card *does* — clamping it can silently hide an effect the player is about to pay for, which is a correctness bug, not a layout preference. The longest text in the pool today is `ember-phoenix` at 75 characters over two trigger lines, comfortably inside the well; the rebalance (worker Tasks 13-16 and 18) adds riders to many cards, so several will grow to three lines. Let the well hold them.
-  - Delete the `.card--hand .card__flavor` one-line override. Hand and preview use the same rule.
-  - Flavor keeps `overflow: hidden` as a backstop for a pathological string, but the backstop must never be the normal case. Verify with `coven-queen` (142 characters, the longest flavor in the pool).
-
-  If rules text plus flavor genuinely cannot both fit for some card, flavor yields — it is the copy that does not affect play. Never the reverse.
+  **Do not redo this in Task 4's flatten pass.** Step 4 above strips gradients and bevels from `card.css` and will be editing the same file; leave the text-well region and the `.card--bleed .card__body` flex values alone. If a flatten edit trips `cardTextWell.test.ts`, the edit is wrong, not the test.
 
 - [ ] **Step 6:** Screenshot a hand card and a board card side by side at 1440×900. Verify both read correctly and the art is untinted. Include `coven-queen` and `ember-phoenix` in the shot — the longest flavor and the longest rules text — and confirm neither shows an ellipsis.
 - [ ] **Step 7:** Commit.
@@ -337,7 +328,11 @@ Keep the existing `--space-*` and `--radius-*` scales, but drop `--radius-lg` to
   - Hand cards pass neither: a card in hand has no `CreatureState`, so the defaults keep them rendering from the definition. This is why both props are optional rather than required.
   - Write `app/tests/boardKeywords.test.ts`: build a board creature whose `CreatureState.keywords` differs from its card def (add one, remove one), render the board, and assert the chips match the creature, not the def.
 
-- [ ] **Step 1: Inspect (report #2).** Clicking any board creature — **either side** — opens the full plate with generated `cardText`, keywords with their `KEYWORD_TEXT` (worker plan Task 4), and live stats. Hands stay hidden. This must not collide with attack targeting: while targeting is active, a click targets; otherwise it inspects. Right-click inspects in both states.
+- [ ] **Step 1: Inspect (report #2).** Clicking any board creature — **either side** — opens the full plate with generated `cardText`, its keywords, and live stats. Hands stay hidden. This must not collide with attack targeting: while targeting is active, a click targets; otherwise it inspects. Right-click inspects in both states.
+
+  **Do not build a keyword-text mechanism here — one exists.** `app/src/components/KeywordChip.tsx` (shipped in the keyword-glossary plan, Task 2, merged as `0d4573d`) renders one keyword and, on click, its `KEYWORD_TEXT` in a popover portalled to `document.body`. Render `<KeywordChip keyword={k} />` per keyword and the panel is done. It already handles Escape, click-outside, scroll/resize dismissal, and `stopPropagation` so a chip click never reaches the creature underneath — which matters here precisely because the creature is a click target.
+
+  This panel is also **the only place a board creature's keywords are legible at all.** `card.css` hides the whole text well on board minis (`.card--board .card__body { display: none }`) because at `zoom: 0.5` an 11px chip renders at 5.5px. The comment there points at this task by name. Do not answer that gap by un-hiding the well; answer it by making sure this panel actually shows the chips.
 - [ ] **Step 2: Hero power (report #1).** Render the power's name, cost, and `heroPowerText` as a permanent blazon in each hero's margin — **for both heroes**. Delete the `title` attribute at `HeroPortrait.tsx:174`; a hover-only tooltip is not an acceptable mechanism and was the whole bug.
 - [ ] **Step 3:** Keyboard: `Escape` closes the inspect panel; it is a focus trap while open.
 - [ ] **Step 4:** Verify against the original reports — open a match, click an enemy creature, read its text; read both hero powers without hovering.
@@ -367,51 +362,18 @@ The existing `useAnimationQueue` event loop and variant-factory pattern are soun
 
 ### Task 9: The Forge and the Deck Builder
 
-The Forge is a card *authoring* tool that runs curated and player-made cards through the identical path. It currently duplicates the engine's keyword set by hand, which means the mechanics the worker plan added are unreachable to a player. It is also the last screen left in the discarded visual world.
+The Forge is a card *authoring* tool that runs curated and player-made cards through the identical path. Its data defects — a hand-copied keyword set that hid `venom` and `stealth` from players, and incomplete effect presets — are fixed and merged (see Steps 1-3). What remains here is the visual work: the Forge and the Deck Builder are the last screens left in the discarded visual world.
 
 **Files:**
-- Modify: `app/src/screens/Forge.tsx`, `app/src/screens/forge.css`, `app/src/screens/DeckBuilder.tsx`, `app/src/screens/deckbuilder.css`, `core/src/index.ts`, `core/tests/publicSurface.test.ts`
-- Test: `app/tests/forgeKeywords.test.ts` (create)
+- Modify: `app/src/screens/forge.css`, `app/src/screens/DeckBuilder.tsx`, `app/src/screens/deckbuilder.css`
 
-- [ ] **Step 1: Stop hand-maintaining the keyword list.**
+- [x] **Steps 1-3: Derive the keyword list, guard it, check the presets — DONE, superseded.**
 
-  `Forge.tsx:39-47` is a literal copy of the `Keyword` union:
+  Shipped in `docs/superpowers/plans/2026-08-09-keyword-glossary-and-text-well.md` Task 3, merged as `23df962` / `0267058`. `KEYWORD_COST` is on the public surface (`core/src/index.ts:11`); `KEYWORDS` is derived from it and lives in `app/src/forge/formState.ts:168` beside `EFFECT_PRESETS`, **not** exported from `Forge.tsx` as this plan originally proposed — import it from `formState.js`. `app/tests/forgeKeywords.test.ts` asserts both the keyword set and full `EffectKind` preset coverage; `EFFECT_PRESETS` now covers all 18 kinds.
 
-  ```ts
-  const KEYWORDS: Keyword[] = ["taunt","rush","charge","windfury","lifesteal","ward","shield"];
-  ```
+  The picker also renders `KeywordChip variant="picker"` now, so each keyword carries a `?` that explains it. Selecting and describing are separate controls — Step 4's restyle must keep both reachable, and must not collapse them back into one button.
 
-  Typed as `Keyword[]`, an **incomplete** list is valid TypeScript, so nothing warned when `venom` (worker Task 7) and `stealth` (worker Task 8) were added to the union — they simply never appear in the picker. Worker Tasks 7 and 8 do not list this file, and the worker plan's architecture note only covers new `EffectKind`s reaching `formState.ts`.
-
-  Derive the list from data instead of restating it. `KEYWORD_COST` in `core/src/validate.ts:22` is a `Record<Keyword, number>`, so its keys are the complete set and are enumerable at runtime — but it is not currently on the public surface (`core/src/index.ts:8` exports `validateCard`, `validateDeck`, `RARITY_COPY_LIMIT`, and `ValidationIssue` only).
-
-  - Add `KEYWORD_COST` to the export on `core/src/index.ts:8`. It belongs there: the Forge implements the same card-authoring contract `validate.ts` enforces, and a keyword's cost is part of that contract.
-  - Update `core/tests/publicSurface.test.ts`, which guards that surface deliberately — read it first and add the entry the way the file already expresses them.
-  - In `Forge.tsx`, replace the literal with `const KEYWORDS = Object.keys(KEYWORD_COST) as Keyword[];`.
-
-- [ ] **Step 2: Guard it with a test.**
-
-  Create `app/tests/forgeKeywords.test.ts`. The app is type-checked only in the editor (`vite build` strips types without checking), so a compile-time exhaustiveness trick would not fail anything in CI. A runtime assertion is the only guard that actually holds:
-
-  ```ts
-  import { describe, it, expect } from 'vitest';
-  import { KEYWORD_COST } from '@ashen/core';
-  import { KEYWORDS } from '../src/screens/Forge.js';
-
-  describe('forge keyword picker', () => {
-    it('offers every keyword the engine defines', () => {
-      // Forge.tsx used to restate the Keyword union as a literal. Because an
-      // incomplete Keyword[] is still a valid Keyword[], venom and stealth were
-      // added to the engine and silently never appeared in the picker. This
-      // test is the thing that fails next time.
-      expect([...KEYWORDS].sort()).toEqual(Object.keys(KEYWORD_COST).sort());
-    });
-  });
-  ```
-
-  Export `KEYWORDS` from `Forge.tsx` so the test can import it.
-
-- [ ] **Step 3: Check the effect presets against the engine too.** `formState.ts:137` `EFFECT_PRESETS` has the same restatement shape for `EffectKind`. Worker Tasks 5, 6, 9, 10, and 11 each added their preset, so it should be complete — verify by asserting every `EffectKind` appears in at least one preset, in the same test file. If one is missing, add it.
+  **`.forge-chip` and `.forge-chip.active` are gone from `forge.css`; `.forge-chips` (the wrapper) remains.** Style `.kwchip--picker` in `app/src/components/keywordchip.css` instead. That file is shared with the in-card chip, so an Armorial restyle there lands on cards too — which is correct, but check both surfaces before committing.
 
 - [ ] **Step 4: Bring both screens into the Armorial.** Apply the Task 4 tokens and Task 5 plate language to `forge.css` and `deckbuilder.css`: `--ground`/`--line`, Cardo, hairline rules instead of panels, no gradients or bevels. The Forge's live card preview already renders through `CardFrame`, so it inherits Task 5 for free — what changes here is the surrounding chrome.
 
@@ -442,6 +404,8 @@ Required by the direction contract's FINISH line. **The build is not done until 
 **Dependencies on the worker plan.** Task 6 needs `CreatureState.token` (worker Task 3). Task 7 needs `KEYWORD_TEXT` (worker Task 4). Task 7 Step 0 exists because of `silence` (worker Task 5), `stealth` (worker Task 8), and the repaired `giveKeyword` (worker Task 5). Task 8 Step 2 needs simultaneous combat (worker Task 2). Task 6 Step 4's struck pip needs `PlayerState.overload` (worker Task 10). Task 9 Step 1 needs `venom` and `stealth` in the `Keyword` union (worker Tasks 7 and 8). **Run the worker plan first, or at minimum its Tasks 2, 3, 4, and 10.**
 
 **The seam between the plans.** Four defects were found only by tracing a worker-plan change into the app, and none would have been caught by either plan's own tests: the board renders `def.keywords` while the workers mutate `c.keywords` (Task 7 Step 0); `Forge.tsx` restates the `Keyword` union by hand so new keywords never reach the picker (Task 9 Step 1); `card.css` clamps flavor to one line, truncating 279 of 285 cards (Task 5 Step 5); and generated rules text is clamped at four lines, which can hide an effect outright (same step). The pattern is the same each time — the engine's data is authoritative, and the app restates it. Anywhere the app holds a second copy of an engine fact is worth checking before Task 10.
+
+Three of those four shipped in the keyword-glossary plan (`0267058`) and are struck through above. **The remaining one is the most consequential**: Task 7 Step 0, the board rendering `def.keywords`. It is still open, and every runtime keyword mutation the workers added — `silence`, `stealth`, the repaired `giveKeyword` — is invisible on the board until it lands. Do not let the Armorial restyle reach Task 7 before that step is done; a prettier plate that still shows a silenced creature's deleted rules text is a worse bug, not a better one.
 
 **Type consistency.** `pendingChoice` is defined in Task 1 and consumed in Tasks 2 and 3 with the same shape. The `discover` intent variant is defined once, in Task 1.
 

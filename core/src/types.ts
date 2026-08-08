@@ -15,7 +15,7 @@ export type CardType = 'creature' | 'spell' | 'artifact';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Keyword = 'taunt' | 'rush' | 'charge' | 'windfury' | 'lifesteal' | 'ward' | 'shield';
 export type Trigger = 'battlecry' | 'deathrattle' | 'startOfTurn' | 'endOfTurn' | 'onDamage';
-export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'copyCard' | 'giveKeyword' | 'discountMostExpensive' | 'discountNextSpell';
+export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'silence' | 'copyCard' | 'giveKeyword' | 'discountMostExpensive' | 'discountNextSpell';
 export type EffectTarget = 'any' | 'hero' | 'anyCreature' | 'enemyCreature' | 'friendlyCreature' | 'friendlyDragon' | 'allEnemies' | 'allEnemyCreatures' | 'allFriendlyCreatures' | 'randomEnemy' | 'randomEnemyCreature' | 'self';
 
 export interface EffectSpec { kind: EffectKind; value?: number; value2?: number; target?: EffectTarget; keyword?: Keyword; cardId?: string; }
@@ -43,6 +43,10 @@ export interface CreatureState {
   attack: number; health: number; maxHealth: number;
   keywords: Keyword[]; exhausted: boolean; attacksLeft: number;
   shields: number; warded: boolean; frozen: boolean;
+  /** Set by the `silence` effect. Keywords are emptied on application; this
+   *  flag additionally suppresses the card def's triggers, which live on the
+   *  CARD not the creature and so cannot be removed by clearing an array. */
+  silenced: boolean;
   /** True for creatures summoned by an effect from a `token` archetype card.
    *  Tokens occupy a SEPARATE row with its own cap (TOKEN_CAP) so a big
    *  swarm card is not silently truncated by the creature cap. Serialization

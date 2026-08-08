@@ -184,6 +184,19 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
       }
       break;
     }
+    case 'silence': {
+      for (const ref of refs) {
+        if (ref.type !== 'creature') continue;
+        const c = findCreature(game, ref.id);
+        if (!c) continue;
+        // Keywords live on the creature (an array we can empty); triggers live
+        // on the CARD DEF, shared by every copy, so they must never be mutated
+        // — the flag is what Game.fireTriggers checks instead.
+        c.keywords.length = 0;
+        c.silenced = true;
+      }
+      break;
+    }
     case 'copyCard': {
       const p = game.state.players[ctx.player];
       const id = spec.cardId ?? randomEnemyCreatureCardId(game, ctx.player);
@@ -412,6 +425,7 @@ export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): Cr
     shields: keywords.includes('shield') ? 1 : 0,
     warded: keywords.includes('ward'),
     frozen: false,
+    silenced: false,
     token: card.archetype === 'token',
   };
 }

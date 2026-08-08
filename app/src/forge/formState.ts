@@ -142,6 +142,7 @@ export const EFFECT_PRESETS: { label: string; spec: EffectSpec }[] = [
   { label: '+2/+2 to a friendly creature', spec: { kind: 'buff', value: 2, value2: 2, target: 'friendlyCreature' } },
   { label: 'Summon 1 Giant Rat', spec: { kind: 'summon', value: 1, cardId: 'token-rat' } },
   { label: 'Destroy an enemy creature', spec: { kind: 'destroy', target: 'enemyCreature' } },
+  { label: 'Silence a creature', spec: { kind: 'silence', target: 'anyCreature' } },
   { label: 'Freeze a creature', spec: { kind: 'freeze', target: 'anyCreature' } },
   { label: 'Give a friendly creature Shield', spec: { kind: 'giveKeyword', keyword: 'shield', target: 'friendlyCreature' } },
   { label: 'Next spell costs 1 less', spec: { kind: 'discountNextSpell', value: 1 } },

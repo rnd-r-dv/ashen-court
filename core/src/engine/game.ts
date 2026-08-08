@@ -457,6 +457,9 @@ export class Game implements Resolver {
    * because validateEffectTargets skips self/AoE specs by design.
    */
   private fireTriggers(when: Trigger, player: PlayerIndex, cardId: string, creatureId?: string, explicitRef?: TargetRef): void {
+    const creature = creatureId ? findCreature(this, creatureId) : undefined;
+    // A silenced creature has no triggers (Task 5).
+    if (creature && creature.silenced) return;
     for (const group of this.triggerGroups(cardId, when)) {
       for (const spec of group.effects) {
         applyEffect(this, { player, cardId, creatureId }, spec, specTargetRef(spec, explicitRef));

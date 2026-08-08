@@ -1,5 +1,7 @@
 import type { Card as CardSpec } from '@ashen/core';
 import { cardText } from '@ashen/core';
+import { resolveCardArt } from '../art/resolveArt.js';
+import { treatmentFor } from './cardTreatment.js';
 import CardArt from './CardArt.js';
 import CardFrame from './CardFrame.js';
 import './card.css';
@@ -43,6 +45,20 @@ export default function Card({
   selected = false,
   onClick,
 }: CardProps) {
+  // Generated art (art-pipeline plan). A miss returns null and CardArt renders
+  // the procedural SVG, which is what lets the pool be generated a slice at a
+  // time and keeps Forge custom cards working.
+  //
+  // A Forge upload always wins: custom cards own their imageUrl, and a
+  // generated file could only collide with one by sharing an id, which
+  // saveCustomCard already forbids.
+  const generated = card.art.imageUrl ? null : resolveCardArt(card.id);
+  const art = generated ? { ...card.art, imageUrl: generated } : card.art;
+
+  // Injecting into the recipe reuses CardArt's existing imageUrl short-circuit
+  // rather than adding a second image-rendering path.
+  const treatment = treatmentFor(card.rarity, generated !== null);
+
   const state = [
     `card--${size}`,
     faceDown && 'card--face-down',
@@ -53,6 +69,7 @@ export default function Card({
   return (
     <CardFrame
       className={state}
+      treatment={faceDown ? 'banded' : treatment}
       rarity={card.rarity}
       type={card.type}
       name={card.name}
@@ -65,7 +82,7 @@ export default function Card({
       faceDown={faceDown}
       onClick={onClick ? () => onClick(card) : undefined}
     >
-      <CardArt recipe={card.art} />
+      <CardArt recipe={art} />
     </CardFrame>
   );
 }

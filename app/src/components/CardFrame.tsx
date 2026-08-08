@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { CardType, Keyword, Rarity } from '@ashen/core';
+import type { Treatment } from './cardTreatment.js';
 import './card.css';
 
 /**
@@ -37,6 +38,8 @@ export interface CardFrameProps {
   text?: string;
   /** Unrevealed enemy card: grayscale silhouette, no name/art (spec §12). */
   faceDown?: boolean;
+  /** Layout treatment (cardTreatment.ts). 'bleed' puts art behind the text. */
+  treatment?: Treatment;
   /** Extra classes from Card.tsx (`card--hand|board|preview`, state flags). */
   className?: string;
   onClick?: () => void;
@@ -88,12 +91,19 @@ export default function CardFrame({
   flavor,
   text,
   faceDown = false,
+  treatment = 'banded',
   className,
   onClick,
   children,
 }: CardFrameProps) {
   const isCreature = type === 'creature';
-  const classes = ['card', className, `card--rarity-${rarity}`, `card--type-${type}`]
+  const classes = [
+    'card',
+    className,
+    `card--rarity-${rarity}`,
+    `card--type-${type}`,
+    treatment === 'bleed' && 'card--bleed',
+  ]
     .filter(Boolean)
     .join(' ');
 

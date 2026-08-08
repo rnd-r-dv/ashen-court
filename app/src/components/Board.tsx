@@ -219,7 +219,7 @@ export default function Board({
         <div className="board-row board-row--top">
           <AnimatePresence>{foeP.board.map((c) => creatureSlot(c, false))}</AnimatePresence>
           {Array.from({ length: slotCount(foeP.board.length) }, (_, i) => (
-            <span className="board-slot" key={`empty-${i}`} aria-hidden="true" />
+            <span className="board-slot--empty" key={`empty-${i}`} aria-hidden="true" />
           ))}
         </div>
       </section>
@@ -229,7 +229,7 @@ export default function Board({
         <div className="board-row board-row--bottom">
           <AnimatePresence>{meP.board.map((c) => creatureSlot(c, true))}</AnimatePresence>
           {Array.from({ length: slotCount(meP.board.length) }, (_, i) => (
-            <span className="board-slot" key={`empty-${i}`} aria-hidden="true" />
+            <span className="board-slot--empty" key={`empty-${i}`} aria-hidden="true" />
           ))}
         </div>
         <div className="board-side board-side--bottom">

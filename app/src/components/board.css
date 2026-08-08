@@ -89,8 +89,14 @@
    them into :root would create a second copy of a DERIVED value that drifts
    the moment the art ratio changes — the exact failure the card-frame plan
    avoids by deriving --card-art-h. A decorative outline being a few px off
-   is harmless; a silently stale duplicate is not. */
-.board-slot {
+   is harmless; a silently stale duplicate is not.
+
+   Scoped to --empty so the pre-existing creature wrapper (.board-slot,
+   position: relative only) never inherits the dashed outline: with no
+   universal box-sizing reset the wrapper is content-box, so a 1px dashed
+   border would draw OUTSIDE the card and show stray chrome around every
+   creature. */
+.board-slot--empty {
   width: 120px;
   height: 103px;
   border-radius: var(--radius-sm);

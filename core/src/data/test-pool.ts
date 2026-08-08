@@ -95,6 +95,14 @@ export function createTestPool(): Card[] {
       id: 't-rush', name: 'Test Rusher', type: 'creature', cost: 2, attack: 2, health: 1,
       keywords: ['rush'], effects: [], rarity: 'common', archetype: 'neutral', art: art(905), author: 'curated', version: 1,
     },
+    // Task 3 token-row fixture: a token-archetype creature so summon effects
+    // resolve to the token row. 1/1 at cost 0 passes validateCard (budget 2,
+    // spends 2 <= 2 + STAT_BUDGET_SLACK). Kept in the TEST pool — tokens are
+    // archetypes, not production cards.
+    {
+      id: 'token-rat', name: 'Token Rat', type: 'creature', cost: 0, attack: 1, health: 1,
+      keywords: [], effects: [], rarity: 'common', archetype: 'token', art: art(907), author: 'curated', version: 1,
+    },
   ];
   const procedural: Card[] = [];
   for (let i = 0; i < 60; i++) procedural.push(proceduralCreature(i));

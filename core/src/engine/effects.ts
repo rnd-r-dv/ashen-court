@@ -27,6 +27,9 @@ export interface EffectCtx {
 }
 
 export const BOARD_CAP = 7;
+/** Tokens fill their own row. Same size as the creature cap so a full board
+ *  of both reads symmetrically on screen. */
+export const TOKEN_CAP = 7;
 const MAX_MANA = 15;
 
 /** Targets that resolve to one ref (caller supplies an explicit ref via the
@@ -376,7 +379,13 @@ function summonTokens(game: Resolver, ctx: EffectCtx, spec: EffectSpec): void {
   if (!spec.cardId) return;
   const card = registryOf(game).get(spec.cardId);
   const p = game.state.players[ctx.player];
-  const count = Math.min(spec.value ?? 1, BOARD_CAP - p.board.length);
+  // Task 3: tokens occupy their own row — count against TOKEN_CAP using only
+  // the same-kind creatures, so a swarm card (Endless Swarm 9) is not silently
+  // truncated by the creature cap (old behavior: BOARD_CAP - board.length = 0).
+  const isToken = card.archetype === 'token';
+  const cap = isToken ? TOKEN_CAP : BOARD_CAP;
+  const used = p.board.filter(c => c.token === isToken).length;
+  const count = Math.min(spec.value ?? 1, cap - used);
   for (let i = 0; i < count; i++) {
     const creature = makeCreature(game, card, ctx.player);
     p.board.push(creature);
@@ -386,8 +395,8 @@ function summonTokens(game: Resolver, ctx: EffectCtx, spec: EffectSpec): void {
 }
 
 /** Build a CreatureState from a card def (exhausted = !(rush||charge), attacksLeft = windfury?2:1,
- *  shields/warded from keywords). Exported so hand plays (game.ts) summon through the same
- *  path as effect summons (Task 9). */
+ *  shields/warded from keywords, token = archetype 'token' — Task 3 token row). Exported so hand
+ *  plays (game.ts) summon through the same path as effect summons (Task 9). */
 export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): CreatureState {
   const keywords: Keyword[] = [...card.keywords];
   return {
@@ -403,6 +412,7 @@ export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): Cr
     shields: keywords.includes('shield') ? 1 : 0,
     warded: keywords.includes('ward'),
     frozen: false,
+    token: card.archetype === 'token',
   };
 }
 

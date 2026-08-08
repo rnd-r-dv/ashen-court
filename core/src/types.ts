@@ -43,6 +43,12 @@ export interface CreatureState {
   attack: number; health: number; maxHealth: number;
   keywords: Keyword[]; exhausted: boolean; attacksLeft: number;
   shields: number; warded: boolean; frozen: boolean;
+  /** True for creatures summoned by an effect from a `token` archetype card.
+   *  Tokens occupy a SEPARATE row with its own cap (TOKEN_CAP) so a big
+   *  swarm card is not silently truncated by the creature cap. Serialization
+   *  is a plain JSON round-trip, so a state saved before this field existed
+   *  deserializes with `token` undefined, which is correctly falsy. */
+  token: boolean;
 }
 export interface ArtifactState { id: string; cardId: string; owner: PlayerIndex; }
 export interface HeroState {

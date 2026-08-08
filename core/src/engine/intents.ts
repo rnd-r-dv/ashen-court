@@ -60,9 +60,10 @@ export function validatePlayCard(
   if (!card) return `Unknown card id: ${cardId}`;
   if (cardId === MANA_SURGE && p.surged) return 'Mana Surge already surged';
   if (p.mana < playEffectiveCost(game, card, me)) return 'Not enough mana';
-  // Board cap (audit 01 C2): a full board (BOARD_CAP creatures) cannot play
-  // more creatures — effect summons cap too, so the invariant holds for both.
-  if (card.type === 'creature' && p.board.length >= BOARD_CAP) return 'Board is full';
+  // Board cap (audit 01 C2, Task 3): a board of BOARD_CAP non-token creatures
+  // cannot play more creatures — hand-played creatures are never tokens, so only
+  // the non-token count matters. Effect summons cap too, so the invariant holds.
+  if (card.type === 'creature' && p.board.filter(c => !c.token).length >= BOARD_CAP) return 'Board is full';
   // Single-target effects require a valid target ref; every single-target
   // effect must accept the supplied ref (multi-target / no-target effects
   // resolve internally and need no target). hero/self effects auto-resolve to
@@ -156,9 +157,10 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
     // Mana Surge is unplayable once surged (validatePlayCard's gate) — never
     // enumerate an intent submit would reject.
     if (card.id === MANA_SURGE && p.surged) continue;
-    // Board cap (audit 01 C2): creatures at a full board are unplayable —
-    // mirror how unaffordable cards are skipped (validatePlayCard rejects).
-    if (card.type === 'creature' && p.board.length >= BOARD_CAP) continue;
+    // Board cap (audit 01 C2, Task 3): creatures at a full board are unplayable —
+    // count only non-tokens (tokens live in their own row; a hand-played creature
+    // is never a token) — mirror how unaffordable cards are skipped (validatePlayCard rejects).
+    if (card.type === 'creature' && p.board.filter(c => !c.token).length >= BOARD_CAP) continue;
     if (p.mana < playEffectiveCost(game, card, player)) continue;
     // Same effect list validatePlayCard validates against — spell effects AND
     // battlecry effects — so enumeration and validation cannot disagree. (No

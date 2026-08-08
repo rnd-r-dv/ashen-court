@@ -1517,11 +1517,16 @@ Append inside the existing `describe('pool balance', ...)` block in `core/tests/
     expect(bad, `late ramp is dead ramp: ${bad.join(', ')}`).toHaveLength(0);
   });
 
-  it('refillMana always returns more mana than the card costs', () => {
+  it('a one-shot refillMana returns more mana than the card costs', () => {
     const bad: string[] = [];
     for (const card of pool) {
-      const refill = sumOf(card, 'refillMana');
-      // A refill that does not exceed its own cost is a Coin you paid for.
+      // SPELLS ONLY, and only their own effects — never trigger effects. A
+      // recurring artifact that refills 1 mana every turn pays for itself over
+      // the game, so comparing one tick against the whole cost is nonsense.
+      // The rule is about one-shot mana: a refill that does not exceed its own
+      // cost is a Coin you paid for.
+      if (card.type !== 'spell') continue;
+      const refill = card.effects.filter(e => e.kind === 'refillMana').reduce((n, e) => n + (e.value ?? 0), 0);
       if (refill > 0 && refill <= card.cost) bad.push(`${card.id} (cost ${card.cost}, refills ${refill})`);
     }
     expect(bad, `net-negative mana: ${bad.join(', ')}`).toHaveLength(0);
@@ -1614,11 +1619,15 @@ Keep the original ids and names exactly — card art is seeded from `hashId(card
 
 `roots-awaken` is the important one: at 8 mana you have already ramped, so more ramp is worthless. It now *spends* the ramp — three bodies plus two crystals is a payoff for the archetype's whole plan.
 
-Also fix the artifact on line 32, which is the same dead-ramp shape at 5 mana:
+Also fix the artifact on line 32. Task 1 made it *function* — it was granting a crystal that `beginTurn`'s stale `manaChanged` erased every turn — but at 5 mana for one empty crystal a turn it still never repays, and its effect is identical to `neutral-idol` (Idol of Growth, `neutrals.ts:80`, cost 3), which every deck can run. A deck-locked common must beat the neutral it duplicates:
 
 ```ts
-  artifact('roots-sylvan', 'Sylvan Grove', 3, 'common', [{ when: 'startOfTurn', effects: [gainMana(1)] }], 'In the heart of the grove, the trees whisper the slow arithmetic of growth.'),
+  artifact('roots-sylvan', 'Sylvan Grove', 4, 'common', [{ when: 'startOfTurn', effects: [gainMana(1), { kind: 'refillMana', value: 1 }] }], 'In the heart of the grove, the trees whisper the slow arithmetic of growth.'),
 ```
+
+`gainMana` grants an **empty** crystal, so Idol's crystal is unusable on the turn it arrives. Sylvan Grove now fills the crystal it creates, which is worth the extra mana and the archetype restriction. Leave `neutral-idol` alone — Task 1 is the whole fix it needed.
+
+This card is the reason the refill assertion in Step 1 is scoped to spells: a recurring 1-mana refill on a 4-cost artifact would otherwise be flagged as net-negative, which it plainly is not.
 
 - [ ] **Step 5: Fix the Hollow Choir**
 

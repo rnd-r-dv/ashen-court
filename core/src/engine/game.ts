@@ -92,7 +92,7 @@ export class Game implements Resolver {
         discountMostExpensive: 0, discountNextSpell: 0,
       },
       deck, hand: [], board: [], artifacts: [],
-      mana: 0, maxMana: 0, surged: false,
+      mana: 0, maxMana: 0, surged: false, overload: 0,
     };
   }
 
@@ -585,6 +585,11 @@ export class Game implements Resolver {
     // mana/draw are events (dispatch applies them); resets stay inline
     // (state maintenance, not events).
     const maxMana = Math.min(MAX_MANA, p.maxMana + 1);
+    // overload: the lock applies to THIS turn's pool and is then spent. It
+    // subtracts from the emitted mana rather than from maxMana, so the crystal
+    // count on screen stays truthful and the lock lasts exactly one turn.
+    const locked = Math.min(p.overload, maxMana);
+    p.overload = 0;
     p.hero.usedPower = false;
     p.hero.discountMostExpensive = 0;
     p.hero.discountNextSpell = 0;
@@ -609,7 +614,7 @@ export class Game implements Resolver {
     // value computed BEFORE the trigger ran — so Sylvan Grove and Idol of
     // Growth granted nothing at all. Any future effect that adjusts mana from
     // a startOfTurn trigger (overload included) depends on this ordering.
-    this.emit({ type: 'manaChanged', player: me, mana: maxMana, maxMana });
+    this.emit({ type: 'manaChanged', player: me, mana: maxMana - locked, maxMana });
     this.emit({ type: 'turnStart', player: me, mana: maxMana });
     // draw 1 (empty deck: no cardDrawn event, fatigue arrives in a later task)
     if (p.deck.length > 0) {

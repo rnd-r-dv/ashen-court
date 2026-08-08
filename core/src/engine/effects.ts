@@ -255,6 +255,9 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
       }
       break;
     }
+    case 'overload':
+      game.state.players[ctx.player].overload += spec.value ?? 0;
+      break;
   }
   push(game, { type: 'effectResolved', player: ctx.player, sourceCardId: ctx.cardId, kind: spec.kind });
   runQueue(game);

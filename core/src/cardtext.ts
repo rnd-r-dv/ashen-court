@@ -128,6 +128,8 @@ export function effectText(effect: EffectSpec): string {
       return `Your next spell costs ${v} less this turn.`;
     case 'spellPower':
       return `Give ${target(effect.target)} Spell Power +${v}.`;
+    case 'overload':
+      return `Overload: ${v}.`;
   }
 }
 

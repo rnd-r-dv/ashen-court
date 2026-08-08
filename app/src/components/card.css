@@ -264,7 +264,14 @@
   flex: 1 1 auto;
   height: auto;
 }
-.card__art--face-down {
+/* Grayscale the placeholder art ONLY, never the whole wrapper: a filter on
+   .card__art--face-down composites its entire subtree (including the gold
+   back-sigil span) into one bitmap before applying, so the sigil would be
+   desaturated with the art. CardArt renders a direct <svg> (procedural) or a
+   direct <div><img/></div> (custom imageUrl) — both are matched here; the
+   sigil's <span> is not, so it keeps its gold color and glow. */
+.card__art--face-down > svg,
+.card__art--face-down > div {
   filter: grayscale(1) brightness(0.5) contrast(1.15);
 }
 .card__sigil {

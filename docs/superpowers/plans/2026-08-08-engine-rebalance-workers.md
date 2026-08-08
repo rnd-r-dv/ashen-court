@@ -1464,10 +1464,245 @@ git commit -m "docs: regenerate the card inventory after the rebalance"
 
 ---
 
+### Task 18: Kill the structurally dead cards
+
+Tasks 12-16 fixed creature *bodies*. They did not catch a second failure class: spells whose effect is mathematically worthless at their cost, no matter how the numbers are tuned. Draw and mana are **tempo loans** — a card is worth roughly 1.5 mana flat, so pure draw above ~3 cost and pure ramp above ~3 cost can never be correct to play, because the loan outlives the game. Pure healing is card disadvantage that only matters when you are already losing. Single-target damage below its cost loses the exchange by definition.
+
+This task adds six assertions that make those classes impossible, then fixes every card they flag.
+
+**Files:**
+- Modify: `core/tests/pool-balance.test.ts`
+- Modify: `core/src/data/neutrals.ts`, `elder-roots.ts`, `hollow-choir.ts`, `shadow-dancers.ts`, `grave-pact.ts`, `eternal-vigil.ts`
+
+**Interfaces:**
+- Consumes: `stealth` (Task 8), `returnToHand` (Task 6), the `giveKeyword` field-mirror fix (Task 5), `TOKEN_CAP` (Task 3).
+- Produces: nothing downstream except a regenerated `graphify-out/CARDS.md`.
+
+- [ ] **Step 1: Add the six assertions**
+
+Append inside the existing `describe('pool balance', ...)` block in `core/tests/pool-balance.test.ts`:
+
+```ts
+  // --- Structural dead-card rules (Task 18) ---
+  //
+  // Draw and mana are tempo LOANS, not commodities. A card is worth ~1.5 mana
+  // flat, so a pure-draw spell above 1.5x its card count never repays; a pure
+  // ramp spell above cost 3 never repays before MAX_MANA and the natural
+  // +1/turn catch up. Both are dead on arrival regardless of tuning, so these
+  // are hard structural bounds, not balance taste.
+
+  const allSpecs = (c: typeof pool[number]) =>
+    [...c.effects, ...(c.triggers ?? []).flatMap(t => t.effects)];
+  const sumOf = (c: typeof pool[number], kind: string) =>
+    allSpecs(c).filter(s => s.kind === kind).reduce((n, s) => n + (s.value ?? 0), 0);
+  const onlyKinds = (c: typeof pool[number], kinds: string[]) =>
+    c.effects.length > 0 && c.effects.every(e => kinds.includes(e.kind));
+
+  it('a pure-draw spell costs at most 1.5 mana per card drawn', () => {
+    const bad: string[] = [];
+    for (const card of pool) {
+      if (card.type !== 'spell' || !onlyKinds(card, ['draw'])) continue;
+      const n = sumOf(card, 'draw');
+      if (card.cost > Math.floor(1.5 * n)) bad.push(`${card.id} (cost ${card.cost}, draws ${n})`);
+    }
+    expect(bad, `overpriced pure draw: ${bad.join(', ')}`).toHaveLength(0);
+  });
+
+  it('a pure-ramp spell costs at most 3', () => {
+    const bad: string[] = [];
+    for (const card of pool) {
+      if (card.type !== 'spell' || !onlyKinds(card, ['gainMana'])) continue;
+      if (card.cost > 3) bad.push(`${card.id} (cost ${card.cost})`);
+    }
+    expect(bad, `late ramp is dead ramp: ${bad.join(', ')}`).toHaveLength(0);
+  });
+
+  it('refillMana always returns more mana than the card costs', () => {
+    const bad: string[] = [];
+    for (const card of pool) {
+      const refill = sumOf(card, 'refillMana');
+      // A refill that does not exceed its own cost is a Coin you paid for.
+      if (refill > 0 && refill <= card.cost) bad.push(`${card.id} (cost ${card.cost}, refills ${refill})`);
+    }
+    expect(bad, `net-negative mana: ${bad.join(', ')}`).toHaveLength(0);
+  });
+
+  it('a pure-heal spell costs at most 3', () => {
+    const bad: string[] = [];
+    for (const card of pool) {
+      if (card.type !== 'spell' || !onlyKinds(card, ['heal'])) continue;
+      // Healing is card disadvantage unless it is attached to a body or a
+      // second effect. Above 3 mana it is never the right play.
+      if (card.cost > 3) bad.push(`${card.id} (cost ${card.cost})`);
+    }
+    expect(bad, `unattached healing: ${bad.join(', ')}`).toHaveLength(0);
+  });
+
+  it('a single-target damage spell deals at least its cost', () => {
+    const single = ['any', 'hero', 'anyCreature', 'enemyCreature', 'randomEnemy', 'randomEnemyCreature'];
+    const bad: string[] = [];
+    for (const card of pool) {
+      if (card.type !== 'spell') continue;
+      if (!(card.effects.length > 0 && card.effects.every(e => e.kind === 'dealDamage' && single.includes(e.target as string)))) continue;
+      const n = sumOf(card, 'dealDamage');
+      if (n < card.cost) bad.push(`${card.id} (cost ${card.cost}, deals ${n})`);
+    }
+    expect(bad, `below-rate removal: ${bad.join(', ')}`).toHaveLength(0);
+  });
+
+  it('no card is strictly dominated by another in the same archetype', () => {
+    // Same archetype, same rarity (so copy limits match), same type, identical
+    // stats/keywords/effects, different cost — the pricier one can never be
+    // the right play, so it is a dead slot in a 21-card core.
+    const groups = new Map<string, typeof pool>();
+    for (const card of pool) {
+      const key = [
+        card.archetype, card.rarity, card.type,
+        card.attack ?? '-', card.health ?? '-',
+        [...card.keywords].sort().join('/'),
+        JSON.stringify([...card.effects, ...(card.triggers ?? []).flatMap(t => [t.when, ...t.effects])]),
+      ].join('|');
+      const g = groups.get(key); if (g) g.push(card); else groups.set(key, [card]);
+    }
+    const bad: string[] = [];
+    for (const g of groups.values()) {
+      if (g.length > 1 && new Set(g.map(c => c.cost)).size > 1) {
+        bad.push(g.map(c => `${c.id}@${c.cost}`).join(' vs '));
+      }
+    }
+    expect(bad, `strictly dominated: ${bad.join('; ')}`).toHaveLength(0);
+  });
+```
+
+- [ ] **Step 2: Run it and confirm the exact worklist**
+
+Run: `npx vitest run core/tests/pool-balance.test.ts`
+
+Expected: FAIL with exactly these thirteen cards named across the six new assertions —
+`neutral-scroll`, `choir-truth`, `roots-bounty`, `dance-veil`, `dance-mirage` (pure draw);
+`roots-verdant`, `roots-awaken` (pure ramp);
+`pact-bargain` (refill);
+`vigil-hymn`, `vigil-layhands`, `vigil-sanctify` (pure heal);
+`roots-vine`, `roots-thorn`, `dance-finale` (below-rate damage);
+`dance-echo` vs `dance-veil` (domination).
+
+If a card appears that is not on this list, Tasks 13-16 introduced it — fix it the same way rather than relaxing an assertion.
+
+- [ ] **Step 3: Fix the neutrals**
+
+In `core/src/data/neutrals.ts`, replace the `neutral-scroll` line:
+
+```ts
+  spell('neutral-scroll', 'Scroll of Lore', 1, 'common', [{ kind: 'draw', value: 1 }],
+```
+
+A 1-mana cantrip is a real card; a 2-mana one pays a card and two mana to draw a card.
+
+- [ ] **Step 4: Fix Elder Roots**
+
+In `core/src/data/elder-roots.ts`, replace these five lines. Ramp stops being the payoff and becomes the setup:
+
+```ts
+  spell('roots-vine', 'Creeping Vine', 1, 'common', [dmg(1, 'anyCreature')], 'It takes its time. It always arrives.'),
+  spell('roots-thorn', 'Thornlash', 3, 'common', [dmg(3, 'anyCreature')], 'The grove does not warn twice.'),
+  spell('roots-verdant', 'Verdant Bloom', 3, 'rare', [gainMana(2), draw(1)], "Spring's first breath, distilled into a single blossom."),
+  spell('roots-bounty', "Nature's Bounty", 4, 'rare', [draw(2), gainMana(1)], 'The forest gives freely to those who remember how to ask.'),
+  spell('roots-awaken', 'Awakening', 8, 'epic', [gainMana(2), summon('token-treant', 3)], 'When the deep roots awaken, the whole world leans in to listen.'),
+```
+
+Keep the original ids and names exactly — card art is seeded from `hashId(card.id)`, and the deck lists in this same file reference the ids.
+
+`roots-awaken` is the important one: at 8 mana you have already ramped, so more ramp is worthless. It now *spends* the ramp — three bodies plus two crystals is a payoff for the archetype's whole plan.
+
+Also fix the artifact on line 32, which is the same dead-ramp shape at 5 mana:
+
+```ts
+  artifact('roots-sylvan', 'Sylvan Grove', 3, 'common', [{ when: 'startOfTurn', effects: [gainMana(1)] }], 'In the heart of the grove, the trees whisper the slow arithmetic of growth.'),
+```
+
+- [ ] **Step 5: Fix the Hollow Choir**
+
+In `core/src/data/hollow-choir.ts`, replace the `choir-truth` line:
+
+```ts
+  spell('choir-truth', 'Truth Unveiled', 6, 'epic', [draw(4), heal(4)], 'The veil was never meant to hold. It was only ever meant to delay.'),
+```
+
+- [ ] **Step 6: Fix the Shadow Dancers**
+
+In `core/src/data/shadow-dancers.ts`, replace the `dance-veil`, `dance-mirage`, and `dance-finale` lines. `dance-veil` and `dance-echo` were the identical card at different prices, both commons in the same core:
+
+```ts
+  spell('dance-veil', 'Veil Dance', 4, 'common', [draw(2), { kind: 'giveKeyword', keyword: 'stealth', target: 'friendlyCreature' }], 'The veils rise and fall; what they conceal is never what the crowd believes it saw.'),
+  spell('dance-mirage', 'Mirage', 5, 'rare', [draw(3), { kind: 'returnToHand', target: 'enemyCreature' }], 'The mirage shows you what you most desire, and charges you dearly for the glimpse.'),
+  spell('dance-finale', 'Finale', 5, 'rare', [dmg(6, 'randomEnemy')], 'The last step of the dance is the one nobody sees coming.'),
+```
+
+Check `dance-finale`'s existing rarity and flavor in the file and keep them — only `cost` changes there.
+
+- [ ] **Step 7: Fix Grave Pact**
+
+In `core/src/data/grave-pact.ts`, replace the `pact-bargain` and `pact-ascend` lines. Both paid mana to receive less mana; both now buy an explosive turn, which is the archetype's whole identity:
+
+```ts
+  spell('pact-bargain', 'Bargain', 2, 'rare', [dmg(3, 'self'), { kind: 'refillMana', value: 5 }], 'Life is the only coin the pact accepts. Three drops buy five favors.'),
+  spell('pact-ascend', 'Ascension', 4, 'epic', [{ kind: 'refillMana', value: 5 }, draw(3), dmg(5, 'self')], 'Every step upward is bought with a piece of what you were.'),
+```
+
+Note the flavor text on `pact-bargain` changed with the numbers — the old line said "Four drops buy four favors" and would now be false. Flavor that contradicts the card is a bug.
+
+- [ ] **Step 8: Fix Eternal Vigil**
+
+In `core/src/data/eternal-vigil.ts`, the five pure-heal spells were one card printed five times on a linear staircase. The three expensive ones get a real second half; the two cheap ones stay as they are:
+
+```ts
+  spell('vigil-hymn', 'Hymn of Dawn', 4, 'common', [heal(6), { kind: 'giveKeyword', keyword: 'lifesteal', target: 'friendlyCreature' }], 'Sung at first light, it asks the wounded to stand once more.'),
+  spell('vigil-layhands', 'Lay on Hands', 5, 'rare', [heal(8), draw(1)], 'The oldest rite of the order, and the one it can least afford to spend.'),
+  spell('vigil-sanctify', 'Sanctify', 6, 'epic', [heal(10), { kind: 'giveKeyword', keyword: 'shield', target: 'allFriendlyCreatures' }], 'The ground itself is consecrated; what stands upon it does not fall easily.'),
+  spell('vigil-radiance', 'Radiance', 5, 'epic', [heal(5), draw(2)], "In its glow the faithful find both solace and clarity."),
+```
+
+Keep each card's existing rarity if it differs from what is written above — only the cost and effects change. `vigil-radiance` is not caught by any assertion (the `draw` rider exempts it), but 7 mana to heal 5 and draw 2 is the same dead card by inspection.
+
+`vigil-sanctify` depends on the Task 5 `giveKeyword` field-mirror fix. Without it, granting `shield` pushes a keyword that absorbs nothing and the card does half of what its text claims. Verify by hand after Step 10: play it with a creature on board and confirm `shields` is 1, not 0.
+
+- [ ] **Step 9: Fix Oldroot's hero power**
+
+In `core/src/data/elder-roots.ts`, replace the `power` line on the `HeroSpec`:
+
+```ts
+  power: { name: 'Roots of the World', cost: 2, effects: [gainMana(1), { kind: 'refillMana', value: 1 }] },
+```
+
+`gainMana` alone grants an *empty* crystal, so the old power cost 2 mana to gain nothing that turn and broke even two turns later — strictly worse than every other hero's power, all of which cost the same 2. Filling the crystal it creates makes the net cost 1 for a permanent ramp, which is what the archetype is built on.
+
+- [ ] **Step 10: Run the guardrail, then the full suite**
+
+Run: `npx vitest run core/tests/pool-balance.test.ts`
+Expected: PASS, all assertions.
+
+Then: `npm test`
+Expected: PASS. Cost changes can break `core/tests/decks-*.test.ts` if a deck asserts a mana curve, and `core/tests/cardtext.test.ts` if it snapshots one of the changed cards. **Recompute the expected value from the new card definition and update the assertion** — do not revert a cost to make an old assertion pass. If a deck test fails on total card count, you changed an id; put it back.
+
+- [ ] **Step 11: Regenerate the inventory**
+
+Task 17 already regenerated `graphify-out/CARDS.md`; this task changed card data after it, so regenerate it again the same way.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add core/tests/pool-balance.test.ts core/src/data graphify-out/CARDS.md
+git commit -m "balance(data): remove the structurally dead draw, ramp, and heal cards"
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage.** §4.1 → Task 1. §4.2 → Task 2. §4.3 → Task 3. §4.4 → Task 4. §5.1 `silence`/`returnToHand`/`consume` → Tasks 5, 6, 11. §5.2 → Tasks 7, 8. §5.3 → Tasks 9, 10. §6 → Tasks 12-17. §5.4 (Discover) is **deliberately absent** — it crosses `core`, `server`, and `app` and belongs to the main-thread plan. §7 (the Armorial) is likewise out of scope here.
 
 **Type consistency.** `CreatureState` gains `token` (Task 3), `silenced` (Task 5), and `spellPower` (Task 9); every task that adds a field also updates `makeCreature` and `core/tests/helpers.ts`. `PlayerState` gains `overload` (Task 10), set in `makePlayer`. `TOKEN_CAP` is defined in Task 3 and consumed by Tasks 11, 12, and 13-16. `KEYWORD_TEXT` is defined in Task 4 and extended by Tasks 7 and 8.
 
-**Ordering.** Task 10 depends on Task 1's event ordering; Task 11 depends on Task 3's `token` flag; Tasks 13-16 depend on Tasks 3 and 5-11. Tasks 13-16 are independent of each other and may run in parallel.
+**Ordering.** Task 10 depends on Task 1's event ordering; Task 11 depends on Task 3's `token` flag; Tasks 13-16 depend on Tasks 3 and 5-11. Tasks 13-16 are independent of each other and may run in parallel. Task 18 runs last: it consumes `stealth` (Task 8), `returnToHand` (Task 6), and the `giveKeyword` field-mirror fix (Task 5), and it edits card data that Task 17 has already documented, so it regenerates `graphify-out/CARDS.md` again at the end.
+
+**Why Task 18 exists separately from 13-16.** Tasks 12-16 police creature *bodies* against `statBudget`. Nothing in that guardrail can see a spell that is worthless at any tuning — an 8-mana "draw 4" passes every stat check because it has no stats. Task 18 adds the six structural rules that make that class impossible, and it comes after the rebalance rather than before it so its assertions also police the cards Tasks 13-16 wrote.

@@ -19,8 +19,21 @@ export interface ManaTrayProps {
 
 const MAX_PIPS = 15;
 
+export type PipState = 'full' | 'spent';
+
+/**
+ * One entry per unlocked crystal: 'full' = available to spend now, 'spent' =
+ * used this turn. Capped at MAX_PIPS so a runaway mana effect cannot overflow
+ * the rail. Extracted and exported because jsdom cannot lay out CSS, so this
+ * is the part of the tray that is actually testable.
+ */
+export function pipStates(mana: number, maxMana: number): PipState[] {
+  const unlocked = Math.min(Math.max(maxMana, 0), MAX_PIPS);
+  const available = Math.min(Math.max(mana, 0), unlocked);
+  return Array.from({ length: unlocked }, (_, i) => (i < available ? 'full' : 'spent'));
+}
+
 export default function ManaTray({ mana, maxMana, pulse = 0, animScale = 1 }: ManaTrayProps) {
-  const pips = Array.from({ length: Math.min(Math.max(maxMana, 0), MAX_PIPS) }, (_, i) => i < mana);
   return (
     <div className="manatray" title={`${mana}/${maxMana} mana`} aria-label={`Mana ${mana} of ${maxMana}`}>
       {/* Task 39: keyed by the pulse counter so each manaChanged replays the pop */}
@@ -32,8 +45,8 @@ export default function ManaTray({ mana, maxMana, pulse = 0, animScale = 1 }: Ma
         animate="enter"
         aria-hidden="true"
       >
-        {pips.map((full, i) => (
-          <span key={i} className={`manatray-pip${full ? ' manatray-pip--full' : ''}`} />
+        {pipStates(mana, maxMana).map((state, i) => (
+          <span key={i} className={`manatray-pip manatray-pip--${state}`} />
         ))}
       </motion.div>
       <span className="manatray-readout">

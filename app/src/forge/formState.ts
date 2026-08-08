@@ -8,7 +8,7 @@ import type {
   Trigger,
   ValidationIssue,
 } from '@ashen/core';
-import { buildPool, validateCard } from '@ashen/core';
+import { buildPool, KEYWORD_COST, validateCard } from '@ashen/core';
 import { loadCustomCards } from '../storage.js';
 
 /**
@@ -150,4 +150,19 @@ export const EFFECT_PRESETS: { label: string; spec: EffectSpec }[] = [
   { label: 'Give a friendly creature Spell Power +1', spec: { kind: 'spellPower', value: 1, target: 'friendlyCreature' } },
   { label: 'Overload 1', spec: { kind: 'overload', value: 1 } },
   { label: 'Next spell costs 1 less', spec: { kind: 'discountNextSpell', value: 1 } },
+  { label: 'Gain 2 empty mana crystals', spec: { kind: 'gainMana', value: 2 } },
+  { label: 'Refill 2 Mana', spec: { kind: 'refillMana', value: 2 } },
+  { label: 'Copy a random enemy creature card', spec: { kind: 'copyCard' } },
+  { label: 'Your most expensive creature costs 2 less', spec: { kind: 'discountMostExpensive', value: 2 } },
 ];
+
+/**
+ * Every keyword a Forge card may carry, DERIVED from the engine rather than
+ * restated. KEYWORD_COST is a Record<Keyword, number> and core is type-checked,
+ * so the compiler guarantees it holds the complete set.
+ *
+ * Order follows KEYWORD_COST's declaration order, which is also the order the
+ * picker renders in. Reordering KEYWORD_COST reorders the UI — if that matters,
+ * sort here rather than editing core for a layout reason.
+ */
+export const KEYWORDS = Object.keys(KEYWORD_COST) as Keyword[];

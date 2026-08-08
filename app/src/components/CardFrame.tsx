@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { CardType, Keyword, Rarity } from '@ashen/core';
 import type { Treatment } from './cardTreatment.js';
+import KeywordChip from './KeywordChip.js';
 import './card.css';
 
 /**
@@ -162,16 +163,15 @@ export default function CardFrame({
               <span className="card__ribbon-rarity">{RARITY_LABEL[rarity]}</span>
             </div>
 
-            {/* One fixed-height text well. Rules text and flavor are clamped
-                inside it rather than growing the card, so a long flavor line
-                can no longer make one card taller than its neighbour. */}
+            {/* One fixed-height text well. It is a flex column: rules text
+                sizes to content and flavor takes the remainder, so nothing is
+                truncated while the card still has room. The card box itself
+                stays invariant — see --card-h in card.css. */}
             <div className="card__body">
               {keywords && keywords.length > 0 && (
                 <div className="card__keywords">
                   {keywords.map((k) => (
-                    <span className="card__keyword" key={k}>
-                      {k}
-                    </span>
+                    <KeywordChip key={k} keyword={k} />
                   ))}
                 </div>
               )}

@@ -58,6 +58,14 @@
 	justify-content: space-between;
 }
 
+/* Picker chip row: children are .kwchip--picker (KeywordChip, keywordchip.css),
+   so only the row layout lives here. */
+.forge-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
 .forge-input {
 	background: #131220;
 	border: 1px solid #322f42;
@@ -116,29 +124,6 @@ select.forge-input {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-}
-
-.forge-chips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.forge-chip {
-	background: #131220;
-	border: 1px solid #322f42;
-	border-radius: 999px;
-	color: #b9b6c9;
-	padding: 5px 12px;
-	font-size: 13px;
-	text-transform: capitalize;
-	cursor: pointer;
-}
-
-.forge-chip.active {
-	background: #3a2d6e;
-	border-color: #7b5cff;
-	color: #e8e6f0;
 }
 
 .forge-effect-row {

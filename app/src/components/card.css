@@ -322,26 +322,19 @@
   align-items: center;
 }
 
-/* ---- keyword chips -------------------------------------------- */
+/* ---- keyword chips --------------------------------------------
+   Chips used to be `nowrap; overflow: hidden`, which silently ATE
+   the second and third keyword. venom and stealth make multi-keyword
+   creatures common, and a keyword you cannot see is a rule you cannot
+   play around. The well is a flex column now (see .card__body), so a
+   wrapped second row costs flavor space, not rules text.            */
 .card__keywords {
   display: flex;
-  flex-wrap: nowrap;      /* a second chip row would eat the rules text */
+  flex-wrap: wrap;
   justify-content: center;
-  overflow: hidden;
   gap: 3px;
   margin-top: 5px;
-}
-.card__keyword {
   flex: 0 0 auto;
-  padding: 1px 6px;
-  border-radius: 8px;
-  background: #2c2c36;
-  border: 1px solid #43434f;
-  color: #d8d2c2;
-  font-family: system-ui, sans-serif;
-  font-size: 11px;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
 }
 
 /* ---- creature stats pips --------------------------------------
@@ -379,49 +372,46 @@
   color: #fff4f0;
 }
 
-/* ---- rules text ----------------------------------------------
-   Line-clamped rather than allowed to overflow mid-glyph, so a long
-   effect reads as an intentional truncation.                      */
+/* ---- rules text and flavor -------------------------------------
+   These live inside .card__body (line 316), which is already a flex
+   column that absorbs whatever height the art panel and ribbon leave
+   over. They used to clamp by FIXED LINE COUNT — rules text at 4
+   lines, flavor at 2, flavor in hand at 1 — counts chosen for a worst
+   case and then applied to every card regardless of the room actually
+   left. The result was an ellipsis with ~40% of the card empty
+   beneath it, on 279 of 285 cards.
+
+   Now the two share the well: rules text takes exactly what it needs,
+   flavor takes the remainder, and only a pathological string is
+   clipped. Rules text is never clamped at all — it is what the card
+   DOES, and hiding a line of it makes a player pay for an effect they
+   were never shown. If both genuinely cannot fit, FLAVOR yields; it
+   is the copy that does not affect play.                           */
 .card__text {
+  flex: 0 0 auto;         /* sizes to content, and wins the space race */
   margin: 7px 4px 0;
   font-size: 12.5px;
   color: #e6e0d0;
   line-height: 1.32;
   text-align: center;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  overflow: hidden;
 }
 
-/* ---- flavor ---------------------------------------------------- */
 .card__flavor {
+  flex: 0 1 auto;         /* takes what is left, yields first when short */
+  min-height: 0;
   margin: 5px 4px 0;
   font-size: 11.5px;
   font-style: italic;
   color: #a79e88;
   line-height: 1.3;
   text-align: center;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
   overflow: hidden;
 }
-/* Board minis have no text well at all, so flavor cannot show there.
-   Hand cards regained the room for one line when the well grew to
-   104px (see --card-art-h), and every curated card carries flavor —
-   hiding it during play wasted writing that already exists. It is
-   clamped to a single line in hand so it can never crowd rules text,
-   which is the copy that actually affects play. */
+
+/* Board minis are rendered at zoom 0.5, where 11.5px flavor is
+   unreadable and would only crowd the stats. */
 .card--board .card__flavor {
   display: none;
-}
-
-.card--hand .card__flavor {
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
 }
 
 /* ---- interaction states ---------------------------------------- */
@@ -461,6 +451,10 @@
      Derived, so it tracks --card-art-h automatically. */
   --card-h: calc(20px + 38px + var(--card-art-h));   /* 205px at 3:2 */
 }
+/* Board minis hide the whole text well: at zoom 0.5 an 11px chip is 5.5px,
+   which is unreadable and unclickable. A board creature's keywords and rules
+   text are reached through the inspect panel instead — see the main-thread
+   plan, Task 7. Do not un-hide this; make the inspect panel better. */
 .card--board .card__ribbon,
 .card--board .card__body {
   display: none;

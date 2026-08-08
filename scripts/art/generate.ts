@@ -38,9 +38,20 @@ const TARGET_SIZE: Record<string, { width: number; height: number }> = {
 /**
  * Free-tier limit is 20 requests/minute, so requests are spaced at least this
  * far apart. 3.2s leaves headroom against clock skew and request duration.
- * Harmless on the paid variant, which is why it is unconditional.
+ * Paid variants have no such cap, so they are not paced at all — see
+ * requestSpacingMs.
  */
 const MIN_REQUEST_SPACING_MS = 3200;
+
+/**
+ * How long to wait between image requests. Only the free `:free` variants are
+ * rate-capped (20/min); a paid model has no per-minute cap, so pacing a paid
+ * run would stretch a 78-image epic+ batch out for no reason. A 429 on a paid
+ * model still recovers via generateImage's retry-with-backoff.
+ */
+export function requestSpacingMs(model: string): number {
+  return model.endsWith(':free') ? MIN_REQUEST_SPACING_MS : 0;
+}
 
 export interface Args {
   dryRun: boolean;
@@ -172,10 +183,11 @@ async function main(): Promise<void> {
 
   let total = 0;
   let done = 0;
+  const spacingMs = requestSpacingMs(args.model);
   for (const [i, job] of jobs.entries()) {
     // Free tier allows 20 requests/minute. Space them rather than burst and
-    // eat 429s; the first request is not delayed.
-    if (i > 0) await new Promise((r) => setTimeout(r, MIN_REQUEST_SPACING_MS));
+    // eat 429s; the first request is not delayed. Paid models are not paced.
+    if (i > 0 && spacingMs > 0) await new Promise((r) => setTimeout(r, spacingMs));
 
     // Annotated, not `let res;` — the latter is an implicit any that leans on
     // control-flow inference to recover a type, which is fragile under strict.

@@ -1,6 +1,6 @@
 // scripts/tests/generateArgs.test.ts
 import { describe, expect, it } from 'vitest';
-import { parseArgs } from '../art/generate.js';
+import { parseArgs, requestSpacingMs } from '../art/generate.js';
 
 describe('parseArgs', () => {
   it('defaults to the safest possible run', () => {
@@ -75,5 +75,16 @@ describe('parseArgs', () => {
   it('rejects an unknown flag instead of ignoring it', () => {
     // Silently ignoring --limt would generate the whole pool by accident.
     expect(() => parseArgs(['--limt', '3'])).toThrow(/unknown/i);
+  });
+});
+
+describe('requestSpacingMs', () => {
+  it('paces free variants to respect the 20/min cap', () => {
+    expect(requestSpacingMs('black-forest-labs/flux.2-max:free')).toBeGreaterThan(0);
+  });
+
+  it('does not pace paid variants — no per-minute cap to respect', () => {
+    expect(requestSpacingMs('black-forest-labs/flux.2-pro')).toBe(0);
+    expect(requestSpacingMs('black-forest-labs/flux.2-max')).toBe(0);
   });
 });

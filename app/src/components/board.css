@@ -34,7 +34,9 @@
 /* enemy hand silhouettes sit beside the enemy hero */
 .board-enemyhand {
   display: flex;
-  gap: 8px;
+  /* Overlap the backs: this is a "how many cards" indicator, not a set of
+     individually meaningful cards, so density beats separation. */
+  gap: 0;
   min-height: clamp(88px, 12vh, 130px);
   min-width: 0;
   /* Task 41: silhouettes are decorative duplicates — cap + clip so a large
@@ -44,6 +46,10 @@
   align-items: center;
   padding-left: var(--space-2);
   border-left: 1px dashed var(--border);
+}
+
+.board-enemyhand .cardview + .cardview {
+  margin-left: -46px;
 }
 
 /* creature rows */

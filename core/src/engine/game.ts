@@ -561,8 +561,15 @@ export class Game implements Resolver {
       c.exhausted = false;
       c.attacksLeft = c.keywords.includes('windfury') ? 2 : 1;
     }
-    this.emit({ type: 'turnStart', player: me, mana: maxMana });
+    // ORDER IS LOAD-BEARING: manaChanged sets the turn's baseline FIRST, then
+    // turnStart's dispatch fires startOfTurn triggers on top of it. Emitting
+    // turnStart first meant a ramp artifact's gainMana landed during that
+    // dispatch and was then overwritten by this manaChanged, which carries the
+    // value computed BEFORE the trigger ran — so Sylvan Grove and Idol of
+    // Growth granted nothing at all. Any future effect that adjusts mana from
+    // a startOfTurn trigger (overload included) depends on this ordering.
     this.emit({ type: 'manaChanged', player: me, mana: maxMana, maxMana });
+    this.emit({ type: 'turnStart', player: me, mana: maxMana });
     // draw 1 (empty deck: no cardDrawn event, fatigue arrives in a later task)
     if (p.deck.length > 0) {
       const cardId = p.deck[p.deck.length - 1]!;   // pre-view; dispatch pops

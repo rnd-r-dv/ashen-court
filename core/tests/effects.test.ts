@@ -14,7 +14,7 @@ describe('dealDamage', () => {
     game.state.phase = 'main';
     const c = game.state.players[0];
     // put a 3/3 on the board via direct state (test helper pattern)
-    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false });
+    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false, spellPower: 0 });
     applyEffect(game, ctx, { kind: 'dealDamage', value: 2, target: 'anyCreature' });
     expect(c.board[0]!.health).toBe(1);
   });
@@ -59,14 +59,14 @@ describe('heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
   it('heal restores creature health up to max', () => {
     const game = g(); game.state.phase = 'main';
     const c = game.state.players[0];
-    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 1, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false });
+    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 1, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false, spellPower: 0 });
     applyEffect(game, ctx, { kind: 'heal', value: 5, target: 'anyCreature' });
     expect(c.board[0]!.health).toBe(3);
   });
   it('buff adds attack and health, and maxHealth', () => {
     const game = g(); game.state.phase = 'main';
     const c = game.state.players[0];
-    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false });
+    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false, spellPower: 0 });
     applyEffect(game, ctx, { kind: 'buff', value: 2, target: 'allFriendlyCreatures' });
     expect(c.board[0]!.attack).toBe(5); expect(c.board[0]!.health).toBe(5); expect(c.board[0]!.maxHealth).toBe(5);
   });
@@ -121,7 +121,7 @@ describe('heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
   it('freeze sets frozen, destroy removes without damage events', () => {
     const game = g(); game.state.phase = 'main';
     const c = game.state.players[0];
-    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false });
+    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false, spellPower: 0 });
     applyEffect(game, ctx, { kind: 'freeze', target: 'anyCreature' });
     expect(c.board[0]!.frozen).toBe(true);
     applyEffect(game, ctx, { kind: 'destroy', target: 'anyCreature' });
@@ -135,7 +135,7 @@ describe('heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
   it('giveKeyword grants a keyword to target creature', () => {
     const game = g(); game.state.phase = 'main';
     const c = game.state.players[0];
-    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false });
+    c.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: false, spellPower: 0 });
     applyEffect(game, ctx, { kind: 'giveKeyword', keyword: 'taunt', target: 'anyCreature' });
     expect(c.board[0]!.keywords).toContain('taunt');
   });

@@ -126,6 +126,8 @@ export function effectText(effect: EffectSpec): string {
       return `Your most expensive creature costs ${v} less this turn.`;
     case 'discountNextSpell':
       return `Your next spell costs ${v} less this turn.`;
+    case 'spellPower':
+      return `Give ${target(effect.target)} Spell Power +${v}.`;
   }
 }
 

@@ -53,6 +53,7 @@ export function addCreature(game: Game, player: PlayerIndex, partial: AddCreatur
     frozen: false,
     silenced: false,  // fixtures are never silenced at creation
     token: false,  // synthetic fixtures are hand-placed creatures, never tokens
+    spellPower: 0,
   };
   game.state.players[player].board.push(creature);
   const base: Card = {

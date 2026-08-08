@@ -102,7 +102,8 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
   const refs = resolveRefs(game, ctx.player, spec, explicitRef);
   switch (spec.kind) {
     case 'dealDamage': {
-      const amount = spec.value ?? 0;
+      const bonus = ctx.creatureId ? 0 : spellPowerOf(game, ctx.player);
+      const amount = (spec.value ?? 0) + bonus;
       if (amount > 0) {
         let dealt = 0;
         for (const ref of refs) dealt += damageTarget(game, ctx, ref, amount);
@@ -246,9 +247,24 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
     case 'discountNextSpell':
       game.state.players[ctx.player].hero.discountNextSpell += spec.value ?? 0;
       break;
+    case 'spellPower': {
+      for (const ref of refs) {
+        if (ref.type !== 'creature') continue;
+        const c = findCreature(game, ref.id);
+        if (c) c.spellPower += spec.value ?? 0;
+      }
+      break;
+    }
   }
   push(game, { type: 'effectResolved', player: ctx.player, sourceCardId: ctx.cardId, kind: spec.kind });
   runQueue(game);
+}
+
+/** Total spell power on a player's board. Applied only when the damage source
+ *  is a SPELL — an EffectCtx with no creatureId. A creature's own battlecry
+ *  carries creatureId, so a board full of mages never inflates battlecries. */
+function spellPowerOf(game: Resolver, player: PlayerIndex): number {
+  return game.state.players[player].board.reduce((s, c) => s + c.spellPower, 0);
 }
 
 /**
@@ -475,6 +491,7 @@ export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): Cr
     frozen: false,
     silenced: false,
     token: card.archetype === 'token',
+    spellPower: 0,
   };
 }
 

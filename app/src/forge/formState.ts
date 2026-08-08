@@ -146,5 +146,6 @@ export const EFFECT_PRESETS: { label: string; spec: EffectSpec }[] = [
   { label: "Return a creature to its owner's hand", spec: { kind: 'returnToHand', target: 'anyCreature' } },
   { label: 'Freeze a creature', spec: { kind: 'freeze', target: 'anyCreature' } },
   { label: 'Give a friendly creature Shield', spec: { kind: 'giveKeyword', keyword: 'shield', target: 'friendlyCreature' } },
+  { label: 'Give a friendly creature Spell Power +1', spec: { kind: 'spellPower', value: 1, target: 'friendlyCreature' } },
   { label: 'Next spell costs 1 less', spec: { kind: 'discountNextSpell', value: 1 } },
 ];

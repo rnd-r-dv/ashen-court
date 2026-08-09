@@ -456,14 +456,16 @@
 
 /* Board minis still carry stats — the pip labels must survive the zoom,
    so the pips and their type step up in card units (zoom halves them on
-   screen). */
+   screen). The label is 18px so that at zoom 0.5 it lands at ~9px with a
+   ~6.5px cap height — above the 6px noise floor set for board copy. 18px
+   fits the 46px pip (18 label + 2 gap + 21 value = 41px of content). */
 .card--board .card__stat {
   min-width: 62px;
   height: 46px;
   padding: 3px 8px;
 }
 .card--board .card__stat-label {
-  font-size: 13px;
+  font-size: 18px;
 }
 .card--board .card__stat-value {
   font-size: 21px;

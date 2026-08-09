@@ -6,6 +6,8 @@
 // while a tick is pending must not fire its first event immediately (no
 // double tick).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { act, createElement, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
@@ -266,5 +268,31 @@ describe('Task 8 — Armorial motion grammar', () => {
         expect(t.duration, `${name} reduced-motion duration`).toBe(0);
       }
     }
+  });
+
+  it('match-shift CSS animation ends at rest — no hold fill', () => {
+    // Captured in a const: Vite's jsdom transform rewrites the literal
+    // `new URL(rel, import.meta.url)` asset pattern to resolve against the
+    // document base, which fileURLToPath rejects. The const escapes the
+    // rewrite (same idiom as cardTextWell.test.ts).
+    const here = import.meta.url;
+    const css = readFileSync(
+      fileURLToPath(new URL('../src/screens/animations.css', here)),
+      'utf8',
+    );
+    // The register page-shift rule: flat, one long beat, linear — and no
+    // fill mode, so the board returns to rest when the class is toggled off
+    // instead of freezing at the last keyframe.
+    const shiftRule = css.match(/\.match-boardwrap\.match-shift\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(shiftRule, 'match-shift animation rule must exist').not.toBe('');
+    expect(shiftRule).toContain('match-page-shift');
+    expect(shiftRule).toContain('var(--beat-long)');
+    expect(shiftRule).toContain('linear');
+    expect(shiftRule).not.toMatch(/\bboth\b/);
+    expect(shiftRule).not.toMatch(/\bforwards\b/);
+    // The keyframes end where they began: translateY(0) at the 100% pose.
+    const finalPose =
+      css.match(/@keyframes match-page-shift[\s\S]*?100%\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(finalPose).toContain('translateY(0)');
   });
 });

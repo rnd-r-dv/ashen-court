@@ -22,9 +22,11 @@
 /* Turn-start register page shift (Task 8): the board registers shift like a
    page being laid — a short vertical step and back on one long beat, linear.
    Re-triggered per turnStart by Match (remove class → reflow → add class).
-   Reduced motion zeroes --anim-scale (instant, forwards = final state). */
+   No fill mode: the 100% pose is translateY(0), so the board always ends at
+   rest and never freezes mid-step when the class is toggled off. Reduced
+   motion zeroes --anim-scale (instant, still ends at rest). */
 .match-boardwrap.match-shift {
-  animation: match-page-shift calc(var(--beat-long) * var(--anim-scale, 1)) linear both;
+  animation: match-page-shift calc(var(--beat-long) * var(--anim-scale, 1)) linear;
 }
 
 @keyframes match-page-shift {

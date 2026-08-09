@@ -267,6 +267,12 @@ export default function Board({
     // targets a valid target, else selects an attack-ready friendly creature,
     // else inspects; right-click ALWAYS inspects (suppressing the native
     // context menu), including during targeting.
+    //
+    // Fix round 1: the inspect branch is gated on !inTargeting. While aiming,
+    // a left-click on a NON-target creature must not open inspection — it
+    // falls through with no onClick, bubbles to the board root, and cancels
+    // the targeting mode (empty-space cancel). Right-click stays the inspect
+    // path during targeting.
     const inspectable = friendly || enemyRevealed;
     const inspect = () => onInspect(c.id);
     return (
@@ -314,7 +320,7 @@ export default function Board({
                     e.stopPropagation();
                     onSelectAttacker(c.id);
                   }
-                : inspectable
+                : !inTargeting && inspectable
                   ? (e) => {
                       e.stopPropagation();
                       inspect();

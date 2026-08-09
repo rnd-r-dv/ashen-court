@@ -352,6 +352,8 @@ describe('board inspection and hero blazons (Task 7)', () => {
     legal?: Intent[];
     myTurn?: boolean;
     targeting?: BoardTargeting | null;
+    enemyRevealed?: boolean;
+    onCancel?: () => void;
     onInspect?: (id: string) => void;
     onSelectAttacker?: (id: string) => void;
     onTargetClick?: (ref: TargetRef) => void;
@@ -370,11 +372,12 @@ describe('board inspection and hero blazons (Task 7)', () => {
           legal: opts.legal ?? [],
           targeting: opts.targeting ?? null,
           myTurn: opts.myTurn ?? false,
+          enemyRevealed: opts.enemyRevealed,
           onSelectAttacker: opts.onSelectAttacker ?? (() => {}),
           onTargetClick: opts.onTargetClick ?? (() => {}),
           onHeroPower: () => {},
           onEndTurn: () => {},
-          onCancel: () => {},
+          onCancel: opts.onCancel ?? (() => {}),
           onInspect: opts.onInspect ?? (() => {}),
         }),
       );
@@ -437,6 +440,27 @@ describe('board inspection and hero blazons (Task 7)', () => {
     expect(onInspect).not.toHaveBeenCalled();
   });
 
+  it('left-click on a non-target creature while targeting cancels, never inspects', () => {
+    const onCancel = vi.fn();
+    const onInspect = vi.fn();
+    const onTargetClick = vi.fn();
+    renderBoard(boardState([creature('foe-1', false, 1), creature('foe-2', false, 1)], [creature('me-1', false)]), {
+      myTurn: true,
+      legal: [{ kind: 'attack', attackerId: 'me-1', target: { type: 'creature', id: 'foe-1' } }],
+      targeting: { kind: 'attack', attackerId: 'me-1' },
+      onCancel,
+      onInspect,
+      onTargetClick,
+    });
+    click(host!.querySelector('.board-row--top [data-creature-id="foe-2"] .cardview'));
+    // The click must NOT open inspection and must NOT resolve a target: it
+    // bubbles past the non-target creature to the board's empty-space cancel
+    // (right-click remains the inspect path while aiming).
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onInspect).not.toHaveBeenCalled();
+    expect(onTargetClick).not.toHaveBeenCalled();
+  });
+
   it('right-click inspects and prevents the context menu — even while targeting', () => {
     const onInspect = vi.fn();
     renderBoard(boardState([creature('foe-1', false, 1)], [creature('me-1', false)]), {
@@ -475,6 +499,24 @@ describe('board inspection and hero blazons (Task 7)', () => {
     expect(onInspect).toHaveBeenCalledTimes(1);
     expect(onInspect).toHaveBeenCalledWith('me-1');
     expect(onSelectAttacker).not.toHaveBeenCalled();
+  });
+
+  it('right-click on a face-down enemy never inspects and leaves the menu unguarded', () => {
+    const onInspect = vi.fn();
+    renderBoard(boardState([creature('foe-1', false, 1)], []), {
+      enemyRevealed: false,
+      onInspect,
+    });
+    const el = host!.querySelector('.board-row--top .cardview')!;
+    let prevented = false;
+    act(() => {
+      const evt = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      prevented = !el.dispatchEvent(evt);
+    });
+    // Face-down identity stays protected: no creature handler claims the
+    // event (so the native menu survives) and no inspection can leak the card.
+    expect(prevented).toBe(false);
+    expect(onInspect).not.toHaveBeenCalled();
   });
 
   it('renders a permanent hero-power blazon in both house margins', () => {

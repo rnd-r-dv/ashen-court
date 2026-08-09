@@ -1,5 +1,7 @@
-/* JSON import/export toolbar (Task 29). Small button row that drops into
-   either screen header; toast matches the forge/deckbuilder toast language. */
+/* JSON import/export toolbar (Task 29, Armorial since Task 9). Small button
+ * row that drops into either screen header; toast matches the
+ * forge/deckbuilder toast language. Flat fields and hairlines — the old
+ * violet palette and the toast's drop shadow are gone. */
 
 .importexport {
   display: flex;
@@ -13,10 +15,10 @@
 }
 
 .importexport-btn {
-  background: #23203a;
-  border: 1px solid #4a4466;
+  background: var(--ground-rise);
+  border: 1px solid var(--line-dim);
   border-radius: 6px;
-  color: #e8e6f0;
+  color: var(--text);
   font-size: 13px;
   padding: 6px 12px;
   cursor: pointer;
@@ -24,8 +26,7 @@
 }
 
 .importexport-btn:hover {
-  background: #2d2a45;
-  border-color: #7b5cff;
+  border-color: var(--line);
 }
 
 .importexport-toast {
@@ -33,12 +34,11 @@
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #2d2a45;
-  border: 1px solid #7b5cff;
+  background: var(--ground-rise);
+  border: 1px solid var(--line-dim);
   border-radius: 8px;
-  color: #f2f0fa;
+  color: var(--text);
   padding: 10px 18px;
   font-size: 14px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   z-index: 20;
 }

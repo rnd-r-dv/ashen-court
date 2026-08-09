@@ -1,8 +1,15 @@
-/* Projectile (Task 40) — spell FX on the match screen. All motion values are
-   driven by Framer Motion (scaled by --anim-scale via the `scale` prop); this
-   file styles the visual shells: the travelling orb per kind (fireball ember
-   trail, frost ring, shadow tendril, starbeam shaft), the impact burst, and
-   the AoE ring + screen tint flash. Theme tokens only. */
+/* Projectile (Task 40 -> Task 9) — spell FX on the match screen. All motion
+   values are driven by Framer Motion (scaled by --anim-scale via the `scale`
+   prop); this file styles the visual shells: the travelling orb per kind
+   (fireball, frost, shadow, starbeam), the impact burst, and the AoE ring +
+   screen tint flash. Theme tokens only.
+ *
+ * Task 9 flattened the travel recipe: the gradient cores, glow box-shadows,
+ * blurred trails and gradient shafts are gone. Each orb is a flat heraldic
+ * charge in the spell's kind colour — a roundel for the fireball, a ring for
+ * frost, a solid disc for shadow, a flat shaft for starbeam — with flat
+ * trailing marks where flight needs direction. No gradients, no glows, no
+ * shadows anywhere in this file. */
 
 /* Traveller parent: anchors the source point (children are absolutely
    positioned and fly via transform deltas). */
@@ -26,46 +33,45 @@
   pointer-events: none;
 }
 
-/* fireball: molten core with a backward flame tail that shimmers. */
+/* fireball: a gules roundel (damage en route) with a hard-edged house-ember
+   flame wedge trailing back. */
 .projectile-orb--fireball {
-  background: radial-gradient(circle at 38% 35%, #ffe9b0 0%, #ff9a3d 45%, #d8331f 100%);
-  box-shadow: 0 0 16px 6px rgba(255, 140, 50, 0.75), 0 0 34px 12px rgba(216, 51, 31, 0.45);
+  background: var(--gules);
+  border: 1px solid var(--line);
 }
 
 .projectile-orb--fireball::after {
   content: '';
   position: absolute;
-  left: -34px;
+  left: -30px;
   top: 50%;
-  width: 44px;
-  height: 16px;
-  margin-top: -8px;
+  width: 40px;
+  height: 18px;
+  margin-top: -9px;
   transform: rotate(calc(var(--trail-angle, 0deg) + 180deg));
   transform-origin: right center;
-  background: linear-gradient(90deg, rgba(255, 140, 50, 0) 0%, rgba(255, 180, 84, 0.85) 55%, rgba(255, 220, 140, 0.95) 100%);
-  filter: blur(1px);
+  background: var(--house-ember);
+  clip-path: polygon(100% 50%, 0% 0%, 34% 50%, 0% 100%);
   animation: ember-trail-pulse calc(0.35s * var(--anim-scale, 1)) ease-in-out infinite alternate;
 }
 
-/* three drifting embers off the tail */
+/* three drifting embers off the tail — flat ink flecks, no glow */
 .projectile-orb--fireball::before {
   content: '';
   position: absolute;
-  left: -22px;
+  left: -20px;
   top: 6px;
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #ffd27a;
-  box-shadow: -10px -8px 0 -1px rgba(255, 160, 60, 0.9), -16px 6px 0 -2px rgba(255, 120, 40, 0.7);
+  background: var(--line);
   animation: ember-drift calc(0.5s * var(--anim-scale, 1)) ease-out infinite;
 }
 
-/* frost: spinning ice ring with a core shard. */
+/* frost: a spinning ice ring with a flat diamond core. */
 .projectile-orb--frost {
-  border: 4px solid rgba(127, 212, 255, 0.95);
-  background: radial-gradient(circle at 40% 35%, rgba(220, 245, 255, 0.95) 0%, rgba(127, 212, 255, 0.35) 42%, rgba(60, 120, 190, 0.15) 100%);
-  box-shadow: 0 0 14px 4px rgba(127, 212, 255, 0.55), inset 0 0 10px rgba(220, 245, 255, 0.6);
+  border: 4px solid #7fd4ff;
+  background: transparent;
 }
 
 .projectile-orb--frost::after {
@@ -77,14 +83,13 @@
   height: 8px;
   margin: -4px 0 0 -4px;
   background: #eaf8ff;
-  box-shadow: 0 0 8px 2px rgba(200, 235, 255, 0.9);
   clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }
 
-/* shadow: violet-black wisp with a smoky smear. */
+/* shadow: a violet-black disc with a flat smoky smear. */
 .projectile-orb--shadow {
-  background: radial-gradient(circle at 42% 36%, #e5d5ff 0%, #8f5bff 38%, #2a1240 100%);
-  box-shadow: 0 0 18px 7px rgba(140, 90, 255, 0.6), 0 0 40px 14px rgba(42, 18, 64, 0.8);
+  background: #8f5bff;
+  border: 1px solid var(--line-dim);
 }
 
 .projectile-orb--shadow::after {
@@ -97,18 +102,18 @@
   margin-top: -10px;
   transform: rotate(calc(var(--trail-angle, 0deg) + 180deg));
   transform-origin: right center;
-  background: linear-gradient(90deg, rgba(140, 90, 255, 0) 0%, rgba(90, 40, 160, 0.75) 60%, rgba(140, 90, 255, 0.9) 100%);
-  filter: blur(3px);
+  background: rgba(90, 40, 160, 0.6);
+  border-radius: 50%;
 }
 
-/* starbeam: a golden light-shaft (width driven inline by the flight line). */
+/* starbeam: a flat gold light-shaft (width driven inline by the flight line)
+   with a flat round head. */
 .projectile-orb--starbeam {
   width: auto;
   height: 12px;
   margin: 0;
   border-radius: 6px;
-  background: linear-gradient(90deg, rgba(255, 233, 168, 0) 0%, #ffe9a8 55%, #fff7d8 100%);
-  box-shadow: 0 0 12px 3px rgba(255, 233, 168, 0.7), 0 0 30px 8px rgba(217, 164, 65, 0.35);
+  background: #ffe9a8;
 }
 
 .projectile-orb--starbeam::after {
@@ -120,13 +125,14 @@
   height: 14px;
   margin-top: -7px;
   border-radius: 50%;
-  background: radial-gradient(circle, #fffbe8 0%, #ffe9a8 55%, rgba(255, 233, 168, 0) 100%);
-  box-shadow: 0 0 14px 6px rgba(255, 233, 168, 0.85);
+  background: #ffe9a8;
+  border: 1px solid var(--line);
 }
 
 /* ---- impact burst (single-target landing, Task 8): the damage landing is
    GULES — the one reserved damage tincture — with a flat ring, no glow, no
-   gradient halo. The kind variants keep their spell-theme border colors only. */
+   gradient halo. The kind variants keep their spell-theme border colors
+   only (Task 9 flattened the last gradient fills). */
 .projectile-impact {
   position: absolute;
   width: 74px;
@@ -149,7 +155,7 @@
   border-color: #ffe9a8;
 }
 
-/* ---- AoE: expanding ring from the zone center + screen tint ---- */
+/* ---- AoE: expanding ring from the zone center + flat screen tint ---- */
 .projectile-aoe {
   position: absolute;
   inset: 0;
@@ -172,46 +178,43 @@
   height: 260px;
   margin: -130px 0 0 -130px;
   border-radius: 50%;
-  border: 4px solid var(--ember);
-  box-shadow: 0 0 24px 6px rgba(255, 180, 84, 0.45), inset 0 0 24px 6px rgba(255, 180, 84, 0.25);
-  background: radial-gradient(circle, rgba(255, 180, 84, 0.22) 0%, rgba(255, 180, 84, 0) 68%);
+  border: 4px solid var(--line);
+  background: rgba(232, 224, 206, 0.08); /* flat line wash */
 }
 
 .projectile-aoe-ring--frost {
   border-color: #7fd4ff;
-  box-shadow: 0 0 24px 6px rgba(127, 212, 255, 0.5), inset 0 0 24px 6px rgba(127, 212, 255, 0.28);
-  background: radial-gradient(circle, rgba(127, 212, 255, 0.24) 0%, rgba(127, 212, 255, 0) 68%);
+  background: rgba(127, 212, 255, 0.1);
 }
 
 .projectile-aoe-ring--shadow {
   border-color: #a06bff;
-  box-shadow: 0 0 24px 6px rgba(140, 90, 255, 0.5), inset 0 0 24px 6px rgba(140, 90, 255, 0.28);
-  background: radial-gradient(circle, rgba(140, 90, 255, 0.26) 0%, rgba(140, 90, 255, 0) 68%);
+  background: rgba(140, 90, 255, 0.12);
 }
 
 .projectile-aoe-ring--starbeam {
   border-color: #ffe9a8;
-  box-shadow: 0 0 24px 6px rgba(255, 233, 168, 0.55), inset 0 0 24px 6px rgba(255, 233, 168, 0.3);
-  background: radial-gradient(circle, rgba(255, 233, 168, 0.28) 0%, rgba(255, 233, 168, 0) 68%);
+  background: rgba(255, 233, 168, 0.12);
 }
 
+/* Flat translucent veils — same recipe as the turn-dim / discover veils. */
 .projectile-aoe-tint {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, rgba(255, 180, 84, 0.28) 0%, rgba(255, 180, 84, 0.08) 45%, rgba(0, 0, 0, 0) 72%);
+  background: rgba(232, 224, 206, 0.1);
 }
 
 .projectile-aoe-tint--frost {
-  background: radial-gradient(ellipse at center, rgba(127, 212, 255, 0.3) 0%, rgba(127, 212, 255, 0.09) 45%, rgba(0, 0, 0, 0) 72%);
+  background: rgba(127, 212, 255, 0.12);
 }
 
 .projectile-aoe-tint--shadow {
-  background: radial-gradient(ellipse at center, rgba(140, 90, 255, 0.32) 0%, rgba(140, 90, 255, 0.1) 45%, rgba(0, 0, 0, 0) 72%);
+  background: rgba(140, 90, 255, 0.14);
 }
 
 .projectile-aoe-tint--starbeam {
-  background: radial-gradient(ellipse at center, rgba(255, 233, 168, 0.34) 0%, rgba(255, 233, 168, 0.1) 45%, rgba(0, 0, 0, 0) 72%);
+  background: rgba(255, 233, 168, 0.14);
 }
 
 /* ---- fireball trail keyframes ---- */

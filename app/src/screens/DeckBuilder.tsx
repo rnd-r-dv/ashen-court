@@ -5,7 +5,6 @@ import { deckKey, deckSlug, deleteDeck, loadCustomCards, loadDecks, saveDeck } f
 import { addCard, deckStatus, filterPool, removeCard, wouldOverwrite } from '../deckBuild.js';
 import Card from '../components/Card.js';
 import ImportExport from '../components/ImportExport.js';
-import './forge.css';          // .card-preview styling for the Card stub (Task 25)
 import './deckbuilder.css';
 
 /**
@@ -14,17 +13,12 @@ import './deckbuilder.css';
  * click a card to add a copy. Right: the working deck list with per-card
  * copy counts and remove buttons. Status banner shows count/60 plus
  * validation issues; save is gated on exactly 60 cards with zero errors.
+ * Rarity ink for the copy counts lives in deckbuilder.css (Task 9) — the
+ * old inline hex map was the last violet-era color in this file.
  */
 
 const TYPES: (CardType | '')[] = ['', 'creature', 'spell', 'artifact'];
 const ARCHETYPES: string[] = ['', ...Object.keys(DECK_DEFS)];
-
-const RARITY_COLOR: Record<CardSpec['rarity'], string> = {
-  common: '#8f93a5',
-  rare: '#3f8ef7',
-  epic: '#a96ef7',
-  legendary: '#f7b23f',
-};
 
 /** Lowercase; runs of non-alphanumerics → '-'; dashes trimmed at both ends. Empty → ''. */
 function slugify(name: string): string {
@@ -255,8 +249,7 @@ export default function DeckBuilder() {
                   <div className="deckbuilder-row" key={`${id}-${i}`}>
                     <span className="deckbuilder-row-name">{card?.name ?? id}</span>
                     <span
-                      className="deckbuilder-row-count"
-                      style={{ color: card ? RARITY_COLOR[card.rarity] : undefined }}
+                      className={`deckbuilder-row-count deckbuilder-rarity-${card?.rarity ?? 'common'}`}
                     >
                       ×{n}
                     </span>

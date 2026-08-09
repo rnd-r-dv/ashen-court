@@ -1,6 +1,8 @@
-/* Shared shell-screen styles (Task 28): menu, mode select, deck pick, and the
- * router placeholder screens. Deliberately minimal — the design-token theme
- * system (colors, gothic frames, ambient background) lands in Task 36. */
+/* Shared shell-screen styles (Task 28, Armorial since Task 9): menu, mode
+ * select, deck pick, and the router placeholder screens. Canonical
+ * ground/line/text tokens from theme.css, Cardo throughout, ruled groups
+ * (section hairlines) and flat focus states. Buttons compose with the
+ * .shell-btn recipe in index.css (double hairline + corner brackets). */
 
 .shell {
   min-height: 100vh;
@@ -27,18 +29,18 @@
 
 .shell-subtitle {
   margin: 0;
-  color: #b9b3a6;
+  color: var(--text-dim);
   font-size: 1.05rem;
 }
 
 .shell-note {
   margin: 0;
-  color: #8a857a;
+  color: var(--text-dim);
   font-style: italic;
 }
 
 .shell-muted {
-  color: #8a857a;
+  color: var(--text-dim);
   font-size: 0.85rem;
 }
 
@@ -51,31 +53,34 @@
   gap: 0.5rem;
 }
 
-/* ---- buttons ---- */
-
+/* ---- buttons ----
+   The base recipe lives in index.css (.shell-btn: double hairline on a
+   ground-rise field, corner brackets, Cardo). This file only varies the
+   hover/primary treatment for shell surfaces — flat hairline + ink changes,
+   never a glow or gradient. */
 .shell-btn {
-  background: #23212c;
-  color: #e8e4da;
-  border: 1px solid #3a3746;
-  border-radius: 8px;
+  position: relative;
+  border: 2px double var(--line-dim);
+  border-radius: var(--radius-md);
+  background: var(--ground-rise);
+  color: var(--text);
   padding: 0.7rem 1.6rem;
   font-size: 1.05rem;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
 }
 
 .shell-btn:hover {
-  background: #2e2b3a;
-  border-color: #555063;
+  border-color: var(--line);
+  color: var(--line);
 }
 
 .shell-btn-primary {
-  background: #4a2f2f;
-  border-color: #7a4a4a;
+  border-color: var(--line-dim);
 }
 
 .shell-btn-primary:hover {
-  background: #5c3b3b;
+  border-color: var(--line);
 }
 
 .shell-menu-buttons {
@@ -92,7 +97,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #b9b3a6;
+  color: var(--text-dim);
   cursor: pointer;
 }
 
@@ -107,9 +112,9 @@
 }
 
 .shell-card {
-  background: #1d1b26;
-  color: #e8e4da;
-  border: 1px solid #3a3746;
+  background: var(--ground-rise);
+  color: var(--text);
+  border: 1px solid var(--line-dim);
   border-radius: 10px;
   padding: 1rem 1.25rem;
   cursor: pointer;
@@ -121,8 +126,7 @@
 }
 
 .shell-card:hover {
-  background: #262330;
-  border-color: #555063;
+  border-color: var(--line);
 }
 
 .shell-card-title {
@@ -131,7 +135,7 @@
 }
 
 .shell-card-flavor {
-  color: #b9b3a6;
+  color: var(--text-dim);
   font-size: 0.9rem;
   max-width: 260px;
 }
@@ -142,10 +146,11 @@
   width: 100%;
 }
 
+/* Ruled group: the section title sits on its own hairline rule. */
 .shell-section-title {
   font-size: 1.1rem;
-  color: #b9b3a6;
-  border-bottom: 1px solid #3a3746;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--line-dim);
   padding-bottom: 0.4rem;
   margin: 1.5rem 0 0.8rem;
   text-align: left;
@@ -165,9 +170,11 @@
   box-sizing: border-box;
 }
 
+/* Selected deck: full cream hairline on the deepest ink — the ruled
+   register of the pick. */
 .deck-card.selected {
-  border-color: #c9a86a;
-  background: #2a2430;
+  border-color: var(--line);
+  background: var(--ground-deep);
 }
 
 .deck-card-name {
@@ -176,12 +183,12 @@
 }
 
 .deck-card-hero {
-  color: #c9a86a;
+  color: var(--line);
   font-size: 0.9rem;
 }
 
 .deck-card-tag {
-  color: #b9b3a6;
+  color: var(--text-dim);
   font-size: 0.85rem;
   font-style: italic;
 }
@@ -189,14 +196,14 @@
 .deck-card-badge {
   align-self: flex-start;
   font-size: 0.78rem;
-  color: #8a857a;
-  border: 1px solid #3a3746;
+  color: var(--text-dim);
+  border: 1px solid var(--line-dim);
   border-radius: 999px;
   padding: 0.15rem 0.6rem;
 }
 
 .shell-empty {
-  color: #8a857a;
+  color: var(--text-dim);
   font-style: italic;
   text-align: left;
   margin: 0;

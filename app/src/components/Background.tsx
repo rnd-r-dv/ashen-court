@@ -1,9 +1,11 @@
-// Ambient background layer (Task 36). Fixed behind every screen: two drifting
-// fog banks (CSS-animated radial gradients), a canvas of floating embers, and
-// a vignette. Cosmetic only — pointer-events are disabled and the ember
-// animation uses Math.random (ambient FX, not engine simulation, so
-// determinism is not required). The animation is skipped entirely under
-// prefers-reduced-motion, leaving a single quiet frame of static embers.
+// Ambient background layer (Task 36 -> Task 9). Fixed behind every screen:
+// two drifting flat house-field washes (background.css) and a canvas of flat
+// ember flecks — the old fog radial gradients, the ember glow and the
+// vignette are gone (the Armorial world has no gradients or soft glows).
+// Cosmetic only — pointer-events are disabled and the ember animation uses
+// Math.random (ambient FX, not engine simulation, so determinism is not
+// required). The animation is skipped entirely under prefers-reduced-motion,
+// leaving a single quiet frame of static flecks.
 import { useEffect, useRef } from 'react';
 import './background.css';
 
@@ -18,6 +20,22 @@ interface Ember {
   swaySpeed: number; // sway oscillation rate
   phase: number;   // per-ember phase offset
   flicker: number; // alpha flicker rate
+}
+
+/** Flat cream flecks — solid discs, no radial-gradient glow, no additive
+ *  compositing. The colour is the engraved hairline's cream at varying
+ *  alpha, so the flecks read as ink specks on the page, not torch light. */
+function drawEmber(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  alpha: number,
+) {
+  ctx.fillStyle = `rgba(232, 224, 206, ${alpha})`;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 export default function Background() {
@@ -55,25 +73,11 @@ export default function Background() {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.globalCompositeOperation = 'lighter'; // additive glow on overlap
-      // Scatter embers across the visible area on first sizing.
+      // Scatter flecks across the visible area on first sizing.
       for (const e of embers) {
         e.x = Math.random() * width;
         e.y = Math.random() * height;
       }
-    }
-
-    const drawEmber = (x: number, y: number, r: number, alpha: number) => {
-      const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
-      glow.addColorStop(0, `rgba(255, 180, 84, ${alpha})`);
-      glow.addColorStop(0.35, `rgba(255, 140, 60, ${alpha * 0.45})`);
-      glow.addColorStop(1, 'rgba(255, 140, 60, 0)');
-      ctx.fillStyle = glow;
-      ctx.fillRect(x - r * 4, y - r * 4, r * 8, r * 8);
-      ctx.fillStyle = `rgba(255, 224, 170, ${Math.min(1, alpha + 0.15)})`;
-      ctx.beginPath();
-      ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
-      ctx.fill();
     }
 
     const frame = (now: number) => {
@@ -90,7 +94,7 @@ export default function Background() {
         }
         const x = e.x + Math.sin(t * e.swaySpeed + e.phase) * e.sway;
         const flicker = 0.5 + 0.5 * Math.sin(t * e.flicker + e.phase);
-        drawEmber(x, e.y, e.size, 0.15 + 0.55 * flicker);
+        drawEmber(ctx, x, e.y, e.size, 0.1 + 0.35 * flicker);
       }
       rafId = requestAnimationFrame(frame);
     }
@@ -99,9 +103,9 @@ export default function Background() {
     window.addEventListener('resize', resize);
 
     if (reduceMotion) {
-      // Static embers only — no animation loop.
+      // Static flecks only — no animation loop.
       for (const e of embers) {
-        drawEmber(e.x, e.y, e.size, 0.3);
+        drawEmber(ctx, e.x, e.y, e.size, 0.25);
       }
     } else {
       rafId = requestAnimationFrame(frame);
@@ -115,10 +119,9 @@ export default function Background() {
 
   return (
     <div className="bg-layer" aria-hidden="true">
-      <div className="bg-fog bg-fog-a" />
-      <div className="bg-fog bg-fog-b" />
+      <div className="bg-wash bg-wash--coven" />
+      <div className="bg-wash bg-wash--house-ember" />
       <canvas ref={canvasRef} className="bg-embers" />
-      <div className="bg-vignette" />
     </div>
   );
 }

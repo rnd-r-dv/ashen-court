@@ -1,4 +1,6 @@
-/* PassDevice (Task 32) — full-screen pass-and-play overlay. Theme tokens. */
+/* PassDevice (Task 32) — full-screen pass-and-play overlay. Theme tokens.
+ * The veil is a flat translucent ground (no backdrop blur — the Armorial
+ * world has no depth effects). */
 
 .pass-device {
   position: fixed;
@@ -6,8 +8,7 @@
   z-index: 30;
   display: grid;
   place-items: center;
-  background: rgba(7, 5, 12, 0.85);
-  backdrop-filter: blur(3px);
+  background: rgba(12, 11, 9, 0.9);
 }
 
 .pass-device-inner {
@@ -16,9 +17,9 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-5) var(--space-6);
-  border: 2px double var(--gold-dim);
+  border: 2px double var(--line-dim);
   border-radius: var(--radius-lg);
-  background: var(--bg-1);
+  background: var(--ground-rise);
   text-align: center;
 }
 

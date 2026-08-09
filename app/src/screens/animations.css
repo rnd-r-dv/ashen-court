@@ -183,7 +183,11 @@
   z-index: 16;
 }
 
-/* ---- gameOver (Task 40): slow-mo + bloom + ember burst ---- */
+/* ---- gameOver (Task 40 -> Task 9): slow-mo + a FLAT veil + ember flecks ----
+   Slow-mo kept; the bloom gradient and glowing embers are gone. The
+   cinematic is now a flat cream veil that steps in and out over the board
+   while flat ember flecks (house-ember and cream) rise — no gradient, no
+   glow, no shadow. */
 /* Slow-mo: every CSS transition on the board runs ~4x slower while the win
    cinematic plays (framer-driven durations are already scaled separately). */
 .match--gameover .match-boardwrap,
@@ -196,36 +200,36 @@
   transition-delay: 0s !important;
 }
 
-/* Bloom veil: warms up over the board as the embers rise, then fades as the
-   screen hands off to the victory screen (~1.5s total). */
-.gameover-bloom {
+/* Flat veil: a cream parchment flash (line-derived) that steps in over the
+   board as the flecks rise, then steps back out as the screen hands off to
+   the victory screen (~1.5s total). */
+.gameover-veil {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 17;
-  background: radial-gradient(ellipse at 50% 58%, rgba(255, 190, 110, 0.4) 0%, rgba(217, 90, 40, 0.16) 42%, rgba(0, 0, 0, 0) 72%);
-  animation: gameover-bloom calc(1.5s * var(--anim-scale, 1)) ease-out forwards;
+  background: rgba(232, 224, 206, 0.16); /* flat line wash */
+  animation: gameover-veil-fade calc(1.5s * var(--anim-scale, 1)) steps(4, end) forwards;
 }
 
-@keyframes gameover-bloom {
-  0% { opacity: 0; filter: brightness(1); }
-  22% { opacity: 1; filter: brightness(1.18); }
-  70% { opacity: 0.9; filter: brightness(1.12); }
-  100% { opacity: 0; filter: brightness(1.05); }
+@keyframes gameover-veil-fade {
+  0% { opacity: 0; }
+  22% { opacity: 1; }
+  70% { opacity: 0.85; }
+  100% { opacity: 0; }
 }
 
-/* Ember burst: glowing particles drifting up off the board, deterministic
-   per index (no RNG — same positions every replay). */
+/* Ember flecks: flat discs drifting up off the board, deterministic per
+   index (no RNG — same positions every replay). */
 .gameover-ember {
   position: absolute;
   bottom: 12%;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #ffe9b0 0%, #ff9a3d 55%, rgba(216, 51, 31, 0) 100%);
-  box-shadow: 0 0 10px 3px rgba(255, 154, 61, 0.7);
+  background: var(--house-ember);
   pointer-events: none;
-  animation: gameover-ember-rise calc(1.35s * var(--anim-scale, 1)) ease-out forwards;
+  animation: gameover-ember-rise calc(1.35s * var(--anim-scale, 1)) linear forwards;
 }
 
 .gameover-ember:nth-child(odd) {
@@ -234,7 +238,7 @@
 }
 
 .gameover-ember:nth-child(3n) {
-  background: radial-gradient(circle at 40% 35%, #fff2c8 0%, #ffd27a 55%, rgba(255, 154, 61, 0) 100%);
+  background: var(--line);
 }
 
 @keyframes gameover-ember-rise {
@@ -247,7 +251,7 @@
   }
   100% {
     opacity: 0;
-    transform: translate(var(--ember-drift-x, 0px), -38vh) scale(0.35);
+    transform: translate(var(--gameover-drift-x, 0px), -38vh) scale(0.35);
   }
 }
 
@@ -264,9 +268,9 @@
   max-width: min(92vw, 640px);
   padding: 8px 18px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--ember-dim);
-  background: rgba(26, 12, 10, 0.92);
-  color: var(--ember);
+  border: 1px solid var(--line-dim);
+  background: rgba(12, 11, 9, 0.92);
+  color: var(--line);
   font-family: var(--font-body);
   font-size: 13px;
   letter-spacing: 0.4px;
@@ -277,7 +281,7 @@
 }
 
 .match-alert--resync {
-  border-color: var(--gold-dim);
-  color: var(--gold);
-  background: rgba(24, 18, 8, 0.92);
+  border-color: var(--line-dim);
+  color: var(--line);
+  background: rgba(12, 11, 9, 0.92);
 }

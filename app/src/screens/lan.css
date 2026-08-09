@@ -1,5 +1,6 @@
-/* LAN host/join screen styles (Task 34). Composes with shell.css and the
- * Task 36 theme tokens (--bg-*, --gold, --accent, --border, --font-display). */
+/* LAN host/join screen styles (Task 34, Armorial tokens since Task 9).
+ * Composes with shell.css and the canonical ground/line tokens from
+ * theme.css (--line/--line-dim/--ground-*/--text-*); Cardo throughout. */
 
 /* Big shareable room code. Task 46 made it up to 12 characters (room id +
    hyphen + address group), so the size scales with the viewport and the box
@@ -11,8 +12,8 @@
   font-size: clamp(1.5rem, 7vw, 3rem);
   letter-spacing: 0.2em;
   padding: var(--space-3) var(--space-5);
-  color: var(--gold);
-  background: var(--bg-2);
+  color: var(--line);
+  background: var(--ground-deep);
   margin: var(--space-3) 0;
   overflow-wrap: anywhere;
 }
@@ -38,15 +39,15 @@
   max-width: 22rem;
   padding: var(--space-2) var(--space-3);
   color: var(--text);
-  background: var(--bg-2);
-  border: 2px double var(--gold-dim);
+  background: var(--ground-deep);
+  border: 2px double var(--line-dim);
   border-radius: var(--radius-md);
 }
 
 .lan-code-input:focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--line);
   outline-offset: 2px;
-  border-color: var(--gold);
+  border-color: var(--line);
 }
 
 .lan-hint {
@@ -62,7 +63,7 @@
   gap: var(--space-3);
 }
 
-/* Waiting spinner: a spinning gold ring. */
+/* Waiting spinner: a spinning cream ring (flat — no glow). */
 .lan-waiting {
   display: flex;
   align-items: center;
@@ -75,8 +76,8 @@
   height: 1.4rem;
   flex: none;
   border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--gold);
+  border: 2px solid var(--line-dim);
+  border-top-color: var(--line);
   animation: lan-spin 0.9s linear infinite;
 }
 
@@ -91,10 +92,12 @@
   margin: 0;
 }
 
+/* Error note: cream ink on a flat or-tinged wash — the warm tint marks the
+   alert without borrowing the reserved tinctures. */
 .lan-error {
-  color: var(--ember);
-  background: rgba(255, 180, 84, 0.08);
-  border: 1px solid var(--ember-dim);
+  color: var(--line);
+  background: rgba(184, 145, 60, 0.1);
+  border: 1px solid var(--line-dim);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   margin: var(--space-3) 0;

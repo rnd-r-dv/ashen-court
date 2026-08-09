@@ -1,10 +1,16 @@
-/* Forge screen (Task 25). Plain CSS — the theme system arrives in Task 36. */
+/* Forge screen (Task 25, Armorial since Task 9). Canonical ground/line/text
+ * tokens, Cardo throughout, ruled sections (hairline groups) and flat focus
+ * states. Errors use the ember house field (the flat world's red), warnings
+ * the vigil house field (its muted gold) — or itself stays reserved for
+ * legendary and active-turn treatments. The palette picker shows TWO
+ * adjacent flat tincture fields per preset (the old inline gradient is
+ * gone), and the Task-25 card-preview stub was deleted when Task 37 shipped
+ * the real Card component. */
 
 .forge {
 	min-height: 100vh;
-	background: #14131a;
-	color: #e8e6f0;
-	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	background: var(--ground);
+	color: var(--text);
 	padding: 24px;
 	box-sizing: border-box;
 }
@@ -12,12 +18,12 @@
 .forge-header h1 {
 	margin: 0 0 4px;
 	font-size: 28px;
-	color: #f2f0fa;
+	color: var(--text);
 }
 
 .forge-subtitle {
 	margin: 0 0 20px;
-	color: #9a97ab;
+	color: var(--text-dim);
 	font-size: 14px;
 }
 
@@ -34,10 +40,11 @@
 	}
 }
 
+/* Ruled group: hairline field on the raised register. */
 .forge-section {
-	background: #1d1b26;
-	border: 1px solid #2c2938;
-	border-radius: 10px;
+	background: var(--ground-rise);
+	border: 1px solid var(--line-dim);
+	border-radius: var(--radius-md);
 	padding: 14px;
 	margin-bottom: 14px;
 	display: flex;
@@ -48,7 +55,7 @@
 .forge-label {
 	font-size: 13px;
 	font-weight: 600;
-	color: #b9b6c9;
+	color: var(--text-dim);
 	text-transform: capitalize;
 }
 
@@ -59,7 +66,8 @@
 }
 
 /* Picker chip row: children are .kwchip--picker (KeywordChip, keywordchip.css),
-   so only the row layout lives here. */
+   so only the row layout lives here. The picker keeps its two separate
+   controls — the select chip and the describe popover — as separate buttons. */
 .forge-chips {
 	display: flex;
 	flex-wrap: wrap;
@@ -67,10 +75,10 @@
 }
 
 .forge-input {
-	background: #131220;
-	border: 1px solid #322f42;
+	background: var(--ground-deep);
+	border: 1px solid var(--line-dim);
 	border-radius: 6px;
-	color: #e8e6f0;
+	color: var(--text);
 	padding: 8px 10px;
 	font-size: 14px;
 	width: 100%;
@@ -79,7 +87,7 @@
 
 .forge-input:focus {
 	outline: none;
-	border-color: #7b5cff;
+	border-color: var(--line);
 }
 
 select.forge-input {
@@ -88,7 +96,7 @@ select.forge-input {
 
 .forge-slider {
 	width: 100%;
-	accent-color: #7b5cff;
+	accent-color: var(--line);
 }
 
 .forge-segmented {
@@ -98,10 +106,10 @@ select.forge-input {
 
 .forge-seg-btn {
 	flex: 1;
-	background: #131220;
-	border: 1px solid #322f42;
+	background: var(--ground-deep);
+	border: 1px solid var(--line-dim);
 	border-radius: 6px;
-	color: #b9b6c9;
+	color: var(--text-dim);
 	padding: 8px 0;
 	font-size: 14px;
 	text-transform: capitalize;
@@ -109,9 +117,9 @@ select.forge-input {
 }
 
 .forge-seg-btn.active {
-	background: #7b5cff;
-	border-color: #7b5cff;
-	color: #fff;
+	background: var(--line);
+	border-color: var(--line);
+	color: var(--ground-deep);
 }
 
 .forge-stats {
@@ -132,8 +140,8 @@ select.forge-input {
 	gap: 8px;
 	align-items: center;
 	padding: 10px;
-	background: #17151f;
-	border: 1px solid #2c2938;
+	background: var(--ground);
+	border: 1px solid var(--line-dim);
 	border-radius: 8px;
 }
 
@@ -142,7 +150,7 @@ select.forge-input {
 	align-items: center;
 	gap: 8px;
 	font-size: 14px;
-	color: #b9b6c9;
+	color: var(--text-dim);
 	white-space: nowrap;
 }
 
@@ -150,10 +158,10 @@ select.forge-input {
 .forge-file-btn,
 .forge-remove-btn,
 .forge-reset-btn {
-	background: #2a2740;
-	border: 1px solid #3d3a52;
+	background: var(--ground-rise);
+	border: 1px solid var(--line-dim);
 	border-radius: 6px;
-	color: #cfcce0;
+	color: var(--text);
 	padding: 6px 10px;
 	font-size: 13px;
 	cursor: pointer;
@@ -163,29 +171,53 @@ select.forge-input {
 .forge-file-btn:hover,
 .forge-remove-btn:hover,
 .forge-reset-btn:hover {
-	background: #383453;
+	border-color: var(--line);
 }
 
+/* Destructive actions read in the ember house field — the flat world's red
+   (or itself stays reserved for legendary and active-turn treatments). */
 .forge-remove-btn {
-	color: #ff9d9d;
+	color: var(--house-ember);
 }
 
+/* ---- palette picker: TWO adjacent flat tincture fields per preset ----
+   The old inline gradient swatch is gone. Each preset is a pair of flat
+   fields (primary + secondary) with a hairline between them; the pair is
+   selected as one palette and wears a full cream ring when active. */
 .forge-swatches {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 6px;
+	gap: 8px;
+}
+
+.forge-palette {
+	display: inline-flex;
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--ground-deep);
+}
+
+.forge-palette.active {
+	outline: 2px solid var(--line);
+	outline-offset: 2px;
+	border-radius: 4px;
 }
 
 .forge-swatch {
-	width: 34px;
-	height: 34px;
-	border-radius: 8px;
-	border: 2px solid transparent;
+	width: 26px;
+	height: 26px;
+	border: 0;
+	padding: 0;
 	cursor: pointer;
 }
 
-.forge-swatch.active {
-	border-color: #fff;
+.forge-swatch + .forge-swatch {
+	border-left: 1px solid rgba(12, 11, 9, 0.55);
+}
+
+.forge-swatch:focus-visible {
+	outline: 1px solid var(--line);
+	outline-offset: 1px;
 }
 
 .forge-upload-row {
@@ -200,7 +232,7 @@ select.forge-input {
 	height: 56px;
 	object-fit: cover;
 	border-radius: 6px;
-	border: 1px solid #322f42;
+	border: 1px solid var(--line-dim);
 }
 
 .forge-textarea {
@@ -215,10 +247,10 @@ select.forge-input {
 
 .forge-save-btn {
 	flex: 1;
-	background: #7b5cff;
+	background: var(--line);
 	border: none;
 	border-radius: 8px;
-	color: #fff;
+	color: var(--ground-deep);
 	font-size: 15px;
 	font-weight: 600;
 	padding: 12px;
@@ -226,27 +258,27 @@ select.forge-input {
 }
 
 .forge-save-btn:disabled {
-	background: #3a3750;
-	color: #8f8ca6;
+	background: var(--ground-deep);
+	color: var(--text-dim);
 	cursor: not-allowed;
 }
 
 .forge-error {
 	margin: 0;
-	color: #ff8d8d;
+	color: var(--house-ember);
 	font-size: 13px;
 }
 
 .forge-hint {
 	margin: 0;
-	color: #8f8ca6;
+	color: var(--text-dim);
 	font-size: 13px;
 	font-style: italic;
 }
 
 .forge-ok {
 	margin: 0;
-	color: #7ce07c;
+	color: var(--line);
 	font-size: 13px;
 }
 
@@ -256,17 +288,17 @@ select.forge-input {
 }
 
 .forge-issue-error {
-	color: #ff8d8d;
+	color: var(--house-ember);
 }
 
 .forge-issue-warning {
-	color: #f2c14e;
+	color: var(--house-vigil);
 }
 
 .forge-side-title {
 	margin: 0;
 	font-size: 15px;
-	color: #cfcce0;
+	color: var(--text);
 }
 
 .forge-toast {
@@ -274,137 +306,13 @@ select.forge-input {
 	bottom: 24px;
 	left: 50%;
 	transform: translateX(-50%);
-	background: #2d2a45;
-	border: 1px solid #7b5cff;
+	background: var(--ground-rise);
+	border: 1px solid var(--line-dim);
 	border-radius: 8px;
-	color: #f2f0fa;
+	color: var(--text);
 	padding: 12px 20px;
 	font-size: 14px;
-	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
 	z-index: 10;
-}
-
-/* ---- Card preview stub (full styling is Task 37) ---- */
-
-.card-preview {
-	width: 100%;
-	border: 2px solid #8f93a5;
-	border-radius: 10px;
-	background: #1a1824;
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-}
-
-.card-preview-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 8px 10px;
-}
-
-.card-preview-name {
-	font-size: 14px;
-	font-weight: 700;
-	color: #f2f0fa;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.card-preview-cost {
-	background: #7b5cff;
-	color: #fff;
-	border-radius: 50%;
-	width: 26px;
-	height: 26px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 14px;
-	font-weight: 700;
-	flex-shrink: 0;
-}
-
-.card-preview-type {
-	padding: 0 10px 8px;
-	font-size: 11px;
-	color: #9a97ab;
-	text-transform: capitalize;
-}
-
-.card-preview-keywords {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	padding: 0 10px 8px;
-}
-
-.card-preview-keyword {
-	background: #2a2740;
-	border-radius: 999px;
-	padding: 2px 8px;
-	font-size: 11px;
-	color: #cfcce0;
-	text-transform: capitalize;
-}
-
-.card-preview-art {
-	flex: 1;
-	min-height: 160px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	margin: 0 10px;
-	border-radius: 6px;
-	overflow: hidden;
-	background: #131220;
-}
-
-.card-preview-img {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-}
-
-.card-preview-artfallback {
-	width: 100%;
-	height: 100%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-.card-preview-glyph {
-	font-size: 56px;
-	color: rgba(255, 255, 255, 0.85);
-	text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
-}
-
-.card-preview-stats {
-	display: flex;
-	gap: 8px;
-	padding: 8px 10px;
-}
-
-.card-preview-stat {
-	flex: 1;
-	text-align: center;
-	background: #2a2740;
-	border-radius: 6px;
-	padding: 4px 0;
-	font-size: 14px;
-	font-weight: 700;
-	color: #f2f0fa;
-}
-
-.card-preview-flavor {
-	margin: 0;
-	padding: 0 10px 10px;
-	font-size: 12px;
-	font-style: italic;
-	color: #9a97ab;
 }
 
 /* ---- card collection (finding 22) ---- */
@@ -419,7 +327,7 @@ select.forge-input {
 	align-items: center;
 	gap: 8px;
 	padding: 5px 0;
-	border-bottom: 1px solid #2a2833;
+	border-bottom: 1px solid var(--line-dim);
 }
 
 .forge-card-row:last-child {
@@ -433,11 +341,11 @@ select.forge-input {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-size: 13px;
-	color: #cfcce0;
+	color: var(--text);
 }
 
 .forge-card-meta {
 	font-size: 11px;
-	color: #8a869c;
+	color: var(--text-dim);
 	white-space: nowrap;
 }

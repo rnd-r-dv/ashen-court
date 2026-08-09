@@ -18,8 +18,8 @@
   pointer-events: none;
   text-align: center;
   background: rgba(13, 10, 22, 0.85);
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--line-dim);
+  border-bottom: 1px solid var(--line-dim);
 }
 
 .turnbanner-kicker {

@@ -1,8 +1,8 @@
 /* Global styles (Task 28) on the Task 4 Armorial foundation. The canonical
  * tokens in theme.css drive the flat iron-gall ground, cream hairlines, and
- * hairline focus/selection treatment. The old violet palette's glow recipes
- * (--glow-gold / --glow-ember) were deleted with the swap: the Armorial
- * world is flat tincture on ground, and nothing here may box-shadow glow. */
+ * hairline focus/selection treatment. Task 9 removed the last violet-era
+ * aliases and their glow recipes: the Armorial world is flat tincture on
+ * ground, and nothing here may box-shadow glow. */
 @import './theme.css';
 @import './fonts.css';
 
@@ -61,9 +61,9 @@ button {
 
 .shell-btn {
   position: relative;
-  border: 2px double var(--gold-dim);
+  border: 2px double var(--line-dim);
   border-radius: var(--radius-md);
-  background: var(--bg-1);
+  background: var(--ground-rise);
   color: var(--text);
   padding: 0.7rem 1.6rem;
   font-size: 1.05rem;
@@ -83,34 +83,53 @@ button {
 .shell-btn::before {
   top: -2px;
   left: -2px;
-  border-top: 2px solid var(--gold);
-  border-left: 2px solid var(--gold);
+  border-top: 2px solid var(--line);
+  border-left: 2px solid var(--line);
 }
 
 .shell-btn::after {
   bottom: -2px;
   right: -2px;
-  border-bottom: 2px solid var(--gold);
-  border-right: 2px solid var(--gold);
+  border-bottom: 2px solid var(--line);
+  border-right: 2px solid var(--line);
 }
 
 .shell-btn:hover {
-  border-color: var(--gold);
+  border-color: var(--line);
   color: var(--line);
 }
 
-/* Primary actions keep the cream hairline treatment through the temporary
- * aliases until their consumers migrate (Tasks 5-9); the old ember burn no
- * longer exists as a token and no glow returns here. */
+/* Primary actions are distinguished by the cream hairline treatment only —
+ * the old ember burn and its glow never return. */
 .shell-btn-primary {
-  border-color: var(--ember-dim);
+  border-color: var(--line-dim);
 }
 
 .shell-btn-primary::before,
 .shell-btn-primary::after {
-  border-color: var(--ember);
+  border-color: var(--line);
 }
 
 .shell-btn-primary:hover {
-  border-color: var(--ember);
+  border-color: var(--line);
+}
+
+/* ---- session-level LAN notice (App.tsx) ----
+ * Mid-match banner for LAN errors/opponent-leave/reconnect remaps. Flat ink
+ * plate with a house-ember hairline — the alert's warm-red edge, not a glow. */
+.app-notice {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: var(--ground-deep);
+  color: var(--text);
+  border: 1px solid var(--house-ember);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  max-width: min(90vw, 520px);
 }

@@ -1,11 +1,13 @@
-/* Deck builder screen (Task 27). Plain CSS; theme system arrives in Task 36.
-   Card stub visuals (.card-preview) come from forge.css — imported by the screen. */
+/* Deck builder screen (Task 27, Armorial since Task 9). Canonical
+   ground/line/text/house tokens, Cardo throughout, ruled sections and flat
+   focus states. The Task-25 card-preview stub that deckbuilder.css used to
+   size is dead — the grid renders the real Card component (card.css), so
+   the stub block and its forge.css import are gone. */
 
 .deckbuilder {
   min-height: 100vh;
-  background: #14131a;
-  color: #e8e6f0;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--ground);
+  color: var(--text);
   padding: 24px;
   box-sizing: border-box;
 }
@@ -13,12 +15,12 @@
 .deckbuilder-header h1 {
   margin: 0 0 4px;
   font-size: 28px;
-  color: #f2f0fa;
+  color: var(--text);
 }
 
 .deckbuilder-subtitle {
   margin: 0 0 20px;
-  color: #9a97ab;
+  color: var(--text-dim);
   font-size: 14px;
 }
 
@@ -45,10 +47,10 @@
 }
 
 .deckbuilder-input {
-  background: #131220;
-  border: 1px solid #322f42;
+  background: var(--ground-deep);
+  border: 1px solid var(--line-dim);
   border-radius: 6px;
-  color: #e8e6f0;
+  color: var(--text);
   padding: 8px 10px;
   font-size: 14px;
   box-sizing: border-box;
@@ -56,7 +58,7 @@
 
 .deckbuilder-input:focus {
   outline: none;
-  border-color: #7b5cff;
+  border-color: var(--line);
 }
 
 select.deckbuilder-input {
@@ -74,7 +76,7 @@ select.deckbuilder-input {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #b9b6c9;
+  color: var(--text-dim);
 }
 
 .deckbuilder-cost .deckbuilder-input {
@@ -115,51 +117,19 @@ select.deckbuilder-input {
   transform: translateY(0);
 }
 
-/* Compact card stub inside the grid. */
-.deckbuilder-grid .card-preview {
-  border-width: 1px;
-  border-radius: 8px;
-}
-
-.deckbuilder-grid .card-preview-head {
-  padding: 5px 7px;
-}
-
-.deckbuilder-grid .card-preview-name {
-  font-size: 12px;
-}
-
-.deckbuilder-grid .card-preview-cost {
-  width: 20px;
-  height: 20px;
-  font-size: 12px;
-}
-
-.deckbuilder-grid .card-preview-type {
-  padding: 0 7px 5px;
-  font-size: 10px;
-}
-
-.deckbuilder-grid .card-preview-art {
-  min-height: 60px;
-}
-
-.deckbuilder-grid .card-preview-stats {
-  padding: 4px 7px;
-}
-
 .deckbuilder-empty {
-  color: #9a97ab;
+  color: var(--text-dim);
   font-size: 14px;
   margin: 12px 0;
 }
 
 /* ---- right column ---- */
 
+/* Ruled group: hairline field on the raised register. */
 .deckbuilder-section {
-  background: #1d1b26;
-  border: 1px solid #2c2938;
-  border-radius: 10px;
+  background: var(--ground-rise);
+  border: 1px solid var(--line-dim);
+  border-radius: var(--radius-md);
   padding: 14px;
   margin-bottom: 14px;
   display: flex;
@@ -170,13 +140,13 @@ select.deckbuilder-input {
 .deckbuilder-side-title {
   margin: 0;
   font-size: 15px;
-  color: #f2f0fa;
+  color: var(--text);
 }
 
 .deckbuilder-label {
   font-size: 13px;
   font-weight: 600;
-  color: #b9b6c9;
+  color: var(--text-dim);
 }
 
 .deckbuilder-rows {
@@ -192,47 +162,56 @@ select.deckbuilder-input {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  background: #17151f;
-  border: 1px solid #2c2938;
+  background: var(--ground);
+  border: 1px solid var(--line-dim);
   border-radius: 6px;
 }
 
 .deckbuilder-row-name {
   flex: 1;
   font-size: 13px;
-  color: #e8e6f0;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Per-copy count in the rarity's own hairline register — the same
+   vocabulary as the card plate: common dim, rare/epic cream, legendary or
+   (the one reserved gold, allowed only for legendary treatment). */
 .deckbuilder-row-count {
   font-size: 13px;
   font-weight: 700;
   min-width: 28px;
   text-align: right;
+  color: var(--text-dim);
 }
 
+.deckbuilder-rarity-common { color: var(--text-dim); }
+.deckbuilder-rarity-rare { color: var(--line); }
+.deckbuilder-rarity-epic { color: var(--line); }
+.deckbuilder-rarity-legendary { color: var(--or); }
+
 .deckbuilder-row-remove {
-  background: #2a2740;
-  border: 1px solid #3d3a52;
+  background: var(--ground-rise);
+  border: 1px solid var(--line-dim);
   border-radius: 6px;
-  color: #ff9d9d;
+  color: var(--house-ember);
   padding: 4px 8px;
   font-size: 12px;
   cursor: pointer;
 }
 
 .deckbuilder-row-remove:hover {
-  background: #383453;
+  border-color: var(--line);
 }
 
 /* ---- status banner ---- */
 
 .deckbuilder-status {
-  background: #1d1b26;
-  border: 1px solid #2c2938;
-  border-left: 3px solid #f7b23f;
+  background: var(--ground-rise);
+  border: 1px solid var(--line-dim);
+  border-left: 3px solid var(--house-vigil);
   border-radius: 8px;
   padding: 12px 14px;
   margin-bottom: 14px;
@@ -242,13 +221,13 @@ select.deckbuilder-input {
 }
 
 .deckbuilder-status.ok {
-  border-left-color: #4cd97b;
+  border-left-color: var(--line);
 }
 
 .deckbuilder-status-count {
   font-size: 15px;
   font-weight: 700;
-  color: #f2f0fa;
+  color: var(--text);
 }
 
 .deckbuilder-issue {
@@ -258,11 +237,11 @@ select.deckbuilder-input {
 }
 
 .deckbuilder-issue-error {
-  color: #ff9d9d;
+  color: var(--house-ember);
 }
 
 .deckbuilder-issue-warning {
-  color: #f7d17b;
+  color: var(--house-vigil);
 }
 
 /* ---- actions ---- */
@@ -279,26 +258,27 @@ select.deckbuilder-input {
   padding: 10px 12px;
   font-size: 14px;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid var(--line-dim);
 }
 
+/* Save is an inked (cream) field; delete a hairline field with house-ember
+   ink. Both flat — no gradient, no glow. */
 .deckbuilder-save-btn {
-  background: #7b5cff;
-  color: #fff;
+  background: var(--line);
+  color: var(--ground-deep);
 }
 
 .deckbuilder-save-btn:hover:not(:disabled) {
-  background: #8f73ff;
+  border-color: var(--line);
 }
 
 .deckbuilder-delete-btn {
-  background: #2a2740;
-  border-color: #3d3a52;
-  color: #ff9d9d;
+  background: var(--ground-rise);
+  color: var(--house-ember);
 }
 
 .deckbuilder-delete-btn:hover:not(:disabled) {
-  background: #383453;
+  border-color: var(--line);
 }
 
 .deckbuilder-save-btn:disabled,
@@ -314,12 +294,11 @@ select.deckbuilder-input {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #2a2740;
-  border: 1px solid #7b5cff;
+  background: var(--ground-rise);
+  border: 1px solid var(--line-dim);
   border-radius: 8px;
-  color: #f2f0fa;
+  color: var(--text);
   padding: 10px 18px;
   font-size: 14px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   z-index: 10;
 }

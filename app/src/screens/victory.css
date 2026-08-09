@@ -1,7 +1,8 @@
-/* Victory/defeat screen (Task 35). Uses the shared shell layout/buttons from
- * shell.css; this file adds only victory-specific pieces (banner, stats grid,
- * action column). The design-token theme lands in Task 36 — colors here are
- * plain, matching the shell palette. */
+/* Victory/defeat screen (Task 35, Armorial since Task 9). Uses the shared
+ * shell layout/buttons from shell.css; this file adds only victory-specific
+ * pieces (banner, stats grid, action column). Canonical tokens: cream for a
+ * win, the ember house field for a defeat, dim grey for a draw — flat
+ * fields and hairlines, no text-shadow. */
 
 .victory {
   justify-content: center;
@@ -12,19 +13,18 @@
   font-size: 3rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
 
 .victory-banner--win {
-  color: #c9a86a;
+  color: var(--line);
 }
 
 .victory-banner--lose {
-  color: #b0574f;
+  color: var(--house-ember);
 }
 
 .victory-banner--draw {
-  color: #9aa0aa;
+  color: var(--text-dim);
 }
 
 /* ---- stats grid: label column + one column per player ---- */
@@ -33,10 +33,10 @@
   width: 100%;
   max-width: 460px;
   margin: 1.5rem 0;
-  border: 1px solid #3a3746;
+  border: 1px solid var(--line-dim);
   border-radius: 10px;
   overflow: hidden;
-  background: #1d1b26;
+  background: var(--ground-rise);
 }
 
 .victory-stats-row {
@@ -46,11 +46,11 @@
 }
 
 .victory-stats-row + .victory-stats-row {
-  border-top: 1px solid #2c2937;
+  border-top: 1px solid var(--line-dim);
 }
 
 .victory-stats-head {
-  background: #23212c;
+  background: var(--ground-deep);
   font-weight: bold;
 }
 
@@ -65,15 +65,15 @@
 
 .victory-stats-label {
   text-align: left;
-  color: #b9b3a6;
+  color: var(--text-dim);
 }
 
 .victory-stats-player {
-  color: #e8e4da;
+  color: var(--text);
 }
 
 .victory-stats-value {
-  color: #e8e4da;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 

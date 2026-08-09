@@ -605,16 +605,33 @@ export default function Forge() {
 
 						<span className="forge-label">Palette</span>
 						<div className="forge-swatches">
-							{PALETTES.map(([a, b], i) => (
-								<button
-									key={i}
-									type="button"
-									className={`forge-swatch${form.art.palette[0] === a && form.art.palette[1] === b ? " active" : ""}`}
-									style={{ background: `linear-gradient(135deg, ${a}, ${b})` }}
-									title={`${a} → ${b}`}
-									onClick={() => set("art", { ...form.art, palette: [a, b] })}
-								/>
-							))}
+							{PALETTES.map(([a, b], i) => {
+								const active =
+									form.art.palette[0] === a && form.art.palette[1] === b;
+								return (
+									<span key={i} className={`forge-palette${active ? " active" : ""}`}>
+										{/* Two adjacent FLAT tincture fields per preset — the old
+											inline gradient is gone (Task 9); the pair is selected
+											as one palette. */}
+										<button
+											type="button"
+											className="forge-swatch"
+											style={{ background: a }}
+											title={`${a} → ${b}`}
+											aria-label={`Palette primary ${a}`}
+											onClick={() => set("art", { ...form.art, palette: [a, b] })}
+										/>
+										<button
+											type="button"
+											className="forge-swatch"
+											style={{ background: b }}
+											title={`${a} → ${b}`}
+											aria-label={`Palette secondary ${b}`}
+											onClick={() => set("art", { ...form.art, palette: [a, b] })}
+										/>
+									</span>
+								);
+							})}
 						</div>
 
 						<label className="forge-label" htmlFor="forge-glyph">

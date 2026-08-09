@@ -23,9 +23,9 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-6);
-  border: 2px double var(--gold-dim);
+  border: 2px double var(--line-dim);
   border-radius: var(--radius-lg);
-  background: var(--bg-1);
+  background: var(--ground-rise);
   text-align: center;
   outline: none;
 }
@@ -75,7 +75,7 @@
 }
 
 .discover-choice:focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--line);
   outline-offset: 4px;
   border-radius: var(--radius-md);
 }

@@ -234,15 +234,7 @@ export default function App() {
           leaves (with a return-to-menu exit) and reconnect seat remaps. Alive
           across match + victory because the LAN screens unmount at entry. */}
       {lanNotice ? (
-        <div
-          role="alert"
-          style={{
-            position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 1000,
-            background: '#1a1016', color: '#f0e6d2', border: '1px solid #8b2f2f',
-            padding: '10px 16px', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-            display: 'flex', gap: 12, alignItems: 'center', maxWidth: 'min(90vw, 520px)',
-          }}
-        >
+        <div role="alert" className="app-notice">
           <span>{lanNotice.text}</span>
           {lanNotice.kind === 'left' ? (
             <button

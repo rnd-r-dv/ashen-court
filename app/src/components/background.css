@@ -1,6 +1,9 @@
-/* Ambient background layer (Task 36). The Background component stacks three
- * layers behind all screen content (z-index: -1, pointer-events: none):
- * fog banks (CSS-animated radial gradients), the ember canvas, vignette. */
+/* Ambient background layer (Task 36 -> Task 9). The Background component
+ * stacks flat layers behind all screen content (z-index: -1, pointer-events:
+ * none): two enormous house-field washes drifting slowly (flat tincture
+ * discs — the fog radial gradients and the vignette are gone, because the
+ * Armorial world has no gradients and no soft glows), and a canvas of flat
+ * ember flecks. */
 
 .bg-layer {
   position: fixed;
@@ -8,32 +11,35 @@
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
-  background: linear-gradient(180deg, var(--bg-0) 0%, var(--bg-2) 100%);
+  background: var(--ground);
 }
 
-.bg-fog {
+/* Flat tincture washes: hard-edged, low-opacity house fields that read like
+   uneven ink on the page — charges, not glows. */
+.bg-wash {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
   will-change: transform;
 }
 
-.bg-fog-a {
-  width: 80vmax;
-  height: 80vmax;
-  left: -25vmax;
-  top: -30vmax;
-  background: radial-gradient(circle, rgba(96, 70, 170, 0.32) 0%, transparent 65%);
-  animation: fog-drift-a 28s ease-in-out infinite alternate;
+.bg-wash--coven {
+  width: 88vmax;
+  height: 88vmax;
+  left: -30vmax;
+  top: -32vmax;
+  background: var(--house-coven);
+  opacity: 0.16;
+  animation: wash-drift-a 28s ease-in-out infinite alternate;
 }
 
-.bg-fog-b {
-  width: 70vmax;
-  height: 70vmax;
-  right: -22vmax;
-  bottom: -28vmax;
-  background: radial-gradient(circle, rgba(46, 34, 96, 0.4) 0%, transparent 65%);
-  animation: fog-drift-b 34s ease-in-out infinite alternate;
+.bg-wash--house-ember {
+  width: 76vmax;
+  height: 76vmax;
+  right: -26vmax;
+  bottom: -30vmax;
+  background: var(--house-ember);
+  opacity: 0.12;
+  animation: wash-drift-b 34s ease-in-out infinite alternate;
 }
 
 .bg-embers {
@@ -43,25 +49,19 @@
   height: 100%;
 }
 
-.bg-vignette {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 40%, transparent 50%, rgba(4, 2, 8, 0.55) 100%);
-}
-
-@keyframes fog-drift-a {
+@keyframes wash-drift-a {
   from { transform: translate3d(0, 0, 0) scale(1); }
-  to { transform: translate3d(6vw, 5vh, 0) scale(1.12); }
+  to { transform: translate3d(5vw, 4vh, 0) scale(1.08); }
 }
 
-@keyframes fog-drift-b {
+@keyframes wash-drift-b {
   from { transform: translate3d(0, 0, 0) scale(1.05); }
-  to { transform: translate3d(-7vw, -6vh, 0) scale(0.92); }
+  to { transform: translate3d(-6vw, -5vh, 0) scale(0.95); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bg-fog-a,
-  .bg-fog-b {
+  .bg-wash--coven,
+  .bg-wash--house-ember {
     animation: none;
   }
 }

@@ -662,9 +662,11 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         setDims((prev) => [...prev, { id: ++fxIdRef.current }]);
         break;
       case 'gameOver':
-        // Win cinematic (Task 40): slow-mo class + bloom + ember burst + a
-        // title banner; the navigation timer (onGameOver) already runs and
-        // hands off to the victory screen. Fast mode skips all of it.
+        // Win cinematic (Task 40 -> Task 9): slow-mo class + flat veil +
+        // flat ember flecks + a title banner; the navigation timer
+        // (onGameOver) already runs and hands off to the victory screen.
+        // Fast mode skips all of it. The veil and flecks are flat — no
+        // gradient, no glow (see animations.css).
         if (!fastMode) {
           setGameOverFx((n) => n + 1);
           setBanners((prev) => [
@@ -1121,7 +1123,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         ))}
         {showWinFx && (
           <>
-            <div className="gameover-bloom" />
+            <div className="gameover-veil" />
             {EMBER_SEEDS.map((e, i) => (
               <div
                 key={i}
@@ -1129,7 +1131,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
                 style={
                   {
                     left: `${e.left}%`,
-                    '--ember-drift-x': `${e.drift}px`,
+                    '--gameover-drift-x': `${e.drift}px`,
                     animationDelay: `${e.delay}s`,
                   } as CSSProperties
                 }

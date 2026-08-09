@@ -1,6 +1,7 @@
 /* CardView (Task 31) — interaction wrapper around Card.tsx (Task 37).
- * Scoped to `.cardview*`; consumes the theme tokens (Task 36). The wrapper
- * is purely visual (pointer events reach the Card inside). */
+ * Scoped to `.cardview*`; consumes the theme tokens. The wrapper is purely
+ * visual (pointer events reach the Card inside). Task 9: the targeting
+ * pulse is a flat cream ring — the old drop-shadow glow is gone. */
 
 .cardview {
   position: relative;
@@ -26,19 +27,22 @@
   filter: hue-rotate(170deg) saturate(0.75) brightness(1.05);
 }
 
-/* ---- targeting highlight: ember ring + pulse glow ---- */
+/* ---- targeting highlight: flat cream ring, stepped flash ----
+   A valid target wears a 3px cream ring that flashes between the dim and
+   full hairline in hard steps — line, not light (Task 9 flattened the old
+   drop-shadow pulse). */
 .cardview--target {
   cursor: crosshair;
-  animation: cardview-target-glow 1.3s ease-in-out infinite;
 }
 .cardview--target .card {
-  outline: 3px solid var(--ember);
+  outline: 3px solid var(--line);
   outline-offset: 2px;
   border-radius: 14px;
+  animation: cardview-target-pulse 1.3s steps(2, end) infinite;
 }
-@keyframes cardview-target-glow {
-  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 180, 84, 0.55)); }
-  50% { filter: drop-shadow(0 0 12px rgba(255, 180, 84, 0.95)); }
+@keyframes cardview-target-pulse {
+  0%, 100% { outline-color: var(--line-dim); }
+  50% { outline-color: var(--line); }
 }
 
 /* ---- status badges (shields / frozen chips, top-right corner) ---- */
@@ -55,9 +59,8 @@
   letter-spacing: 0.5px;
   text-transform: uppercase;
   white-space: nowrap;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
+  background: var(--ground-deep);
+  border: 1px solid var(--line-dim);
   color: var(--text-dim);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   pointer-events: none;
 }

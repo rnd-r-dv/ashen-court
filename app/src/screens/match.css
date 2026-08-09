@@ -28,13 +28,13 @@
 }
 
 .match-banner--mine {
-  color: var(--gold);
+  color: var(--line);
 }
 
 .match-hint {
   font-family: var(--font-body);
   font-size: 13px;
-  color: var(--ember);
+  color: var(--line);
 }
 
 /* Skip (Task 39): drains the remaining animation queue on click. */
@@ -54,10 +54,10 @@
   min-height: clamp(190px, 27vh, 300px);
   margin: 0 calc(var(--space-5) * -1);
   padding-top: var(--space-2);
-  /* UI pass 2026-08-07: near-opaque backdrop. The old mostly-transparent
-     gradient let the battlefield show through the hand, which is the same
-     washed-out effect the muted-card opacity had. */
-  background: linear-gradient(180deg, transparent 0%, rgba(13, 10, 22, 0.92) 32%, var(--bg-1) 62%);
+  /* Task 9: the old mostly-transparent gradient backdrop is gone — the hand
+     row now sits on a flat ground-rise field, so the battlefield never
+     bleeds through the hand and the washed-out look is impossible. */
+  background: var(--ground-rise);
   /* Task 41: the container never eats clicks — only the hand cards
      themselves are interactive (.hand-slot re-enables pointer events), so
      board controls (End Turn, mana tray) stay clickable even when the board
@@ -129,8 +129,8 @@
   text-transform: uppercase;
   padding: 3px 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-2);
+  border: 1px solid var(--line-dim);
+  background: var(--ground-deep);
   color: var(--text-dim);
   cursor: pointer;
 }
@@ -140,13 +140,13 @@
 }
 
 .mulligan-toggle--keep {
-  border-color: var(--gold-dim);
-  color: var(--gold);
+  border-color: var(--line-dim);
+  color: var(--line);
 }
 
 .mulligan-toggle--redraw {
-  border-color: var(--ember-dim);
-  color: var(--ember);
+  border-color: var(--line-dim);
+  color: var(--line);
 }
 
 .match-waiting {

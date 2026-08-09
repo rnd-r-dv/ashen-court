@@ -38,7 +38,7 @@
 }
 
 .hand-empty {
-  color: var(--text-faint);
+  color: var(--text-dim);
   font-family: var(--font-body);
   font-size: 13px;
 }

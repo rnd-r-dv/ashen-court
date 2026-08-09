@@ -156,7 +156,7 @@ export default function HeroPortrait({
         )}
       </div>
       <div className={`heroportrait-hpbar heroportrait-hpbar--${hpTone}`}>
-        <div className="heroportrait-hpfill" style={{ width: `${pct}%` }} />
+        <div className="heroportrait-hpfill" style={{ transform: `scaleX(${pct / 100})` }} />
         <span className="heroportrait-hpnum">
           {hpDisplay}/{hero.maxHp}
         </span>

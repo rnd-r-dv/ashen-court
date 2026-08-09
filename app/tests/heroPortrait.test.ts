@@ -19,10 +19,10 @@ vi.mock('../src/art/resolveArt.js', () => ({
  * counters are required. Typed rather than cast so a future rename of any of
  * them fails this fixture loudly instead of silently.
  */
-function heroState(name: string): HeroState {
+function heroState(name: string, hp = 30): HeroState {
   return {
     name,
-    hp: 30,
+    hp,
     maxHp: 30,
     shields: 0,
     power: { name: 'Lullaby', cost: 2, effects: [] },
@@ -32,13 +32,13 @@ function heroState(name: string): HeroState {
   };
 }
 
-function render(heroName: string) {
+function render(heroName: string, hp = 30) {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   act(() => {
     root.render(createElement(HeroPortrait, {
-      hero: heroState(heroName),
+      hero: heroState(heroName, hp),
       player: 0,
       isViewer: true,
       active: true,
@@ -63,6 +63,15 @@ describe('HeroPortrait art', () => {
     const { host, cleanup } = render('Rat King Moulder');
     expect(host.querySelector('.heroportrait-portrait')).toBeNull();
     expect(host.querySelector('.heroportrait-sigil')).not.toBeNull();
+    cleanup();
+  });
+
+
+  it('expresses health as a transform instead of a layout width', () => {
+    const { host, cleanup } = render('Rat King Moulder', 15);
+    const fill = host.querySelector<HTMLElement>('.heroportrait-hpfill');
+    expect(fill?.style.width).toBe('');
+    expect(fill?.style.transform).toBe('scaleX(0.5)');
     cleanup();
   });
 });

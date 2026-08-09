@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-09T10:11:33.000Z",
+  "title": "Design System: Ashen Court — Armorial",
+  "extensions": {
+    "colorMeta": {
+      "ground": { "role": "neutral", "displayName": "Iron-Gall Ground", "canonical": "#14120F", "tonalRamp": ["#130807", "#2d211f", "#4b3f3e", "#6b605f", "#8d8482", "#b0a9a8", "#d2cccb", "#f1eded"] },
+      "ground-deep": { "role": "neutral", "displayName": "Deepest Ink", "canonical": "#0C0B09", "tonalRamp": ["#100908", "#2a2220", "#48403f", "#686160", "#8a8583", "#aeaaa9", "#d0cdcc", "#f0eeed"] },
+      "ground-rise": { "role": "neutral", "displayName": "Raised Register", "canonical": "#1D1A15", "tonalRamp": ["#160605", "#301f1c", "#4f3e3b", "#6e5f5d", "#908381", "#b3a8a6", "#d4ccca", "#f2edec"] },
+      "line": { "role": "neutral", "displayName": "Cream Hairline", "canonical": "#E8E0CE", "tonalRamp": ["#220000", "#411309", "#643227", "#885347", "#ae7669", "#d59a8d", "#fabdaf", "#ffe4da"] },
+      "line-dim": { "role": "neutral", "displayName": "Dim Hairline", "canonical": "rgba(232, 224, 206, 0.38)", "tonalRamp": ["#220000", "#411309", "#643227", "#885347", "#ae7669", "#d59a8d", "#fabdaf", "#ffe4da"] },
+      "text": { "role": "neutral", "displayName": "Cream Ink", "canonical": "#E8E0CE", "tonalRamp": ["#220000", "#411309", "#643227", "#885347", "#ae7669", "#d59a8d", "#fabdaf", "#ffe4da"] },
+      "text-dim": { "role": "neutral", "displayName": "Blazon Grey", "canonical": "#A79E8A", "tonalRamp": ["#230000", "#411208", "#653226", "#895346", "#af7568", "#d29c8e", "#e9c4bb", "#fdeae5"] },
+      "gules": { "role": "primary", "displayName": "Gules (Damage)", "canonical": "#A81E22", "tonalRamp": ["#a90002", "#df0018", "#ff0036", "#ff0059", "#ff007d", "#ff00a4", "#ff64c9", "#ffbbeb"] },
+      "or": { "role": "primary", "displayName": "Or (Honor)", "canonical": "#B8913C", "tonalRamp": ["#460000", "#6e0000", "#9a0000", "#c60000", "#f22f00", "#ff7152", "#ffae97", "#ffdfd2"] },
+      "house-ember": { "role": "secondary", "displayName": "House Ember", "canonical": "#B4341C", "tonalRamp": ["#9e0000", "#d30006", "#ff0022", "#ff0044", "#ff006c", "#ff0096", "#ff6abf", "#ffbfe5"] },
+      "house-choir": { "role": "secondary", "displayName": "House Choir", "canonical": "#C9BFA4", "tonalRamp": ["#250000", "#450e00", "#682f1d", "#8e503d", "#b4735f", "#db9883", "#f9beac", "#ffe8df"] },
+      "house-vermin": { "role": "secondary", "displayName": "House Vermin", "canonical": "#6B7A3A", "tonalRamp": ["#070f00", "#1d2a00", "#3a4a00", "#5a6d00", "#7d903c", "#a3b378", "#c8d4ac", "#ebf2db"] },
+      "house-dragon": { "role": "secondary", "displayName": "House Dragon", "canonical": "#8C5A1E", "tonalRamp": ["#500000", "#7a0000", "#a80000", "#d60013", "#ef2b4d", "#ff7980", "#ffafb0", "#ffdddd"] },
+      "house-roots": { "role": "secondary", "displayName": "House Roots", "canonical": "#3C6B44", "tonalRamp": ["#001c00", "#003b00", "#005f0d", "#008433", "#00a461", "#51c48f", "#99e0bb", "#d1fae3"] },
+      "house-dance": { "role": "secondary", "displayName": "House Dance", "canonical": "#4A2F63", "tonalRamp": ["#290031", "#4a0050", "#6c0771", "#8b418e", "#aa6cab", "#c898c8", "#e4c0e4", "#fde6fd"] },
+      "house-bone": { "role": "secondary", "displayName": "House Bone", "canonical": "#8A8578", "tonalRamp": ["#1c0200", "#391a11", "#5b382f", "#7e594e", "#a37b70", "#c2a39a", "#dec8c2", "#f7ebe8"] },
+      "house-pact": { "role": "secondary", "displayName": "House Pact", "canonical": "#6B1F2E", "tonalRamp": ["#6b000c", "#9b0026", "#c50045", "#e30066", "#fd0089", "#ff5ead", "#ff9fcf", "#ffd3ef"] },
+      "house-coven": { "role": "secondary", "displayName": "House Coven", "canonical": "#2F3E6B", "tonalRamp": ["#001032", "#003051", "#005272", "#00748e", "#1996ab", "#6db8c8", "#a4d8e3", "#d5f5fc"] },
+      "house-star": { "role": "secondary", "displayName": "House Star", "canonical": "#3E5C7A", "tonalRamp": ["#001724", "#003640", "#005962", "#007d83", "#009da1", "#50bec0", "#98dcdd", "#d0f8f8"] },
+      "house-vigil": { "role": "secondary", "displayName": "House Vigil", "canonical": "#A88C3E", "tonalRamp": ["#3c0000", "#610000", "#8a0000", "#b42700", "#de5212", "#f9875e", "#ffb89d", "#ffe4d5"] },
+      "house-storm": { "role": "secondary", "displayName": "House Storm", "canonical": "#4A6B75", "tonalRamp": ["#001913", "#00372d", "#005a4c", "#007e6e", "#009e8f", "#5abfb2", "#9ddcd2", "#d3f7f1"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero and screen titles, the turn banner text, hero names — the largest Cardo, tracked widest." },
+      "title": { "displayName": "Title", "purpose": "Card nameplates, inspect titles, mana readouts — 700 weight; numerals tabular where they are readouts." },
+      "body": { "displayName": "Body", "purpose": "Rules text (never clamped), controls, and panel copy at 12–14px, ~1.3 line-height." },
+      "label": { "displayName": "Label", "purpose": "Ribbons, chips, and margin banners — Cardo small caps with wide tracking, inscription-like." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "beat", "value": "140ms", "purpose": "The short beat: one standard step (e.g. each discover candidate dealing one beat apart)." },
+      { "name": "beat-long", "value": "320ms", "purpose": "The long beat: page shifts, slam ripples, combat strikes, token pops." },
+      { "name": "ease-linear", "value": "linear", "purpose": "All structural motion is linear; the system has no easing curves." },
+      { "name": "ease-steps", "value": "steps(4, end)", "purpose": "Hard-stepped rings and veils land in four flat frames — never smooth fades." },
+      { "name": "anim-scale", "value": "1 / 0.5 / 0", "purpose": "One multiplier on the .match root scales every CSS animation and framer duration: 1 normal, 0.5 fast mode (F hotkey), 0 under prefers-reduced-motion (all effects land at their final pose instantly)." }
+    ],
+    "breakpoints": [
+      { "name": "hand-zoom-1", "value": "1200px", "purpose": "Hand cards step from full size to zoom 0.88 when the viewport cannot seat them." },
+      { "name": "hand-zoom-2", "value": "900px", "purpose": "Second viewport step: hand 0.76, board 0.44." },
+      { "name": "hand-zoom-3", "value": "700px", "purpose": "Floor of the desktop-only layout: hand 0.66, board 0.4. No mobile system exists below this." },
+      { "name": "short-window", "value": "max-height 760–850px", "purpose": "Height compressors: portraits, board rows, the token band, and the hand area shrink so the board stays above the hand." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Gothic Button",
+      "kind": "button",
+      "refersTo": "button-gothic-primary",
+      "description": "The primary shell action: double hairline plus corner brackets on a raised field; primary is distinguished by the cream hairline, never by color fill.",
+      "html": "<button class=\"ds-btn-gothic ds-btn-gothic-primary\" type=\"button\">Declare Vengeance</button>",
+      "css": ".ds-btn-gothic { position: relative; border: 2px double var(--line-dim, rgba(232, 224, 206, 0.38)); border-radius: var(--radius-md, 8px); background: var(--ground-rise, #1D1A15); color: var(--line, #E8E0CE); padding: 0.7rem 1.6rem; font-family: var(--font-body, 'Cardo', Georgia, serif); font-size: 1.05rem; cursor: pointer; transition: border-color 140ms linear, color 140ms linear; } .ds-btn-gothic::before, .ds-btn-gothic::after { content: ''; position: absolute; width: 10px; height: 10px; pointer-events: none; } .ds-btn-gothic::before { top: -2px; left: -2px; border-top: 2px solid var(--line, #E8E0CE); border-left: 2px solid var(--line, #E8E0CE); } .ds-btn-gothic::after { bottom: -2px; right: -2px; border-bottom: 2px solid var(--line, #E8E0CE); border-right: 2px solid var(--line, #E8E0CE); } .ds-btn-gothic:hover { border-color: var(--line, #E8E0CE); color: var(--line, #E8E0CE); } .ds-btn-gothic:focus-visible { outline: 1px solid var(--line, #E8E0CE); outline-offset: 2px; }"
+    },
+    {
+      "name": "Gothic Button (Base)",
+      "kind": "button",
+      "refersTo": "button-gothic",
+      "description": "The base shell button — same frame as the primary, cream ink at rest stepping to full cream on hover.",
+      "html": "<button class=\"ds-btn-gothic\" type=\"button\">Back to Court</button>",
+      "css": ".ds-btn-gothic { position: relative; border: 2px double var(--line-dim, rgba(232, 224, 206, 0.38)); border-radius: var(--radius-md, 8px); background: var(--ground-rise, #1D1A15); color: var(--text, #E8E0CE); padding: 0.7rem 1.6rem; font-family: var(--font-body, 'Cardo', Georgia, serif); font-size: 1.05rem; cursor: pointer; transition: border-color 140ms linear, color 140ms linear; } .ds-btn-gothic::before, .ds-btn-gothic::after { content: ''; position: absolute; width: 10px; height: 10px; pointer-events: none; } .ds-btn-gothic::before { top: -2px; left: -2px; border-top: 2px solid var(--line, #E8E0CE); border-left: 2px solid var(--line, #E8E0CE); } .ds-btn-gothic::after { bottom: -2px; right: -2px; border-bottom: 2px solid var(--line, #E8E0CE); border-right: 2px solid var(--line, #E8E0CE); } .ds-btn-gothic:hover { border-color: var(--line, #E8E0CE); color: var(--line, #E8E0CE); } .ds-btn-gothic:disabled { opacity: 0.45; cursor: default; } .ds-btn-gothic:focus-visible { outline: 1px solid var(--line, #E8E0CE); outline-offset: 2px; }"
+    },
+    {
+      "name": "Field / Input",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Text field on the deepest ink; the dim hairline steps to full cream on focus — no outline, no glow.",
+      "html": "<label class=\"ds-field-label\">Search the arms<input class=\"ds-field\" type=\"text\" placeholder=\"Search the arms\" /></label>",
+      "css": ".ds-field { background: var(--ground-deep, #0C0B09); border: 1px solid var(--line-dim, rgba(232, 224, 206, 0.38)); border-radius: 6px; color: var(--text, #E8E0CE); padding: 8px 10px; font-family: var(--font-body, 'Cardo', Georgia, serif); font-size: 14px; box-sizing: border-box; width: 100%; } .ds-field::placeholder { color: var(--text-dim, #A79E8A); } .ds-field:focus { outline: none; border-color: var(--line, #E8E0CE); } .ds-field:focus-visible { outline: 1px solid var(--line, #E8E0CE); outline-offset: 1px; } .ds-field:disabled { opacity: 0.45; cursor: not-allowed; } .ds-field-label { font-family: var(--font-body, 'Cardo', Georgia, serif); font-size: 12px; font-variant-caps: small-caps; letter-spacing: 0.5px; color: var(--text-dim, #A79E8A); display: flex; flex-direction: column; gap: 6px; }"
+    },
+    {
+      "name": "Keyword Chip",
+      "kind": "chip",
+      "refersTo": "keyword-chip",
+      "description": "Flat ink plate in Cardo small caps; hover or open steps border and ink to full cream. Plain variant holds its dim state.",
+      "html": "<button class=\"ds-kwchip\" type=\"button\">Stealth</button>",
+      "css": ".ds-kwchip { padding: 1px 6px; border-radius: 2px; background: var(--ground, #14120F); border: 1px solid var(--line-dim, rgba(232, 224, 206, 0.38)); color: var(--text-dim, #A79E8A); font-family: var(--font-body, 'Cardo', Georgia, serif); font-size: 11px; font-variant-caps: small-caps; letter-spacing: 0.5px; white-space: nowrap; cursor: help; transition: border-color 140ms linear, color 140ms linear; } .ds-kwchip:hover, .ds-kwchip[aria-expanded='true'] { border-color: var(--line, #E8E0CE); color: var(--text, #E8E0CE); } .ds-kwchip:focus-visible { outline: 1px solid var(--line, #E8E0CE); outline-offset: 1px; } .ds-kwchip--plain { cursor: default; } .ds-kwchip--plain:hover { border-color: var(--line-dim, rgba(232, 224, 206, 0.38)); color: var(--text-dim, #A79E8A); }"
+    },
+    {
+      "name": "Card Plate",
+      "kind": "card",
+      "refersTo": "card-plate",
+      "description": "The banded creature card: fixed 240×336 (5:7), 10px corner, 2px house band, nameplate and cost gem on deep ink, flat art slot, small-caps ribbon, stat pips reading WORD over NUMERAL. Rarity is the frame hairline.",
+      "html": "<div class=\"ds-card\" data-house=\"ember\" data-rarity=\"common\"><span class=\"ds-card__band\"></span><div class=\"ds-card__top\"><span class=\"ds-card__cost\">4</span><span class=\"ds-card__nameplate\">Warden of the Court</span></div><div class=\"ds-card__art\"><svg viewBox=\"0 0 220 147\" aria-hidden=\"true\"><path d=\"M110 30 L175 75 L110 120 L45 75 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><line x1=\"45\" y1=\"75\" x2=\"175\" y2=\"75\" stroke=\"currentColor\" stroke-width=\"2\"/></svg></div><div class=\"ds-card__ribbon\"><span class=\"ds-card__lozenge\"></span><span>Creature</span><span class=\"ds-card__rarity\">Common</span></div><div class=\"ds-card__body\"><p class=\"ds-card__text\">Deal 1 damage to a creature.</p><p class=\"ds-card__flavor\">\u201cThe court keeps its ledger in blood.\u201d</p></div><div class=\"ds-card__stats\"><span class=\"ds-card__stat\"><span class=\"ds-card__stat-label\">Attack</span><span class=\"ds-card__stat-value\">5</span></span><span class=\"ds-card__stat\"><span class=\"ds-card__stat-label\">Health</span><span class=\"ds-card__stat-value\">4</span></span></div></div>",
+      "css": ".ds-card { --house: var(--line-dim, rgba(232, 224, 206, 0.38)); position: relative; width: 240px; height: 336px; box-sizing: border-box; overflow: hidden; border: var(--rarity-weight, 1px) solid var(--rarity-border, var(--line-dim, rgba(232, 224, 206, 0.38))); border-radius: var(--radius-lg, 10px); background: var(--ground-rise, #1D1A15); font-family: var(--font-body, 'Cardo', Georgia, serif); } .ds-card[data-house='ember'] { --house: var(--house-ember, #B4341C); } .ds-card[data-house='vigil'] { --house: var(--house-vigil, #A88C3E); } .ds-card[data-house='coven'] { --house: var(--house-coven, #2F3E6B); } .ds-card[data-house='roots'] { --house: var(--house-roots, #3C6B44); } .ds-card[data-rarity='common'] { --rarity-border: var(--line-dim, rgba(232, 224, 206, 0.38)); --rarity-weight: 1px; } .ds-card[data-rarity='rare'] { --rarity-border: var(--line, #E8E0CE); --rarity-weight: 1px; } .ds-card[data-rarity='epic'] { --rarity-border: var(--line, #E8E0CE); --rarity-weight: 2px; } .ds-card[data-rarity='legendary'] { --rarity-border: var(--or, #B8913C); --rarity-weight: 2px; } .ds-card__band { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--house); } .ds-card__top { display: flex; align-items: center; gap: 6px; padding: 10px 8px 6px; } .ds-card__cost { width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line-dim, rgba(232, 224, 206, 0.38)); background: var(--ground-deep, #0C0B09); color: var(--text, #E8E0CE); font-size: 17px; font-weight: 700; } .ds-card__nameplate { flex: 1; min-width: 0; padding: 4px 8px; border-radius: 3px; background: var(--ground-deep, #0C0B09); border: 1px solid var(--line-dim, rgba(232, 224, 206, 0.38)); color: var(--text, #E8E0CE); font-size: 15px; font-weight: 700; letter-spacing: 0.4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-card__art { margin: 0 8px; height: 147px; border-radius: 6px; overflow: hidden; background: var(--ground-deep, #0C0B09); color: var(--house); display: grid; place-items: center; } .ds-card__ribbon { display: flex; align-items: center; gap: 5px; margin: 6px 8px 0; padding: 2px 8px; border-radius: 3px; background: var(--ground-deep, #0C0B09); border: 1px solid var(--line-dim, rgba(232, 224, 206, 0.38)); color: var(--text-dim, #A79E8A); font-size: 12.5px; font-variant-caps: small-caps; letter-spacing: 0.6px; } .ds-card__lozenge { width: 7px; height: 7px; transform: rotate(45deg); background: var(--house); flex-shrink: 0; } .ds-card__rarity { margin-left: auto; font-weight: 700; color: var(--rarity-border, var(--line-dim, rgba(232, 224, 206, 0.38))); } .ds-card__body { flex: 1; padding: 7px 8px 0; text-align: center; } .ds-card__text { margin: 0; font-size: 12.5px; color: var(--text, #E8E0CE); line-height: 1.32; } .ds-card__flavor { margin: 5px 0 0; font-size: 11.5px; font-style: italic; color: var(--text-dim, #A79E8A); line-height: 1.3; } .ds-card__stats { position: absolute; left: 6px; right: 6px; bottom: 6px; display: flex; justify-content: space-between; } .ds-card__stat { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 46px; height: 42px; padding: 2px 6px; border-radius: 3px; background: var(--ground, #14120F); border: 1px solid var(--line-dim, rgba(232, 224, 206, 0.38)); color: var(--text, #E8E0CE); } .ds-card__stat-label { font-variant-caps: small-caps; font-size: 8.5px; letter-spacing: 0.7px; color: var(--text-dim, #A79E8A); line-height: 1; } .ds-card__stat-value { margin-top: 2px; font-size: 15px; font-weight: 700; line-height: 1; }"
+    },
+    {
+      "name": "Hero Blazon",
+      "kind": "card",
+      "refersTo": "hero-blazon",
+      "description": "The permanent hero-power plate in the board margin: small-caps name with a flat cream cost gem, and the power's generated rules text below. The read is permanent — no hover-only tooltip.",
+      "html": "<div class=\"ds-blazon\"><span class=\"ds-blazon__name\"><span class=\"ds-blazon__gem\">2</span>Iron Resolve</span><p class=\"ds-blazon__text\">Give a creature Ward until end of turn.</p></div>",
+      "css": ".ds-blazon { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 108px; padding: 6px 8px; border: 1px solid var(--line-dim, rgba(232, 224, 206, 0.38)); border-radius: var(--radius-sm, 4px); background: var(--ground-deep, #0C0B09); color: var(--text-dim, #A79E8A); font-family: var(--font-body, 'Cardo', Georgia, serif); box-sizing: border-box; } .ds-blazon__name { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-variant-caps: small-caps; letter-spacing: 0.06em; color: var(--text, #E8E0CE); white-space: nowrap; } .ds-blazon__gem { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; font-size: 9px; font-weight: 800; color: var(--ground-deep, #0C0B09); background: var(--line, #E8E0CE); } .ds-blazon__text { margin: 0; font-size: 11px; line-height: 1.3; text-align: center; color: var(--text-dim, #A79E8A); }"
+    },
+    {
+      "name": "Mana Tray Pip",
+      "kind": "custom",
+      "refersTo": "mana-pip",
+      "description": "A ledger cell, not a crystal rail: rotated diamonds — inked for available mana, empty hairline for spent, struck through for the overload lock.",
+      "html": "<div class=\"ds-mana\" role=\"img\" aria-label=\"3 of 5 mana available, 1 locked\"><span class=\"ds-mana__pip ds-mana__pip--full\"></span><span class=\"ds-mana__pip ds-mana__pip--full\"></span><span class=\"ds-mana__pip ds-mana__pip--full\"></span><span class=\"ds-mana__pip\"></span><span class=\"ds-mana__pip\"></span><span class=\"ds-mana__pip ds-mana__pip--locked\"></span></div>",
+      "css": ".ds-mana { display: flex; align-items: center; gap: 6px; } .ds-mana__pip { width: 20px; height: 20px; transform: rotate(45deg); border: 1px solid var(--line-dim, rgba(232, 224, 206, 0.38)); background: transparent; } .ds-mana__pip--full { background: var(--line, #E8E0CE); border-color: var(--line, #E8E0CE); } .ds-mana__pip--locked { position: relative; border-color: var(--line-dim, rgba(232, 224, 206, 0.38)); } .ds-mana__pip--locked::after { content: ''; position: absolute; top: 50%; left: -3px; right: -3px; height: 1px; background: var(--line-dim, rgba(232, 224, 206, 0.38)); }"
+    },
+    {
+      "name": "House Margin Banner",
+      "kind": "custom",
+      "refersTo": "hero-blazon",
+      "description": "The house identity in the board margin: a vertical small-caps name at wide tracking over a flat SVG charge, both in the house tincture (host sets --house from the data attribute).",
+      "html": "<div class=\"ds-house\" style=\"--house: var(--house-vigil, #A88C3E)\"><svg class=\"ds-house__charge\" viewBox=\"0 0 22 22\" aria-hidden=\"true\"><path d=\"M11 2 L20 11 L11 20 L2 11 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><circle cx=\"11\" cy=\"11\" r=\"2.5\" fill=\"currentColor\" stroke=\"none\"/></svg><span class=\"ds-house__name\">The Vigil</span></div>",
+      "css": ".ds-house { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--house, var(--line-dim, rgba(232, 224, 206, 0.38))); font-family: var(--font-body, 'Cardo', Georgia, serif); } .ds-house__charge { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; } .ds-house__name { writing-mode: vertical-rl; font-size: 11px; font-variant-caps: small-caps; letter-spacing: 0.22em; color: currentColor; white-space: nowrap; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A Roll of Arms",
+    "overview": "Ashen Court reads as a book of heraldry brought to the screen: twelve archetypes are twelve houses, and every surface is drawn in the flat grammar of a roll of arms. The ground is iron-gall ink on parchment, hairlines are engraved cream rules, and charges are flat SVG — no bevels, gradients, glows, or faux metal exist anywhere in the world. Depth is not light but layering: a raised surface is a tone lighter on the ink ground, set off by a ruled line. This refuses both the torch-lit tavern the genre normally ships and its flat-gray opposite.\n\nDensity is that of a ledger, not a dashboard. The match surface is a ruled page — two banded registers divided by an engraved rule, each under its house banner in the margin, with the token row a subordinate sub-band. Every number on screen carries its own label (a stat pip reads \"ATTACK 5\", never a bare 5), and rarity is told by the weight and color of a hairline rather than by glow or chrome. Cardo — a single self-hosted renaissance serif — sets both display and body, so the whole interface speaks in one voice, from a house name in the margin to the rules text on a plate.\n\nMotion is engraved, not animated in the modern sense: everything runs on two beats — 140ms and 320ms — with linear or stepped easing, hard cuts, and short holds. A combat strike is a flat gules line cutting across a plate; a creature landing is a hairline ring expanding in four hard steps. Under reduced motion every duration zeroes and all effects land at their final pose immediately. This is a desktop/laptop system: it assumes a wide viewport and a mouse, and it owns that assumption rather than papering over it.",
+    "keyCharacteristics": [
+      "Flat heraldic tinctures on an iron-gall ground; cream engraved hairlines; charges as flat SVG.",
+      "Two reserved tinctures with hard meanings: gules for damage and death only, or for legendary rarity and the active turn only.",
+      "Twelve house tinctures used strictly as identity fields — a card's top band, its ribbon mark, a margin banner.",
+      "Depth by tonal ground layers and hairline rules; no gradient, glow, shadow, bevel, faux metal, or 3D anywhere.",
+      "One typeface (Cardo, self-hosted, 400/italic/700) for display, body, and label; small caps from the 400 weight.",
+      "One fixed card box (240×336, 5:7) with generated art; epic and legendary cards with art run full-bleed on flat ink plates.",
+      "Motion on two beats (140ms / 320ms), linear or stepped, scaled by a single `--anim-scale` and zeroed under reduced motion.",
+      "Desktop/laptop only: layouts assume a wide viewport, a mouse, and hover."
+    ],
+    "rules": [
+      { "name": "The Reserved Tincture Rule", "body": "Gules appears only for damage and death; or only for legendary rarity and the active turn. A third use of either is a violation — the migration guard fails the build if a gradient, glow, shadow, or alias reappears, and the contract test pins the exact token values.", "section": "colors" },
+      { "name": "The One House, One Field Rule", "body": "A house tincture is identity only — top band, ribbon mark, margin banner. It never tints the art mount, and it never crosses into the reserved pair's meanings.", "section": "colors" },
+      { "name": "The Cardo Rule", "body": "Cardo is the only typeface — display, body, and label alike — and it is self-hosted. No second face, no CDN, and small caps only via `font-variant-caps` on the 400 weight; a synthetic small-caps face is forbidden.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "No gradient, glow, shadow, bevel, faux metal, or 3D anywhere in the app. Depth is tonal grounds plus hairlines, and emphasis is line and ink changes, never light. When a state must call attention, it steps in flat (a veil, a ring, an ink shift) — it never glows.", "section": "elevation" },
+      { "name": "The Corner Scale Rule", "body": "Radii are 4px, 8px, 10px and strictly increasing; nothing joins the token scale between them. Micro corners (2–3px) and the 6px field corner are literals confined to their components.", "section": "shapes" },
+      { "name": "The Card Box Rule", "body": "Every card is exactly 240×336 — the 5:7 TCG proportion — regardless of type, keyword count, or flavor length; full-bleed keeps the same box, and one derived geometry serves every context via `zoom`.", "section": "components" },
+      { "name": "The Rarity-By-Line Rule", "body": "Rarity is told by the frame hairline — common dim, rare cream, epic heavier cream, legendary 2px or — never by fill, chrome, or light.", "section": "components" },
+      { "name": "The Number-Over-Word Rule", "body": "A stat is never a bare numeral: each pip reads WORD over NUMERAL in Cardo small caps, so no number on the board is ever ambiguous.", "section": "components" }
+    ],
+    "dos": [
+      "**Do** set every surface on the three iron-gall grounds and separate them with cream hairlines — depth is tonal layers plus rules, nothing else.",
+      "**Do** reserve gules for damage/death and or for legendary and the active turn; let a house tincture carry identity instead.",
+      "**Do** express state as hairline and ink changes, flat translucent washes, and hard steps — a border, a color, a veil, a ring.",
+      "**Do** animate on the two beats (140ms / 320ms) with linear or stepped easing, and scale every duration by `--anim-scale`; under reduced motion, land at the final pose instantly.",
+      "**Do** set labels in Cardo small caps with wide tracking, and set every numeral in `tabular-nums` where it is a readout.",
+      "**Do** keep the card box at 240×336 and the radius scale at 4 / 8 / 10, strictly increasing.",
+      "**Do** favor a permanent read over hover: rules text, keywords, and stats are on the surface or in an inspect panel, never behind a tooltip."
+    ],
+    "donts": [
+      "**Don't** use gradients, glows, box/text shadows, bevels, faux metal, backdrop blur, or any 3D effect anywhere in the app.",
+      "**Don't** add a second typeface, or load fonts from the network — Cardo is self-hosted and offline play depends on it.",
+      "**Don't** put gules or or anywhere outside their reserved meanings, and don't tint a card's art mount with its house tincture.",
+      "**Don't** clamp or hide a line of rules text — let flavor yield first.",
+      "**Don't** design for mobile: this is a desktop/laptop system, and the 700px floor is the edge of what it will seat itself into."
+    ]
+  }
+}

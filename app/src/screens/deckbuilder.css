@@ -210,8 +210,7 @@ select.deckbuilder-input {
 
 .deckbuilder-status {
   background: var(--ground-rise);
-  border: 1px solid var(--line-dim);
-  border-left: 3px solid var(--house-vigil);
+  border: 1px solid var(--house-vigil);
   border-radius: 8px;
   padding: 12px 14px;
   margin-bottom: 14px;
@@ -221,7 +220,7 @@ select.deckbuilder-input {
 }
 
 .deckbuilder-status.ok {
-  border-left-color: var(--line);
+  border-color: var(--line);
 }
 
 .deckbuilder-status-count {

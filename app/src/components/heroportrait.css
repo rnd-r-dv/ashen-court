@@ -106,8 +106,10 @@
 }
 
 .heroportrait-hpfill {
+  width: 100%;
   height: 100%;
-  transition: width 250ms ease;
+  transform-origin: left center;
+  transition: transform calc(var(--beat-long) * var(--anim-scale, 1)) linear;
 }
 
 /* Flat gauge in the theme's own vocabulary. The old gold gradient, the

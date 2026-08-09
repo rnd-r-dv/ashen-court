@@ -173,6 +173,10 @@ const RAW_HEX_RE = /#A81E22|#B8913C/gi;
  * is tolerated after the triple. */
 const RESERVED_RGB_RE =
   /\b(?:rgb|rgba)\(\s*(?:168\s*,\s*30\s*,\s*34|184\s*,\s*145\s*,\s*60|168\s+30\s+34|184\s+145\s+60)(?:\s*(?:,\s*[^)]*|\/\s*[^)]*))?\)/gi;
+const LAYOUT_TRANSITION_RE =
+  /transition(?:-property)?\s*:\s*[^;]*\b(?:width|height|padding(?:-[\w-]+)?|margin(?:-[\w-]+)?)\b/gi;
+const THICK_SIDE_ACCENT_RE = /border-(?:left|right)\s*:\s*(?:[3-9]|\d{2,})(?:\.\d+)?px\b/gi;
+const EMPTY_IMAGE_MARKUP_RE = /<img\s*\/>/gi;
 const GULES_RE = /var\(--gules\)/g;
 const OR_RE = /var\(--or\)/g;
 
@@ -305,6 +309,37 @@ describe('armorial whole-tree migration guard (Task 9)', () => {
         const ok = OR_FILE_ALLOW.has(baseName(abs)) && selectorMatches(sel, OR_SELECTOR_ALLOW);
         if (!ok) offenders.push({ file: rel, line: lineFor(css, m.index as number), snippet: `selector "${sel}"` });
       }
+    }
+    expect(offenders, offenders.map((o) => `${o.file}:${o.line} ${o.snippet}`).join('\n')).toEqual([]);
+  });
+
+
+  it('does not animate layout properties', () => {
+    const offenders: Offender[] = [];
+    for (const abs of sourceFiles().filter((f) => f.endsWith('.css'))) {
+      const rel = relative(APP_ROOT, abs);
+      const css = stripComments(readFileSync(abs, 'utf8'));
+      for (const o of collect(css, LAYOUT_TRANSITION_RE)) offenders.push({ ...o, file: rel });
+    }
+    expect(offenders, offenders.map((o) => `${o.file}:${o.line} ${o.snippet}`).join('\n')).toEqual([]);
+  });
+
+  it('does not use thick one-sided borders as status accents', () => {
+    const offenders: Offender[] = [];
+    for (const abs of sourceFiles().filter((f) => f.endsWith('.css'))) {
+      const rel = relative(APP_ROOT, abs);
+      const css = stripComments(readFileSync(abs, 'utf8'));
+      for (const o of collect(css, THICK_SIDE_ACCENT_RE)) offenders.push({ ...o, file: rel });
+    }
+    expect(offenders, offenders.map((o) => `${o.file}:${o.line} ${o.snippet}`).join('\n')).toEqual([]);
+  });
+
+  it('does not put pseudo-empty image markup in CSS comments', () => {
+    const offenders: Offender[] = [];
+    for (const abs of sourceFiles().filter((f) => f.endsWith('.css'))) {
+      const rel = relative(APP_ROOT, abs);
+      const css = readFileSync(abs, 'utf8');
+      for (const o of collect(css, EMPTY_IMAGE_MARKUP_RE)) offenders.push({ ...o, file: rel });
     }
     expect(offenders, offenders.map((o) => `${o.file}:${o.line} ${o.snippet}`).join('\n')).toEqual([]);
   });

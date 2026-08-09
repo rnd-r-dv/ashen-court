@@ -130,6 +130,15 @@ describe('armorial offline/build contract', () => {
       .map(([name, expected]) => `${name}: expected "${expected}", got "${declarations[name] ?? '<missing>'}"`);
     expect(mismatches).toEqual([]);
   });
+
+
+  it('keeps the radius scale strictly increasing', () => {
+    const declarations = tokenDeclarations(readAppFile('src/theme.css'));
+    const radius = ['--radius-sm', '--radius-md', '--radius-lg'].map((name) => Number.parseFloat(declarations[name] ?? 'NaN'));
+    expect(radius.every(Number.isFinite)).toBe(true);
+    expect(radius[0]! < radius[1]!).toBe(true);
+    expect(radius[1]! < radius[2]!).toBe(true);
+  });
 });
 
 describe('armorial whole-app CSS artifact contract', () => {

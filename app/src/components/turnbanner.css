@@ -39,7 +39,6 @@
 
 .turnbanner--mine .turnbanner-text {
   color: var(--gold);
-  text-shadow: var(--glow-gold);
 }
 
 .turnbanner--mine .turnbanner-kicker {

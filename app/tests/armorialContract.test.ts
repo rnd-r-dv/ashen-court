@@ -18,8 +18,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
-import { dirname, resolve, join } from 'node:path';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { dirname, resolve, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -129,5 +129,42 @@ describe('armorial offline/build contract', () => {
       .filter(([name, expected]) => declarations[name] !== expected)
       .map(([name, expected]) => `${name}: expected "${expected}", got "${declarations[name] ?? '<missing>'}"`);
     expect(mismatches).toEqual([]);
+  });
+});
+
+describe('armorial whole-app CSS artifact contract', () => {
+  /** All app/src CSS files, as absolute paths. */
+  function cssFiles(): string[] {
+    const out: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const abs = join(dir, entry);
+        if (statSync(abs).isDirectory()) walk(abs);
+        else if (abs.endsWith('.css')) out.push(abs);
+      }
+    };
+    walk(join(APP_ROOT, 'src'));
+    return out;
+  }
+
+  /** Strip CSS block comments so prose may name the dead tokens. */
+  function executableCss(css: string): string {
+    return css.replace(/\/\*[\s\S]*?\*\//g, '');
+  }
+
+  it('no executable app CSS references the deleted --glow-gold / --glow-ember tokens', () => {
+    // Task 4 Step 5 deleted the glow token definitions and every consumer.
+    // A reintroduced `var(--glow-gold)`/`var(--glow-ember)` is an undefined
+    // variable that invalidates the whole declaration (e.g. the active
+    // hero-portrait ring) — a build-breaking change, not a style choice.
+    const offenders: string[] = [];
+    for (const abs of cssFiles()) {
+      const rel = relative(APP_ROOT, abs);
+      const executable = executableCss(readFileSync(abs, 'utf8'));
+      if (/--glow-(gold|ember)/.test(executable)) {
+        offenders.push(`${rel} references --glow-gold/--glow-ember`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

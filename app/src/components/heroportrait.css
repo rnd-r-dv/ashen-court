@@ -43,7 +43,10 @@
 
 .heroportrait--active .heroportrait-circle {
   border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.35), var(--glow-gold);
+  /* Task 4 fix round 1: the legacy glow token died with the Armorial swap;
+     the active ring is now a flat cream hairline — no shadow, no glow. */
+  outline: 1px solid var(--line);
+  outline-offset: 2px;
 }
 
 .heroportrait-player {
@@ -175,7 +178,6 @@
 }
 .heroportrait-power--ready:hover {
   border-color: var(--gold);
-  box-shadow: var(--glow-gold);
 }
 
 .heroportrait-power-cost {

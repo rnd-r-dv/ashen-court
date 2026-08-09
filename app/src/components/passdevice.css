@@ -19,7 +19,6 @@
   border: 2px double var(--gold-dim);
   border-radius: var(--radius-lg);
   background: var(--bg-1);
-  box-shadow: var(--glow-gold);
   text-align: center;
 }
 

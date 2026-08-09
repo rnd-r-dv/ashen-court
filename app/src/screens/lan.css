@@ -13,7 +13,6 @@
   padding: var(--space-3) var(--space-5);
   color: var(--gold);
   background: var(--bg-2);
-  text-shadow: var(--glow-gold);
   margin: var(--space-3) 0;
   overflow-wrap: anywhere;
 }

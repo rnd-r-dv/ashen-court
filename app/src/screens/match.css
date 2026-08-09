@@ -29,7 +29,6 @@
 
 .match-banner--mine {
   color: var(--gold);
-  text-shadow: var(--glow-gold);
 }
 
 .match-hint {

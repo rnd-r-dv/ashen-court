@@ -1,0 +1,58 @@
+/* DiscoverOverlay (Task 3) — the discover modal. The board may be dimmed with
+   a FLAT translucent veil — never a gradient or glow. Theme tokens only; the
+   Armorial restyle (Task 4+) owns the final register. */
+
+.discover-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40; /* above the pass-device (30) so the choice resolves first */
+  display: grid;
+  place-items: center;
+}
+
+.discover-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 5, 12, 0.72); /* flat translucent ground — no gradient */
+}
+
+.discover-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border: 2px double var(--gold-dim);
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+  text-align: center;
+  outline: none;
+}
+
+.discover-choices {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: center;
+}
+
+/* Each candidate is a real button so the ring is keyboard-navigable; the
+   plate inside must not be independently focusable. */
+.discover-choice {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.discover-choice:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+  border-radius: var(--radius-md);
+}
+
+.discover-waiting {
+  margin: var(--space-4) 0;
+  font-style: italic;
+  color: var(--text-dim);
+}

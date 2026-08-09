@@ -154,6 +154,7 @@ export const EFFECT_PRESETS: { label: string; spec: EffectSpec }[] = [
   { label: 'Refill 2 Mana', spec: { kind: 'refillMana', value: 2 } },
   { label: 'Copy a random enemy creature card', spec: { kind: 'copyCard' } },
   { label: 'Your most expensive creature costs 2 less', spec: { kind: 'discountMostExpensive', value: 2 } },
+  { label: 'Discover a card', spec: { kind: 'discover' } },
 ];
 
 /**

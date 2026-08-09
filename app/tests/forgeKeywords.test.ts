@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { KEYWORD_COST } from '@ashen/core';
-import { KEYWORDS } from '../src/forge/formState.js';
-import { EFFECT_PRESETS } from '../src/forge/formState.js';
+import { KEYWORDS, EFFECT_PRESETS, createDraft, draftToCard } from '../src/forge/formState.js';
 
 describe('forge authoring surface', () => {
   it('offers every keyword the engine defines', () => {
@@ -21,9 +20,38 @@ describe('forge authoring surface', () => {
       'dealDamage', 'draw', 'heal', 'buff', 'summon', 'gainMana', 'refillMana',
       'freeze', 'destroy', 'copyCard', 'giveKeyword', 'discountMostExpensive',
       'discountNextSpell', 'silence', 'returnToHand', 'spellPower', 'overload',
-      'consume',
+      'consume', 'discover',
     ]) {
       expect(kinds, `no Forge preset for ${kind}`).toContain(kind);
     }
+  });
+
+  it('preserves the discover preset through draftToCard in spell and trigger effects', () => {
+    const preset = EFFECT_PRESETS.find((p) => p.spec.kind === 'discover');
+    expect(preset).toBeDefined();
+    const spec = preset!.spec;
+
+    // Spell: the preset lands in the card's cast effects verbatim.
+    const spell = draftToCard({
+      ...createDraft(),
+      name: 'Glimpse',
+      type: 'spell',
+      effects: [spec],
+    });
+    expect(spell.effects).toEqual([{ kind: 'discover' }]);
+
+    // Creature trigger: the preset is preserved in the trigger's effects and
+    // creatures never carry cast effects.
+    const creature = draftToCard({
+      ...createDraft(),
+      name: 'Omen',
+      type: 'creature',
+      attack: '1',
+      health: '2',
+      trigger: 'onDamage',
+      effects: [spec],
+    });
+    expect(creature.triggers).toEqual([{ when: 'onDamage', effects: [{ kind: 'discover' }] }]);
+    expect(creature.effects).toEqual([]);
   });
 });

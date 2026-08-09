@@ -133,20 +133,38 @@ export function useMatch(opts: UseMatchOpts): UseMatchApi {
     const b = botRef.current;
     if (!b) return;
     const botPlayer = (1 - myPlayer) as PlayerIndex;
-    // Mulligan order is FIXED by the engine (player 0 first, then player 1,
-    // tracked by mulligansDone) regardless of who submits — turn stays 0 so
-    // currentPlayer() is meaningless here. The bot may submit its mulligan
-    // only when the engine's next mulligan actor IS the bot. In main phase the
-    // bot plays while currentPlayer() is the bot.
-    const mulliganActor = (g.state.mulligansDone[0] ? 1 : 0) as PlayerIndex;
-    const isBotsMulligan = g.state.phase === 'mulligan' && mulliganActor === botPlayer;
-    const isBotsMainTurn = g.state.phase === 'main' && g.currentPlayer() === botPlayer;
-    if (!isBotsMulligan && !isBotsMainTurn) return;
-    const intent = isBotsMulligan
-      ? mulliganPolicy(g, botPlayer)
-      : botPolicyRef.current!.chooseIntent(g, botPlayer);
+    // Task 3: a pending choice makes its OWNER the temporary actor even when
+    // that owner is not the current player (start/end-turn triggers can offer a
+    // choice to either player; see core/intents.ts). The bot is scheduled when
+    // the choice belongs to it — and, conversely, a HUMAN-owned choice suspends
+    // the bot's turn, because the human resolves it regardless of whose turn it
+    // is (no current-player intent is legal until it resolves). Mulligan order
+    // is FIXED by the engine (player 0 first, then player 1, tracked by
+    // mulligansDone) regardless of who submits — turn stays 0 so
+    // currentPlayer() is meaningless there. In main phase the bot plays while
+    // currentPlayer() is the bot and nothing is pending.
+    const botOwnsMove = (live: GameState): boolean => {
+      const pending = live.pendingChoice;
+      const mulliganActor = (live.mulligansDone[0] ? 1 : 0) as PlayerIndex;
+      return (
+        (pending !== null && pending.player === botPlayer) ||
+        (live.phase === 'mulligan' && mulliganActor === botPlayer) ||
+        (live.phase === 'main' && (live.turn % 2) as PlayerIndex === botPlayer && pending === null)
+      );
+    };
+    if (!botOwnsMove(g.state)) return;
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
+      // Re-derive at FIRE time, not schedule time: the pacing delay may have
+      // been interrupted by a pending choice or turn change (e.g. a human-owned
+      // choice landed while a bot move was queued). A stale submission would be
+      // rejected by the engine and surface as a spurious error banner.
+      const live = driver.game();
+      if (!botOwnsMove(live.state)) return;
+      const intent =
+        live.state.phase === 'mulligan'
+          ? mulliganPolicy(live, botPlayer)
+          : botPolicyRef.current!.chooseIntent(live, botPlayer);
       safeSubmit(intent);
       // events arrive via onEvents → stepRef, which schedules the next move
     }, BOT_PACING_MS);
@@ -192,8 +210,14 @@ export function useMatch(opts: UseMatchOpts): UseMatchApi {
 
   const humanLegal = useMemo<Intent[]>(() => {
     const g = driver.game();
+    const pending = g.state.pendingChoice;
+    // Task 3: a pending choice names its owner as the temporary actor, so the
+    // human's legal intents are theirs even when it is not their turn (the
+    // engine suspends legality: the owner gets the discover intents, everyone
+    // else gets []).
+    const isHumanChoice = pending !== null && pending.player === myPlayer;
     const isHumanTurn = g.state.phase === 'main' && g.currentPlayer() === myPlayer;
-    return isHumanTurn ? g.legalIntents(myPlayer) : [];
+    return isHumanTurn || isHumanChoice ? g.legalIntents(myPlayer) : [];
   }, [driver, myPlayer, state]);
 
   return { state, events, submit, legal: humanLegal, myPlayer, drainEvents };

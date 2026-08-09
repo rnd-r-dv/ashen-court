@@ -18,11 +18,14 @@ import {
   HEROES,
   mulliganPolicy,
 } from '@ashen/core';
-import type { GameState, MatchSetup, PlayerIndex } from '@ashen/core';
+import type { GameEvent, GameState, Intent, MatchSetup, PendingChoice, PlayerIndex } from '@ashen/core';
 import { createLocalDriver } from '../src/game/drivers.js';
 import { playerVisibility } from '../src/game/playerVisibility.js';
 import { useMatch } from '../src/game/useMatch.js';
 import type { UseMatchApi, UseMatchOpts } from '../src/game/useMatch.js';
+import Match from '../src/screens/Match.js';
+import type { MatchDriver, MatchScreenSetup } from '../src/types.js';
+import { buildMatchEntry } from '../src/game/matchSetup.js';
 
 // React 18's act() requires the testing-environment flag (see drivers.test.ts).
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -197,6 +200,134 @@ describe('hotseat pass-and-play (useMatch, both players human)', () => {
       expect(playerVisibility(hook.api.state, 1)).toBe(false);
     } finally {
       hook.unmount();
+    }
+  });
+});
+
+// ---- Task 3: the pending-choice actor gate on the real Match screen ----
+// A discover choice makes its OWNER the temporary actor, so in hotseat the
+// device must physically pass BEFORE any candidate is revealed, and pass BACK
+// to the turn owner after the choice resolves. Assert the screen-level
+// contract: PassDevice (not candidates) while viewer !== actor, candidates
+// only after the pass confirm, and a second pass after resolution. A real
+// hotseat driver + the engine's discoverOffered event (no mocks).
+
+/** Local hotseat driver that also lets the test push synthetic (incl. empty) batches. */
+interface ScriptedDriver extends MatchDriver {
+  push(batch: GameEvent[]): void;
+}
+function scriptedHotseatDriver(base: MatchDriver): ScriptedDriver {
+  const listeners = new Set<(events: GameEvent[]) => void>();
+  base.onEvents((batch) => {
+    for (const cb of [...listeners]) cb(batch);
+  });
+  return {
+    push(batch) {
+      for (const cb of [...listeners]) cb(batch);
+    },
+    async submit(intent) {
+      return base.submit(intent);
+    },
+    onEvents(cb) {
+      listeners.add(cb);
+    },
+    game: () => base.game(),
+    reset: (setup) => base.reset(setup),
+  };
+}
+
+const HIDDEN_CANDIDATES = ['neutral-boar', 'neutral-militia', 'neutral-scroll'];
+
+function hotseatChoice(player: PlayerIndex): PendingChoice {
+  return { kind: 'discover', player, cardIds: HIDDEN_CANDIDATES };
+}
+
+function clickScreen(el: Element | null | undefined) {
+  if (!el) throw new Error('click target not found');
+  act(() => {
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
+
+function advanceScreen(ms: number) {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
+
+/** Submit both mulligans through the engine and drain the animation queue. */
+function reachMainScreen(driver: ScriptedDriver) {
+  act(() => {
+    void driver.submit({ kind: 'mulligan', keep: [] });
+  });
+  advanceScreen(180 * 10);
+  act(() => {
+    void driver.submit({ kind: 'mulligan', keep: [] });
+  });
+  advanceScreen(180 * 10);
+  expect(driver.game().state.phase).toBe('main');
+}
+
+describe('hotseat discover — pass before reveal (Task 3)', () => {
+  it('hides candidates behind the pass overlay, reveals after the pass, and passes back after resolution', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const entry = buildMatchEntry({
+      mode: 'hotseat',
+      decks: [
+        { slug: 'ember', name: 'Ember Court' },
+        { slug: 'bone', name: 'Bone Horde' },
+      ],
+    });
+    const driver = scriptedHotseatDriver(entry.setup.driver);
+    const setup: MatchScreenSetup = { ...entry.setup, driver };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const screenRoot: Root = createRoot(container);
+    act(() => {
+      screenRoot.render(createElement(Match, { setup }));
+    });
+    try {
+      reachMainScreen(driver); // player 0's turn; the viewer starts as player 0
+
+      // Player 1 is offered a Discover while player 0 holds the device.
+      driver.game().applyEvent({ type: 'discoverOffered', choice: hotseatChoice(1) });
+      act(() => {
+        driver.push([]);
+      });
+
+      // Before the pass: the device prompt shows, and NO candidate name leaks.
+      expect(document.querySelector('.pass-device')).not.toBeNull();
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(document.body.textContent).not.toContain('Wild Boar');
+      expect(document.body.textContent).not.toContain('Village Militia');
+      expect(document.body.textContent).not.toContain('Scroll of Lore');
+
+      // Player 1 takes the device: only NOW do the candidates appear.
+      clickScreen(document.querySelector('.pass-device-confirm'));
+      expect(document.querySelector('.pass-device')).toBeNull();
+      const plates = document.querySelectorAll('.discover-choice .cardview--preview');
+      expect(plates.length).toBe(3);
+      expect(plates[0]!.textContent).toContain('Wild Boar');
+      expect(plates[2]!.textContent).toContain('Scroll of Lore');
+
+      // Resolve by clicking the middle candidate.
+      clickScreen(document.querySelectorAll('.discover-choice')[1]);
+      advanceScreen(180 * 3);
+      expect(driver.game().state.pendingChoice).toBeNull();
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+      // The choice resolved on player 0's turn, so the actor is player 0
+      // again — the device must pass BACK before player 0 can play.
+      expect(document.querySelector('.pass-device')).not.toBeNull();
+      clickScreen(document.querySelector('.pass-device-confirm'));
+      expect(document.querySelector('.pass-device')).toBeNull();
+      // Player 0 is back at the board with their own hand up.
+      expect(document.querySelectorAll('.hand-slot').length).toBeGreaterThan(0);
+    } finally {
+      act(() => {
+        screenRoot.unmount();
+      });
+      vi.restoreAllMocks();
     }
   });
 });

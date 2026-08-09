@@ -13,6 +13,7 @@ import type { BoardTargeting } from '../components/Board.js';
 import CardView, { FACE_DOWN_CARD } from '../components/CardView.js';
 import DamagePopup from '../components/DamagePopup.js';
 import type { DamageEntry } from '../components/DamagePopup.js';
+import DiscoverOverlay from '../components/DiscoverOverlay.js';
 import Hand from '../components/Hand.js';
 import PassDevice from '../components/PassDevice.js';
 import Projectile, { aoeFlightTime, flightTime } from '../components/Projectile.js';
@@ -22,7 +23,6 @@ import type { TurnBannerEntry } from '../components/TurnBanner.js';
 import { useAnimationQueue } from '../components/animations.js';
 import { HERO_FX_ZERO } from '../components/animations.js';
 import type { HeroFX } from '../components/animations.js';
-import { playerVisibility } from '../game/playerVisibility.js';
 import './animations.css';
 import './match.css';
 
@@ -106,11 +106,12 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Hotseat pass-and-play (Task 32): the viewer is whoever currently holds
-  // the device — starts as the first pick (player 0) and alternates as the
-  // pass overlay is confirmed. Bot mode never passes, so the viewer stays
-  // the single human. Hands render face-down until the incoming player
-  // confirms — the visibility contract lives in playerVisibility.
+  // Hotseat pass-and-play (Task 32, discover Task 3): the viewer is whoever
+  // currently holds the device — starts as the first pick (player 0) and
+  // alternates as the pass overlay is confirmed. Bot mode never passes, so the
+  // viewer stays the single human. Hands render face-down until the incoming
+  // player confirms — the actor gate below (mulligan, turn handover, pending
+  // choice) is that contract.
   const [viewer, setViewer] = useState<PlayerIndex>(setup.myPlayer);
 
   // ---- Task 39: animation state -------------------------------
@@ -176,24 +177,39 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const foe = (1 - viewer) as PlayerIndex;
   const meP = state.players[viewer];
   const currentPlayer = (state.turn % 2) as PlayerIndex;
-  // The engine's acting player: current player in main, mulligan actor during
-  // mulligan (turn stays 0 through both mulligans — see playerVisibility).
+  const pendingChoice = state.pendingChoice;
+  // The engine's acting player (Task 3): the pending-choice owner while a
+  // choice is open — even when that owner is not the current player (a
+  // start/end-turn trigger can offer a choice to either player) — then the
+  // mulligan actor during mulligan (turn stays 0 through both mulligans), and
+  // the current player otherwise. This single actor replaces the old
+  // playerVisibility-derived gate: mulligan, main-turn, and pending-choice
+  // states all run through it.
   const actor: PlayerIndex =
-    state.phase === 'mulligan' ? ((state.mulligansDone[0] ? 1 : 0) as PlayerIndex) : currentPlayer;
-  const visible = playerVisibility(state, viewer);
-  const myTurn = state.phase === 'main' && currentPlayer === viewer;
-  const inTargeting = targeting !== null;
-  const isBotMode = setup.mode === 'bot';
-  // Hands hide only at hotseat pass points (between turns and between the two
-  // mulligan phases). Bot mode never hides anything: the viewer's own hand
-  // stays up during the bot's turn, exactly as in Task 31. LAN never hides:
-  // the viewer always sees their own hand (the enemy hand is never rendered
-  // in main phase anyway) and never sees the pass overlay.
-  const hideHands = setup.mode === 'hotseat' && !visible;
+    pendingChoice?.player ??
+    (state.phase === 'mulligan' ? ((state.mulligansDone[0] ? 1 : 0) as PlayerIndex) : currentPlayer);
   // M6 (audit 04): at game over the pass-and-play contract is over — render
   // an empty hand placeholder (not silhouettes) so the winner's hand size
   // never leaks to the other seat during the 1.5s cinematic.
   const gameOver = state.phase === 'gameOver';
+  // Hands hide only at hotseat pass points: whenever the device is not held by
+  // the acting player (mulligan, turn handover, or a pending choice owned by
+  // the other seat), and always at game over (the pass-and-play contract is
+  // over — M6 renders an empty placeholder, not the silhouettes). Bot mode
+  // never hides anything: the viewer's own hand stays up during the bot's
+  // turn, exactly as in Task 31. LAN never hides: the viewer always sees their
+  // own hand (the enemy hand is never rendered in main phase anyway) and never
+  // sees the pass overlay.
+  const hideHands = setup.mode === 'hotseat' && (gameOver || viewer !== actor);
+  // The turn banner stays turn-based, but ordinary controls are gated by the
+  // TURN owner AND the absence of a pending choice: a discover makes its owner
+  // the temporary actor WITHOUT enabling any hand/attack/power/end-turn
+  // controls (the engine suspends legality; the UI must not light anything up
+  // either).
+  const myTurn = state.phase === 'main' && currentPlayer === viewer;
+  const canAct = myTurn && pendingChoice === null;
+  const inTargeting = targeting !== null;
+  const isBotMode = setup.mode === 'bot';
   // Pass overlay: same gate as hideHands, and never in LAN. Game over
   // navigates away on the next batch, so never flash an overlay on it.
   const passVisible = hideHands && setup.mode !== 'lan' && !gameOver;
@@ -692,7 +708,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   }
 
   function onHandCardClick(handIndex: number) {
-    if (!myTurn) return;
+    if (!canAct) return;
     if (targeting) {
       // Clicking a hand card while aiming cancels the targeting mode.
       setTargeting(null);
@@ -710,7 +726,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   }
 
   function onHeroPower() {
-    if (!myTurn || targeting) return;
+    if (!canAct || targeting) return;
     const intents = legal.filter((i): i is Extract<Intent, { kind: 'heroPower' }> => i.kind === 'heroPower');
     if (intents.length === 0) return;
     if (intents.some((i) => i.target !== undefined)) {
@@ -721,7 +737,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   }
 
   function onSelectAttacker(creatureId: string) {
-    if (!myTurn || targeting) return;
+    if (!canAct || targeting) return;
     setTargeting({ kind: 'attack', attackerId: creatureId });
   }
 
@@ -743,7 +759,9 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
 
   // Pass point: the incoming player's hand sits face-down until they confirm
   // the overlay — only its size is visible (the same info the board's
-  // enemy-hand silhouettes already show).
+  // enemy-hand silhouettes already show). `actor` is the pending-choice owner
+  // while a choice is open, so the pass hands the device (and the choice) to
+  // exactly the right seat.
   const handHidden = (
     <div
       className="match-hand-hidden"
@@ -758,6 +776,23 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const passOverlay = passVisible ? (
     <PassDevice player={actor} onConfirm={() => setViewer(actor)} />
   ) : null;
+
+  // Discover overlay (Task 3): rendered independently of myTurn whenever a
+  // choice is open. In hotseat, candidates stay behind the pass: the device
+  // must physically reach the owner (viewer === actor) before any candidate
+  // name renders — until then the PassDevice above is the only overlay. LAN
+  // (and bot mode while the bot resolves) never passes: the overlay shows the
+  // owner the three candidates and everyone else the bare waiting copy, with
+  // no pass-device prompt.
+  const discoverOverlay =
+    pendingChoice !== null && (setup.mode !== 'hotseat' || viewer === actor) ? (
+      <DiscoverOverlay
+        choice={pendingChoice}
+        viewer={viewer}
+        getCard={getCard}
+        onChoose={(i) => submitOnce({ kind: 'discover', choice: i })}
+      />
+    ) : null;
 
   function toggleFastMode() {
     setFastMode((prev) => {
@@ -774,7 +809,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // skips while the animation queue is playing.
   useHotkeys({
     e: () => {
-      if (myTurn && !inTargeting) submitOnce({ kind: 'endTurn' });
+      if (canAct && !inTargeting) submitOnce({ kind: 'endTurn' });
     },
     f: toggleFastMode,
     ' ': () => {
@@ -876,7 +911,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
           getCard={getCard}
           legal={legal}
           targeting={targeting}
-          myTurn={myTurn}
+          myTurn={canAct}
           onSelectAttacker={onSelectAttacker}
           onTargetClick={onTargetClick}
           onHeroPower={onHeroPower}
@@ -958,7 +993,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
             hand={meP.hand}
             getCard={getCard}
             playable={playable}
-            interactive={myTurn}
+            interactive={canAct}
             targeting={inTargeting}
             onCardClick={onHandCardClick}
             animScale={animScale}
@@ -966,6 +1001,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         )}
       </div>
 
+      {discoverOverlay}
       {passOverlay}
     </div>
   );

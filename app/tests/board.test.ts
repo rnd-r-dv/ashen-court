@@ -11,6 +11,10 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import Match from '../src/screens/Match.js';
 import { buildMatchEntry } from '../src/game/matchSetup.js';
+import Board from '../src/components/Board.js';
+import type { BoardTargeting } from '../src/components/Board.js';
+import { BOARD_CAP } from '@ashen/core';
+import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, PlayerState } from '@ashen/core';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -115,10 +119,11 @@ describe('Match board (Task 31)', () => {
       }
       advance(PACING);
 
-      // attack with ready creatures
+      // attack with ready creatures (token band included — tokens attack too)
       for (let i = 0; i < 6; i++) {
         const ready = document.querySelector(
-          '.board-row--bottom .cardview:not(.cardview--exhausted):not(.cardview--frozen)',
+          '.board-row--bottom .cardview:not(.cardview--exhausted):not(.cardview--frozen), ' +
+            '.board-row--tokens--bottom .cardview:not(.cardview--exhausted):not(.cardview--frozen)',
         );
         if (!ready) break;
         click(ready);
@@ -152,5 +157,175 @@ describe('Match board (Task 31)', () => {
     const g = game();
     expect(g.state.turn).toBeGreaterThanOrEqual(6);
     expect(g.state.players[0].board.length + g.state.players[0].hand.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 6: the board reads as a ruled page — normal creatures in two banded
+// registers, tokens in subordinate sub-bands that never consume a normal-row
+// slot. Renders the real Board with a synthetic GameState (real CardView
+// stack, no mocks) so the row structure and live-card language are both real.
+// ---------------------------------------------------------------------------
+
+const WARDEN: CardSpec = {
+  id: 'warden',
+  name: 'Warden',
+  type: 'creature',
+  cost: 3,
+  attack: 3,
+  health: 3,
+  keywords: [],
+  effects: [],
+  rarity: 'common',
+  archetype: 'ember',
+  art: { preset: 'ember', palette: ['#7a1f1f', '#2b0d0d'], seed: 1 },
+  author: 'curated',
+  version: 1,
+};
+
+function creature(id: string, token: boolean, owner: PlayerIndex = 0): CreatureState {
+  return {
+    id,
+    cardId: 'warden',
+    owner,
+    attack: 3,
+    health: 3,
+    maxHealth: 3,
+    keywords: [],
+    exhausted: false,
+    attacksLeft: 1,
+    shields: 0,
+    warded: false,
+    frozen: false,
+    silenced: false,
+    token,
+    spellPower: 0,
+  };
+}
+
+function playerState(board: CreatureState[]): PlayerState {
+  return {
+    hero: {
+      name: 'Pyra Emberveil',
+      hp: 30,
+      maxHp: 30,
+      shields: 0,
+      power: { name: 'Ember Bolt', cost: 2, effects: [] },
+      usedPower: false,
+      discountMostExpensive: 0,
+      discountNextSpell: 0,
+    },
+    deck: [],
+    hand: [],
+    board,
+    artifacts: [],
+    mana: 1,
+    maxMana: 5,
+    surged: false,
+    overload: 0,
+    lockedMana: 2,
+  };
+}
+
+function boardState(foeBoard: CreatureState[], meBoard: CreatureState[]): GameState {
+  return {
+    players: [playerState(meBoard), playerState(foeBoard)],
+    turn: 0,
+    phase: 'main',
+    seed: 1,
+    mulligansDone: [true, true],
+    rngState: { seed: 1, calls: 0 },
+    log: [],
+    pendingChoice: null,
+    pendingChoiceQueue: [],
+  };
+}
+
+describe('board registers and token sub-bands (Task 6)', () => {
+  let host: HTMLDivElement | null = null;
+  let root: Root | null = null;
+
+  function renderBoard(
+    state: GameState,
+    opts?: { legal?: Intent[]; myTurn?: boolean; targeting?: BoardTargeting | null },
+  ) {
+    const legal = opts?.legal ?? [];
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => {
+      root!.render(
+        createElement(Board, {
+          state,
+          viewer: 0,
+          getCard: () => WARDEN,
+          legal,
+          targeting: opts?.targeting ?? null,
+          myTurn: opts?.myTurn ?? false,
+          onSelectAttacker: () => {},
+          onTargetClick: () => {},
+          onHeroPower: () => {},
+          onEndTurn: () => {},
+          onCancel: () => {},
+        }),
+      );
+    });
+  }
+
+  afterEach(() => {
+    act(() => {
+      root?.unmount();
+    });
+    host?.remove();
+    host = null;
+    root = null;
+  });
+
+  it('partitions both sides: normal registers plus subordinate token bands', () => {
+    const foe = [creature('foe-1', false, 1), creature('foe-2', false, 1), creature('foe-token', true, 1)];
+    const me = [creature('me-1', false), creature('me-token-1', true), creature('me-token-2', true)];
+    renderBoard(boardState(foe, me));
+
+    // enemy register: 2 normals + capacity outlines, tokens counted out
+    expect(host!.querySelectorAll('.board-row--top .board-slot')).toHaveLength(2);
+    expect(host!.querySelectorAll('.board-row--top .board-slot--empty')).toHaveLength(BOARD_CAP - 2);
+    const foeTokens = host!.querySelectorAll('.board-row--tokens--top .board-slot');
+    expect(foeTokens).toHaveLength(1);
+    expect(foeTokens[0]!.getAttribute('data-creature-id')).toBe('foe-token');
+
+    // friendly register: 1 normal + capacity outlines — tokens never consume
+    // a normal-row slot
+    expect(host!.querySelectorAll('.board-row--bottom .board-slot')).toHaveLength(1);
+    expect(host!.querySelectorAll('.board-row--bottom .board-slot--empty')).toHaveLength(BOARD_CAP - 1);
+    expect(host!.querySelectorAll('.board-row--tokens--bottom .board-slot')).toHaveLength(2);
+  });
+
+  it('renders tokens with the same CardView language at a smaller scale', () => {
+    renderBoard(boardState([], [creature('me-token-1', true)]));
+    const slot = host!.querySelector('.board-row--tokens--bottom .board-slot')!;
+    expect(slot.getAttribute('data-creature-id')).toBe('me-token-1');
+    // same live-stat language as a normal board plate
+    expect(slot.querySelector('.cardview')).not.toBeNull();
+    expect(slot.querySelector('.card__stat--attack')!.getAttribute('aria-label')).toBe('Attack 3');
+    expect(slot.querySelector('.card__stat--health')!.getAttribute('aria-label')).toBe('Health 3');
+    // and it is a smaller scale — a token slot, not a normal-row slot
+    expect(slot.classList.contains('board-slot--token')).toBe(true);
+  });
+
+  it('keeps normal creatures selectable as attackers in the friendly register', () => {
+    renderBoard(boardState([], [creature('me-1', false), creature('me-token-1', true)]), {
+      myTurn: true,
+      legal: [{ kind: 'attack', attackerId: 'me-1', target: { type: 'hero', player: 1 } }],
+      targeting: { kind: 'attack', attackerId: 'me-1' },
+    });
+    const slot = host!.querySelector('.board-row--bottom .board-slot')!;
+    expect(slot.querySelector('.card--selected')).not.toBeNull();
+    // the token band renders beside it, untouched
+    expect(host!.querySelector('.board-row--tokens--bottom .cardview')).not.toBeNull();
+  });
+
+  it('passes the friendly lockedMana through to the mana tray', () => {
+    renderBoard(boardState([], []));
+    expect(host!.querySelectorAll('[aria-label="Locked mana"]')).toHaveLength(2);
   });
 });

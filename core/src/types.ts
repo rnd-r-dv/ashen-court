@@ -67,6 +67,12 @@ export interface PlayerState {
   mana: number; maxMana: number; surged: boolean;
   /** Mana locked at the start of this player's NEXT turn, then cleared. */
   overload: number;
+  /** Mana visibly locked THIS turn (Task 6): assigned at beginTurn from the
+   *  player's overload, kept after mana is spent, cleared at turnEnd. The
+   *  overload amount is "waiting for next turn"; lockedMana is the same
+   *  amount once it has been spent — presentation state the tray ledger
+   *  reads. Plain JSON serialization carries both. */
+  lockedMana: number;
 }
 export type Phase = 'mulligan' | 'main' | 'gameOver';
 

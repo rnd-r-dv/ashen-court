@@ -26,7 +26,12 @@ export default function DeckCount({ remaining, label }: DeckCountProps) {
       aria-label={`${label}: ${remaining} cards left in deck`}
       title={`${remaining} cards left in deck`}
     >
-      <span className="deckcount-icon" aria-hidden="true">▤</span>
+      {/* Drawn deck glyph (Task 6): a flat two-card stack — the Armorial
+          world draws its icons; no Unicode stand-ins. */}
+      <svg className="deckcount-icon" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+        <rect x="2" y="1.5" width="8" height="6" rx="0.5" fill="none" />
+        <rect x="1.5" y="4.5" width="9" height="6" rx="0.5" fill="none" />
+      </svg>
       <span className="deckcount-num">{remaining}</span>
     </div>
   );

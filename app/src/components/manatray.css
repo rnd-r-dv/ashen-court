@@ -1,9 +1,9 @@
-/* ManaTray (Task 31) — mana crystal rail. Theme tokens only.
+/* ManaTray (Task 31) — mana pip ledger (Task 6). Theme tokens only.
  *
- * UI pass 2026-08-08: crystals went from 11px to 20px and the rail from a
- * 5-column grid to a single row. Mana is the core resource and was the least
- * visible element on the screen — an 11px diamond with a 12px readout,
- * floating above the hand's left edge. */
+ * The Armorial tray is a ledger line, not a crystal rail: inked cells for
+ * mana available now, hairline cells for mana spent, and a struck-through
+ * column for the overload lock of the current turn. Flat — no gradients,
+ * no glows, no inset shadows. */
 
 .manatray {
   display: flex;
@@ -18,29 +18,53 @@
   max-width: 260px;
 }
 
+/* A ledger cell: a rotated diamond so full/spent/locked read at a glance. */
 .manatray-pip {
   width: 20px;
   height: 20px;
   transform: rotate(45deg);
-  border-radius: 3px;
-  border: 1px solid var(--border);
-  background: var(--bg-2);
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--line-dim);
+  background: transparent;
 }
 
-/* Available to spend right now. */
+/* Available to spend right now — the cell is inked. */
 .manatray-pip--full {
-  background: radial-gradient(circle at 35% 30%, #ffe9b8, var(--gold) 60%, #6d4c10);
-  border-color: var(--gold);
-  box-shadow: 0 0 8px rgba(217, 164, 65, 0.6);
+  background: var(--line);
+  border-color: var(--line);
 }
 
-/* Unlocked but already spent this turn — visibly a crystal, visibly empty,
-   so "how much have I used" is readable at a glance. */
+/* Unlocked but already spent this turn — an empty hairline cell, so "how
+   much have I used" is readable at a glance. */
 .manatray-pip--spent {
-  background: var(--bg-2);
-  border-color: var(--gold-dim);
-  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+  background: transparent;
+  border-color: var(--line-dim);
+}
+
+/* Locked mana (Task 6): the overload lock of this turn, struck through. A
+   separate ledger column so spending ordinary mana never clears it. */
+.manatray-locked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line-dim);
+}
+
+.manatray-pip--locked {
+  position: relative;
+  border-color: var(--line-dim);
+}
+
+/* The strike rides across the diamond (the pip is rotated, so the horizontal
+   rule crosses it diagonally — a struck cell, not a filled one). */
+.manatray-pip--locked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -3px;
+  right: -3px;
+  height: 1px;
+  background: var(--line-dim);
 }
 
 .manatray-readout {
@@ -48,7 +72,6 @@
   font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--gold);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  color: var(--line);
   white-space: nowrap;
 }

@@ -93,7 +93,7 @@ export class Game implements Resolver {
         discountMostExpensive: 0, discountNextSpell: 0,
       },
       deck, hand: [], board: [], artifacts: [],
-      mana: 0, maxMana: 0, surged: false, overload: 0,
+      mana: 0, maxMana: 0, surged: false, overload: 0, lockedMana: 0,
     };
   }
 
@@ -439,6 +439,11 @@ export class Game implements Resolver {
         // endOfTurn triggers fire for the player ending their turn, BEFORE the
         // turn advances (they belong to the turn that is ending).
         this.fireTurnTriggers(evt.player, 'endOfTurn');
+        // The lock expires with the turn it locked (Task 6): lockedMana is a
+        // same-turn ledger value, so it clears here. The incoming player's
+        // beginTurn reassigns it from THEIR overload, so a lock never bleeds
+        // into the opponent's turn.
+        this.state.players[evt.player].lockedMana = 0;
         this.state.turn += 1;
         this.beginTurn(this.currentPlayer());
         break;
@@ -631,8 +636,13 @@ export class Game implements Resolver {
     // overload: the lock applies to THIS turn's pool and is then spent. It
     // subtracts from the emitted mana rather than from maxMana, so the crystal
     // count on screen stays truthful and the lock lasts exactly one turn.
+    // lockedMana (Task 6) keeps the spent lock visible for the tray ledger:
+    // overload is the amount waiting for the next turn, lockedMana the amount
+    // currently struck through. Both are state (inline), never events — the
+    // manaChanged event is what the UI animates.
     const locked = Math.min(p.overload, maxMana);
     p.overload = 0;
+    p.lockedMana = locked;
     p.hero.usedPower = false;
     p.hero.discountMostExpensive = 0;
     p.hero.discountNextSpell = 0;

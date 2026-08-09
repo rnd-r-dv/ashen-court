@@ -11,6 +11,8 @@ import './manatray.css';
 export interface ManaTrayProps {
   mana: number;
   maxMana: number;
+  /** Mana locked (overload) THIS turn — struck-through pips beside the rail. */
+  lockedMana?: number;
   /** manaChanged sequence counter — remounts the pips and replays the pop. */
   pulse?: number;
   /** Animation duration scale (fast mode 0.5). */
@@ -33,7 +35,10 @@ export function pipStates(mana: number, maxMana: number): PipState[] {
   return Array.from({ length: unlocked }, (_, i) => (i < available ? 'full' : 'spent'));
 }
 
-export default function ManaTray({ mana, maxMana, pulse = 0, animScale = 1 }: ManaTrayProps) {
+export default function ManaTray({ mana, maxMana, lockedMana = 0, pulse = 0, animScale = 1 }: ManaTrayProps) {
+  // The lock is capped the same way the rail is: a runaway overload must not
+  // overflow the ledger (mirrors pipStates' MAX_PIPS clamp).
+  const locked = Math.min(Math.max(lockedMana, 0), MAX_PIPS);
   return (
     <div className="manatray" title={`${mana}/${maxMana} mana`} aria-label={`Mana ${mana} of ${maxMana}`}>
       {/* Task 39: keyed by the pulse counter so each manaChanged replays the pop */}
@@ -49,6 +54,23 @@ export default function ManaTray({ mana, maxMana, pulse = 0, animScale = 1 }: Ma
           <span key={i} className={`manatray-pip manatray-pip--${state}`} />
         ))}
       </motion.div>
+      {/* Locked mana (Task 6): a separate ledger column so the struck-through
+          pips survive ordinary spending and stay individually labeled. Kept
+          OUT of the aria-hidden pips rail so the label is announced. */}
+      {locked > 0 && (
+        /* The container is a visual divider; each struck pip carries the
+           accessible name itself. */
+        <div className="manatray-locked">
+          {Array.from({ length: locked }, (_, i) => (
+            <span
+              key={i}
+              className="manatray-pip manatray-pip--locked"
+              role="img"
+              aria-label="Locked mana"
+            />
+          ))}
+        </div>
+      )}
       <span className="manatray-readout">
         {mana}/{maxMana}
       </span>

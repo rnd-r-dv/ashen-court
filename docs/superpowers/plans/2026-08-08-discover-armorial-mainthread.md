@@ -1,213 +1,365 @@
 # Discover, the Armorial Rework, and the Animation Overhaul — Main-Thread Plan
 
-> **For agentic workers:** this plan is deliberately NOT for worker agents. Every task here crosses package boundaries (`core` + `server` + `app`), owns a design contract that cannot be verified by a unit test, or requires visual judgement against a rendered screenshot. Run it in the main thread with `superpowers:executing-plans`.
+> **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:executing-plans` in the main thread. Do not delegate implementation tasks. Task 10 alone uses fresh `general-purpose` reviewers because the named Impeccable reviewer agents are unavailable in this harness.
 
-**Goal:** Ship the Discover mechanic across all three packages, replace the app's visual world with the Armorial, and rebuild the animation layer so the game reads as authored rather than assembled.
+**Goal:** Ship deterministic FIFO Discover across `core`, `server`, and `app`; replace the app's visual world with the Armorial; and rebuild motion so it communicates the rules accurately.
 
-**Architecture:** Discover introduces the engine's first *interrupting* state — a pending choice that suspends normal intent legality — which touches the deterministic replay contract, the LAN authorization gate, and the app's interaction state machine at once. The Armorial replaces `theme.css` and `card.css` wholesale and reshapes `Board.tsx`, but touches no engine code. Animation work sits on top of the existing `useAnimationQueue` event loop.
+**Architecture:** Discover is the engine's first interrupting intent state. Candidate generation and state mutation remain event-driven; `pendingChoice` exposes the active choice while `pendingChoiceQueue` serializes overlapping choices in deterministic FIFO order. LAN authorization follows the pending owner, and the app treats that owner—not the current turn—as the temporary actor. The Armorial is staged through canonical tokens plus temporary compatibility aliases, then every consumer migrates before the aliases are deleted. Animation keeps Framer Motion and the existing one-event queue, with one `combatStarted` event carrying both sides of a simultaneous exchange.
 
-**Tech Stack decisions — no new dependencies are added.**
+**Tech Stack:** TypeScript, Vitest, React 18, Vite, WebSocket, Framer Motion 11, plain CSS custom properties, self-hosted Cardo 400/400 italic/700 woff2, inline SVG. No new package dependency.
 
-| Concern | Choice | Why |
-|---|---|---|
-| Animation | **Framer Motion 11**, already in `app/package.json` | The event-driven `useAnimationQueue` and the variant-factory pattern in `components/animations.ts` are good architecture. The problem is the *content* of the animations, not the library. Adding a second motion library would fragment the timing model. |
-| Type | **Cardo, self-hosted** as woff2 in `app/public/fonts/` | LAN play must work with no internet — a Google Fonts `<link>` would blank the type on an offline machine. Cardo is cut for medieval scholarship, so the archaism is derived, not costumed, and it ships regular, italic, and small caps. |
-| Styling | **Plain CSS with custom properties**, as today | The project has no CSS framework and no build-time style tooling. Introducing one would be a second migration on top of the visual one. |
-| Colour system | CSS custom properties in `theme.css`, one tincture token per archetype | Twelve houses need twelve values addressable by `data-archetype`; custom properties are the only mechanism already in use. |
-| Icons | **Hand-authored inline SVG** in the world's own grammar | An icon library would import a foreign line weight and corner language. Heraldic charges have to be drawn, not imported. |
-| Layout | CSS Grid for the board registers, flexbox within rows | Already the pattern in `board.css`. |
-| 3D / WebGL | **None** | The direction is flat and graphic by decision. Depth effects would reintroduce exactly the gradient-and-glow chrome that reads as AI-generated. |
+## Baseline and workspace
+
+- Execute in `/Users/lucas/.pi/worktrees/tcg/discover-armorial` on branch `feature/discover-armorial`.
+- Base commit: `1e56fe76f96a2a495a5d161def7b5eb21ae546e6`.
+- Clean committed baseline: **581 tests across 79 files**, all passing.
+- `core/tests/__def.test.ts` in the original checkout was disposable investigation output for the already-shipped MTG-style simultaneous-defense decision. Do not copy or commit it.
+- Leave the original dirty `main` checkout untouched.
 
 ## Global Constraints
 
 - Desktop and laptop only (`app/PRODUCT.md`). No mobile or tablet layout work.
-- All 278 card ids immutable; card art is seeded from `hashId(card.id)`.
+- All 278 non-token card IDs are immutable; card art is seeded from `hashId(card.id)`.
 - Generated card art and the 5:7 card proportion are binding brand commitments.
-- **Gules `#A81E22` is reserved exclusively for damage** and never decorates.
-- **Or `#B8913C`** marks legendary rarity and the active turn only.
-- No bevels, gradients, glows, drop shadows used as depth, or faux-metal textures. Flat tinctures and hairline rules only.
-- `prefers-reduced-motion: reduce` must be honoured by every new animation. `Background.tsx:32` shows the existing pattern.
-- The direction contract (below) goes in the emitted markup as an HTML comment and must survive the production build.
+- **Gules `#A81E22` is reserved exclusively for damage.**
+- **Or `#B8913C` is reserved for legendary rarity and the active turn.**
+- No bevels, gradients, glows, depth drop shadows, faux-metal textures, or 3D/WebGL.
+- Every new animation honors `prefers-reduced-motion: reduce`.
+- Do not add `line-clamp` anywhere in `card.css`, do not set `.card--bleed .card__body` to `flex: 0 0`, and do not unhide `.card--board .card__body`.
+- App behavior that matters must have runtime tests; Vite strips types. Final verification additionally runs app `tsc --noEmit` explicitly.
+- The direction contract in Task 4 is the first child of `app/index.html`'s `<body>` and must survive `vite build`.
 
 ---
 
-### Task 1: Discover — engine
+### Task 0: Render live board state before visual work
 
 **Files:**
-- Modify: `core/src/types.ts` (`Intent`, `GameState`), `core/src/engine/game.ts`, `core/src/engine/intents.ts`, `core/src/engine/effects.ts`, `core/src/cardtext.ts`
-- Test: `core/tests/discover.test.ts` (create)
+- Modify: `app/src/components/Board.tsx`
+- Modify: `app/src/components/CardView.tsx`
+- Modify: `app/src/components/Card.tsx`
+- Modify: `app/src/components/CardFrame.tsx`
+- Create: `app/tests/boardKeywords.test.ts`
 
 **Interfaces:**
-- Produces: `Intent` variant `{ kind: 'discover'; choice: number }`; `GameState.pendingChoice: { player: PlayerIndex; cardIds: string[] } | null`; `EffectKind` member `'discover'`.
+- Produces: optional `keywords?: readonly Keyword[]` and `silenced?: boolean` props threaded `CardView → Card → CardFrame`.
+- Rule: hand cards omit both props and continue rendering immutable card-definition text; board creatures pass `CreatureState.keywords` and `CreatureState.silenced`.
 
-- [ ] **Step 1: Write the failing tests**
-
-Create `core/tests/discover.test.ts` covering four behaviours:
-
-```ts
-import { describe, it, expect } from 'vitest';
-import { Game } from '../src/engine/game.js';
-import { makeTestSetup } from './helpers.js';
-import { applyEffect } from '../src/engine/effects.js';
-import { legalIntents } from '../src/engine/intents.js';
-
-describe('discover', () => {
-  it('offers exactly three candidates', () => {
-    const game = Game.create(makeTestSetup());
-    game.state.phase = 'main';
-    applyEffect(game, { player: 0, cardId: 'test' }, { kind: 'discover' });
-    expect(game.state.pendingChoice?.cardIds).toHaveLength(3);
-    expect(game.state.pendingChoice?.player).toBe(0);
-  });
-
-  it('suspends every other intent while a choice is pending', () => {
-    const game = Game.create(makeTestSetup());
-    game.state.phase = 'main';
-    applyEffect(game, { player: 0, cardId: 'test' }, { kind: 'discover' });
-    const legal = legalIntents(game, 0);
-    expect(legal.every(i => i.kind === 'discover')).toBe(true);
-    expect(legal).toHaveLength(3);
-  });
-
-  it('puts the chosen card in hand and clears the choice', () => {
-    const game = Game.create(makeTestSetup());
-    game.state.phase = 'main';
-    applyEffect(game, { player: 0, cardId: 'test' }, { kind: 'discover' });
-    const picked = game.state.pendingChoice!.cardIds[1]!;
-    const before = game.state.players[0].hand.length;
-    game.submit({ kind: 'discover', choice: 1 });
-    expect(game.state.players[0].hand).toHaveLength(before + 1);
-    expect(game.state.players[0].hand.at(-1)).toBe(picked);
-    expect(game.state.pendingChoice).toBeNull();
-  });
-
-  it('replays identically from the same seed', () => {
-    const run = () => {
-      const g = Game.create(makeTestSetup());
-      g.state.phase = 'main';
-      applyEffect(g, { player: 0, cardId: 'test' }, { kind: 'discover' });
-      g.submit({ kind: 'discover', choice: 0 });
-      return g.serialize();
-    };
-    expect(run()).toBe(run());
-  });
-});
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `npx vitest run core/tests/discover.test.ts` — expect type errors on `pendingChoice` and the `discover` intent.
-
-- [ ] **Step 3: Implement**
-
-Add to `core/src/types.ts`:
+- [ ] **Step 1: Add failing runtime coverage.** Render a board creature whose definition has `taunt` and a deathrattle, but whose live state has `keywords: ['stealth']` and `silenced: true`. Assert that the DOM contains a Stealth chip, contains no Taunt chip, and contains no generated deathrattle text. Add the inverse case for a runtime-added keyword.
 
 ```ts
-export type Intent =
-  | { kind: 'mulligan'; keep: number[] }
-  | { kind: 'playCard'; handIndex: number; target?: TargetRef }
-  | { kind: 'attack'; attackerId: string; target: TargetRef }
-  | { kind: 'heroPower'; target?: TargetRef }
-  | { kind: 'discover'; choice: number }
-  | { kind: 'endTurn' };
+expect(screen.getByText('Stealth')).toBeTruthy();
+expect(screen.queryByText('Taunt')).toBeNull();
+expect(screen.queryByText(/Deathrattle:/)).toBeNull();
 ```
 
-and to `GameState`:
+- [ ] **Step 2: Prove the test fails.**
+
+Run: `npx vitest run app/tests/boardKeywords.test.ts`
+Expected: the board still renders definition keywords/text.
+
+- [ ] **Step 3: Thread the live overrides.** In `Card`, compute:
 
 ```ts
-  /** Set while a discover is open. The engine is SUSPENDED: legalIntents
-   *  returns only the three discover intents, so no other action can resolve
-   *  and the pending choice can never be orphaned by an endTurn. Candidates
-   *  are drawn through the seeded RNG, so replay reproduces them exactly. */
-  pendingChoice: { player: PlayerIndex; cardIds: string[] } | null;
+const shownKeywords = keywords ?? card.keywords;
+const shownText = silenced ? '' : cardText(card);
 ```
 
-Candidate selection must go through `game.pickRandom` (the counting RNG wrapper) so `serialize()`'s `{seed, calls}` stays accurate. Draw three distinct ids from the registry pool, excluding tokens and `mana-surge`.
+Pass those values to `CardFrame`; `Board.tsx` passes `c.keywords` and `c.silenced`.
 
-In `legalIntents`, before anything else:
-
-```ts
-  // A pending discover suspends the game: nothing else is legal, for either
-  // player. Returning early here is what stops an endTurn from stranding an
-  // unanswered choice, which would deadlock the LAN game.
-  const pending = game.state.pendingChoice;
-  if (pending) {
-    if (pending.player !== player) return [];
-    return pending.cardIds.map((_, i) => ({ kind: 'discover' as const, choice: i }));
-  }
-```
-
-In `Game.submit`, handle the new intent: validate `phase`, that `pendingChoice` exists, that `pendingChoice.player === me`, and that `choice` indexes the array. Emit a `discoverResolved` event; add its `dispatch` case to push the card into hand and null the choice (the `default` branch throws, so the case is required).
-
-Also guard: `submit` must reject every *other* intent kind while `pendingChoice` is set.
-
-`cardtext.ts`: `case 'discover': return 'Discover a card.';`
-
-- [ ] **Step 4-5: Run the file, then `npm test`.** Expected: all pass.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Verify and commit separately.**
 
 ```bash
-git add core/src core/tests
-git commit -m "feat(core): add the discover mechanic"
+npx vitest run app/tests/boardKeywords.test.ts app/tests/cardTextWell.test.ts
+npm test
+npx tsc --noEmit -p app/tsconfig.json
+git add app/src/components/Board.tsx app/src/components/CardView.tsx app/src/components/Card.tsx app/src/components/CardFrame.tsx app/tests/boardKeywords.test.ts
+git commit -m "fix(app): render live board keywords and silence"
 ```
 
 ---
 
-### Task 2: Discover — LAN authorization
-
-The server gates intents by socket identity against *the acting player*. A pending choice belongs to a player who may not be the acting player, so the existing gate would reject a legitimate discover.
+### Task 1: Discover engine, FIFO choices, bots, and curated cards
 
 **Files:**
-- Modify: `server/src/index.ts` (or wherever `playerIndex(room, socket)` is compared to the acting player — read it first)
-- Test: `server/tests/discover-gate.test.ts` (create)
+- Modify: `core/src/types.ts`
+- Modify: `core/src/engine/game.ts`
+- Modify: `core/src/engine/intents.ts`
+- Modify: `core/src/engine/effects.ts`
+- Modify: `core/src/cardtext.ts`
+- Modify: `core/src/bot/policies.ts`
+- Modify: `core/src/data/neutrals.ts`
+- Modify: `core/src/data/starforged.ts`
+- Modify: `core/src/data/hollow-choir.ts`
+- Create: `core/tests/discover.test.ts`
+- Modify: `core/tests/cardtext.test.ts`
+- Modify: `core/tests/bot/integration.test.ts`
+- Modify: `core/tests/data.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1's `pendingChoice`.
-- Produces: no protocol change. `server/src/protocol.ts` carries `Intent` by import from `@ashen/core`, so the new variant rides the wire for free — **verify this by reading the file rather than assuming it.**
 
-- [ ] **Step 1:** Write a test asserting (a) a discover from the choice-owner's socket is accepted, (b) a discover from the other socket is rejected with an `error` message, (c) a non-discover intent from either socket is rejected while a choice is pending.
+```ts
+export interface PendingChoice {
+  kind: 'discover';
+  player: PlayerIndex;
+  cardIds: string[];
+}
+```
 
-- [ ] **Step 2:** Run it; expect the wrong-socket case to pass incorrectly or the right-socket case to be rejected.
+Add these fields to the existing `GameState` interface:
 
-- [ ] **Step 3:** Change the authorization check to: when `game.state.pendingChoice` is set, the authorized player is `pendingChoice.player`; otherwise it is the acting player, as today. Add a comment explaining that the engine alone cannot tell who submitted, which is why this gate exists at all.
+```ts
+pendingChoice: PendingChoice | null;
+pendingChoiceQueue: PendingChoice[];
+```
 
-- [ ] **Step 4-5:** Run `npm test -w server`, then `npm test`.
+Add these members to the existing unions:
 
-- [ ] **Step 6: Commit**
+```ts
+// EffectKind
+| 'discover'
+
+// Intent
+| { kind: 'discover'; choice: number }
+
+// GameEvent
+| { type: 'discoverOffered'; choice: PendingChoice }
+| { type: 'discoverResolved'; player: PlayerIndex; cardId: string }
+```
+
+The core build must keep the `applyEffect`, `effectText`, and `dispatch` switches exhaustive. `pendingChoice` is the only choice exposed to legality/UI; `pendingChoiceQueue` holds later offers. Both serialize as ordinary `GameState` and clone with the search state.
+
+- [ ] **Step 1: Write failing engine tests.** Cover all of these cases in `core/tests/discover.test.ts`:
+  1. Three distinct candidates are produced through the seeded RNG.
+  2. Tokens and `mana-surge` are absent.
+  3. Only the pending owner receives three legal Discover intents; every other player receives none.
+  4. The pending owner can resolve while they are **not** `currentPlayer()`.
+  5. Every non-Discover intent and every out-of-range choice is rejected without mutation.
+  6. Resolution adds the selected card to the pending owner's hand through `discoverResolved`.
+  7. Two offers queue FIFO; resolving the first exposes the second, then clears both fields.
+  8. `gameOver` clears active and queued choices.
+  9. A true serialize/deserialize round trip preserves candidates, owner, queue, RNG position, and byte-identical continuation.
+  10. `clone()` preserves active/queued choices while retaining its existing empty-log contract.
+
+Use a real round trip, not two fresh games:
+
+```ts
+const restored = Game.deserialize(game.serialize(), game.registry);
+expect(restored.state.pendingChoice).toEqual(game.state.pendingChoice);
+expect(restored.state.pendingChoiceQueue).toEqual(game.state.pendingChoiceQueue);
+
+game.submit({ kind: 'discover', choice: 1 });
+restored.submit({ kind: 'discover', choice: 1 });
+expect(restored.serialize()).toBe(game.serialize());
+```
+
+- [ ] **Step 2: Prove runtime failure and type failure separately.** Vitest transpiles without type-checking.
 
 ```bash
-git add server/src server/tests
-git commit -m "fix(server): authorize discover against the pending choice owner"
+npx vitest run core/tests/discover.test.ts
+npm run build -w core
+```
+
+Expected: runtime assertions fail because Discover is absent; `tsc --noEmit` fails on the new type members.
+
+- [ ] **Step 3: Add the state and event model.** Initialize `pendingChoice: null` and `pendingChoiceQueue: []` in the constructor. Add explicit `dispatch` cases:
+
+```ts
+case 'discoverOffered':
+  if (this.state.pendingChoice === null) this.state.pendingChoice = evt.choice;
+  else this.state.pendingChoiceQueue.push(evt.choice);
+  break;
+case 'discoverResolved':
+  this.state.players[evt.player].hand.push(evt.cardId);
+  this.state.pendingChoice = this.state.pendingChoiceQueue.shift() ?? null;
+  break;
+case 'gameOver':
+  this.state.phase = 'gameOver';
+  this.state.pendingChoice = null;
+  this.state.pendingChoiceQueue = [];
+  break;
+```
+
+Do not mutate these fields directly from `applyEffect`; events remain the mutation path.
+
+- [ ] **Step 4: Generate candidates deterministically.** In the `'discover'` effect branch, build `const eligible = [...registryOf(game).pool().values()]`, exclude `card.archetype === 'token'` and `card.id === 'mana-surge'`, then select and remove one item at a time with `game.pickRandom` until three remain. Push `discoverOffered`, then the existing `effectResolved` marker. Throw before consuming RNG if the registry has fewer than three eligible cards.
+
+- [ ] **Step 5: Resolve the temporary actor before normal turn logic.** `Game.submit` must check `state.pendingChoice` first:
+
+```ts
+const pending = this.state.pendingChoice;
+let me: PlayerIndex;
+if (pending !== null) {
+  if (intent.kind !== 'discover') throw new Error('Resolve Discover first');
+  me = pending.player;
+} else {
+  if (intent.kind === 'discover') throw new Error('No Discover choice pending');
+  me = this.currentPlayer();
+}
+// Continue through the existing top-level session below: resolveIntent,
+// deferred checkWin, and the shared runQueue collector must still run.
+```
+
+In `resolveIntent`, validate the index against the active choice and emit `discoverResolved`. Do **not** require `pending.player === currentPlayer()` and do not require `phase === 'main'`; start/end-turn triggers can create a valid out-of-turn choice.
+
+- [ ] **Step 6: Suspend legality.** Put this at the top of `legalIntents`:
+
+```ts
+const pending = game.state.pendingChoice;
+if (pending !== null) {
+  return pending.player === player
+    ? pending.cardIds.map((_, choice) => ({ kind: 'discover' as const, choice }))
+    : [];
+}
+```
+
+- [ ] **Step 7: Make every bot tier and Grandmaster simulation choice-aware.** Recruit already picks from legal intents. Veteran/Grandmaster may score the three resulting hands normally. Update `scoreAfterEnemyTurn` so a pending choice is resolved by `pendingChoice.player` even when that player differs from the simulated current player; only exit when no choice is pending and the simulated enemy turn has ended. Add a deterministic integration test in which a pending Discover appears during Grandmaster's depth-2 enemy-turn simulation.
+
+- [ ] **Step 8: Add player-facing text and curated reachability without changing IDs.** Add `case 'discover': return 'Discover a card.';` and replace exactly these effects:
+  - `neutral-scroll` / **Scroll of Lore**: `draw(1)` → `{ kind: 'discover' }`.
+  - `star-meditate` / **Meditate**: `draw(1), gainMana(1)` → `{ kind: 'discover' }, gainMana(1)`.
+  - `choir-candle` / **Candlelight**: `draw(1), heal(2)` → `{ kind: 'discover' }, heal(2)`.
+
+Do not rename these IDs; art seeds must remain stable. Assert the three definitions contain Discover and still pass pool/deck validation.
+
+- [ ] **Step 9: Verify and commit narrowly.**
+
+```bash
+npx vitest run core/tests/discover.test.ts core/tests/cardtext.test.ts core/tests/bot/integration.test.ts core/tests/data.test.ts
+npm run build -w core
+npm test -w core
+npm test
+git add core/src/types.ts core/src/engine/game.ts core/src/engine/intents.ts core/src/engine/effects.ts core/src/cardtext.ts core/src/bot/policies.ts core/src/data/neutrals.ts core/src/data/starforged.ts core/src/data/hollow-choir.ts core/tests/discover.test.ts core/tests/cardtext.test.ts core/tests/bot/integration.test.ts core/tests/data.test.ts
+git commit -m "feat(core): add deterministic FIFO discover"
 ```
 
 ---
 
-### Task 3: Discover — app overlay
+### Task 2: Discover LAN authorization and replay
 
 **Files:**
-- Create: `app/src/components/DiscoverOverlay.tsx`, `app/src/components/discover.css`
-- Modify: `app/src/screens/Match.tsx`, `app/src/game/useMatch.ts`
+- Modify: `server/src/rooms.ts`
+- Modify: `server/tests/rooms.test.ts`
 
-- [ ] **Step 1:** Render from `state.pendingChoice`: three full card plates, centred, board dimmed behind. Clicking one submits `{ kind: 'discover', choice: i }`.
-- [ ] **Step 2:** Keyboard: `1`/`2`/`3` select; focus lands on the first card; arrow keys move between them. The overlay is a focus trap while open.
-- [ ] **Step 3:** When `pendingChoice.player` is not the viewer, show a waiting state naming the opponent rather than the candidates — the choice is hidden information.
-- [ ] **Step 4:** Confirm the bot resolves discovers. `bot/policies.ts` enumerates `legalIntents`, so a discover is just another legal intent — verify Grandmaster's depth-2 search does not choke on the suspended state.
-- [ ] **Step 5:** `npm test`, then play a local match with a discover card and confirm the flow end to end.
-- [ ] **Step 6:** Commit.
+**Interfaces:**
+- Consumes: Task 1's `pendingChoice.player` and Discover intent.
+- Produces: no protocol declaration change; `server/src/protocol.ts` already imports `Intent` from `@ashen/core`.
+
+- [ ] **Step 1: Add failing room tests using the existing WebSocket harness.** Cover two paths:
+  - **Authorization path:** after room startup, obtain the room from `RoomRegistry.roomOf(hostSocket)` and call `room.game!.applyEvent({ type: 'discoverOffered', choice: { kind: 'discover', player: 1, cardIds: ['neutral-militia', 'neutral-scroll', 'neutral-boar'] } })`. Assert guest Discover is accepted, host Discover is rejected only to host, and `endTurn` from either socket is rejected while pending.
+  - **Replay path:** use a deterministic-seed helper to start a valid deck with curated `neutral-scroll` in the current player's opening hand, complete both mulligans, play it through the socket so both `playCard` and `discover` enter `room.intents`, then reconnect and assert the replay reconstructs the same final shadow state. Never inject pending state for the replay case, because injected events are not part of the append-only intent log.
+
+- [ ] **Step 2: Prove the owner test fails.**
+
+Run: `npx vitest run server/tests/rooms.test.ts -t "Discover"`
+Expected: the current gate authorizes `currentPlayer()` rather than the pending owner.
+
+- [ ] **Step 3: Put pending authorization before mulligan/main authorization.** In `RoomRegistry.handleIntent`:
+
+```ts
+const acting: PlayerIndex = g.state.pendingChoice?.player
+  ?? (g.state.phase === 'mulligan'
+    ? ((g.state.mulligansDone[0] ? 1 : 0) as PlayerIndex)
+    : g.currentPlayer());
+```
+
+Keep the socket identity check. The engine deliberately cannot identify a socket; the server must enforce that only the owner submits the otherwise-valid pending intent.
+
+- [ ] **Step 4: Verify and commit.**
+
+```bash
+npx vitest run server/tests/rooms.test.ts -t "Discover"
+npm run build -w server
+npm test -w server
+npm test
+git add server/src/rooms.ts server/tests/rooms.test.ts
+git commit -m "fix(server): authorize discover choice owners"
+```
 
 ---
 
-### Task 4: The Armorial — tokens and type
-
-This is the foundation every later visual task builds on. Nothing renders differently yet.
+### Task 3: Discover overlay, hotseat transfer, bot drive, and Forge preset
 
 **Files:**
+- Create: `app/src/components/DiscoverOverlay.tsx`
+- Create: `app/src/components/discover.css`
+- Modify: `app/src/screens/Match.tsx`
+- Modify: `app/src/game/useMatch.ts`
+- Modify: `app/src/forge/formState.ts`
+- Create: `app/tests/discoverOverlay.test.tsx`
+- Create: `app/tests/useMatchDiscover.test.tsx`
+- Modify: `app/tests/hotseat.test.ts`
+- Modify: `app/tests/forgeKeywords.test.ts`
+
+**Interfaces:**
+
+```ts
+interface DiscoverOverlayProps {
+  choice: PendingChoice;
+  viewer: PlayerIndex;
+  getCard(id: string): Card | undefined;
+  onChoose(choice: number): void;
+}
+```
+
+- [ ] **Step 1: Write failing overlay tests.** Assert that the owner sees three full `CardView size="preview"` plates; a non-owner sees only `Opponent is choosing a card…`; click and `1`/`2`/`3` submit the correct index; ArrowLeft/ArrowRight move focus; Tab/Shift+Tab wrap among the three buttons; Escape cannot dismiss an unresolved choice.
+
+- [ ] **Step 2: Implement the modal contract.** Use `role="dialog"`, `aria-modal="true"`, an explicit heading, three button refs, initial focus on the first card, and a component-scoped keydown handler. The board may be visually dimmed with a flat translucent ground color, never a gradient or glow.
+
+- [ ] **Step 3: Make pending ownership the app actor.** In `Match.tsx`, derive:
+
+```ts
+const actor: PlayerIndex = state.pendingChoice?.player
+  ?? (state.phase === 'mulligan'
+    ? ((state.mulligansDone[0] ? 1 : 0) as PlayerIndex)
+    : currentPlayer);
+const hideHands = setup.mode === 'hotseat' && viewer !== actor;
+```
+
+Replace the old `playerVisibility`-derived hotseat gate with this single actor gate for mulligan, main-turn, and pending-choice states. Render Discover independently of `myTurn`. If `viewer !== pendingChoice.player`, show `PassDevice` and no candidate names; only reveal candidates after `setViewer(actor)`. After resolution, actor returns to the turn owner and naturally requires a second pass. LAN shows the waiting copy to the non-owner without a pass-device prompt.
+
+- [ ] **Step 4: Drive bot-owned choices.** In `useMatch.stepRef`, add `isBotsChoice = g.state.pendingChoice?.player === botPlayer`. Schedule the bot when mulligan, main-turn, **or pending-choice** ownership belongs to it. In `humanLegal`, return `g.legalIntents(myPlayer)` when a pending choice belongs to the human even if it is not their turn.
+
+- [ ] **Step 5: Add Forge reachability.** Add this preset to `EFFECT_PRESETS`:
+
+```ts
+{ label: 'Discover a card', spec: { kind: 'discover' } }
+```
+
+Add `'discover'` to the exhaustive runtime list in `forgeKeywords.test.ts` and assert `draftToCard` preserves the preset in both spell effects and trigger effects.
+
+- [ ] **Step 6: Verify local, bot, hotseat, and LAN-visible behavior.**
+
+```bash
+npx vitest run app/tests/discoverOverlay.test.tsx app/tests/useMatchDiscover.test.tsx app/tests/hotseat.test.ts app/tests/forgeKeywords.test.ts
+npx tsc --noEmit -p app/tsconfig.json
+npm test
+```
+
+In the browser, play a curated Scroll of Lore/Meditate/Candlelight; verify owner-only candidates, the waiting state, keyboard selection, hotseat pass-before-reveal, and bot resolution.
+
+- [ ] **Step 7: Commit.**
+
+```bash
+git add app/src/components/DiscoverOverlay.tsx app/src/components/discover.css app/src/screens/Match.tsx app/src/game/useMatch.ts app/src/forge/formState.ts app/tests/discoverOverlay.test.tsx app/tests/useMatchDiscover.test.tsx app/tests/hotseat.test.ts app/tests/forgeKeywords.test.ts
+git commit -m "feat(app): add accessible discover flow"
+```
+
+---
+
+### Task 4: Armorial foundation, offline type, and migration aliases
+
+**Files:**
+- Create: `app/public/fonts/cardo-v21-latin-400.woff2`
+- Create: `app/public/fonts/cardo-v21-latin-400-italic.woff2`
+- Create: `app/public/fonts/cardo-v21-latin-700.woff2`
+- Create: `app/public/fonts/CARDO-OFL.txt`
+- Create: `app/src/fonts.css`
 - Modify: `app/src/theme.css`
-- Create: `app/public/fonts/` (Cardo woff2: regular, italic, bold), `app/src/fonts.css`
+- Modify: `app/src/index.css`
 - Modify: `app/index.html`
+- Create: `app/tests/armorialContract.test.ts`
 
-**Direction contract** — paste verbatim as the first child of `<body>` in `app/index.html`:
+**Direction contract — paste verbatim as the first child of `<body>`:**
 
 ```html
 <!--
@@ -228,185 +380,383 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 -->
 ```
 
-- [ ] **Step 1:** Download Cardo woff2 (SIL Open Font License) into `app/public/fonts/`. Write `app/src/fonts.css` with `@font-face` blocks using `font-display: swap` and local paths only — **no CDN**, because LAN play must work offline.
-- [ ] **Step 2:** Rewrite `app/src/theme.css`. Replace the violet/ember/gold tokens entirely:
+- [ ] **Step 1: Add contract tests.** Read `app/index.html`, `fonts.css`, and `theme.css` as text. Assert the direction comment precedes `<div id="root">`, every font URL begins `/fonts/`, no `http` appears in `fonts.css`, and the canonical tincture values match the contract.
 
-```css
-:root {
-  --ground:      #14120F;  /* iron-gall near-black */
-  --ground-deep: #0C0B09;
-  --ground-rise: #1D1A15;
-  --line:        #E8E0CE;  /* cream engraved hairline */
-  --line-dim:    rgba(232, 224, 206, 0.38);
-  --text:        #E8E0CE;
-  --text-dim:    #A79E8A;
+- [ ] **Step 2: Download official Cardo Latin assets and license.** Use exactly these commands; stop and report if any request or checksum fails.
 
-  --gules: #A81E22;  /* DAMAGE ONLY. Never decorative. */
-  --or:    #B8913C;  /* legendary rarity and active turn ONLY. */
-
-  /* Twelve house tinctures, flat and unmodulated. */
-  --house-ember:  #B4341C;
-  --house-choir:  #C9BFA4;
-  --house-vermin: #6B7A3A;
-  --house-dragon: #8C5A1E;
-  --house-roots:  #3C6B44;
-  --house-dance:  #4A2F63;
-  --house-bone:   #8A8578;
-  --house-pact:   #6B1F2E;
-  --house-coven:  #2F3E6B;
-  --house-star:   #3E5C7A;
-  --house-vigil:  #A88C3E;
-  --house-storm:  #4A6B75;
-
-  --font-display: 'Cardo', Georgia, serif;
-  --font-body:    'Cardo', Georgia, serif;
-}
+```bash
+mkdir -p app/public/fonts
+curl -fsSL https://fonts.gstatic.com/s/cardo/v21/wlp_gwjKBV1pqhv43IE7225P.woff2 -o app/public/fonts/cardo-v21-latin-400.woff2
+curl -fsSL https://fonts.gstatic.com/s/cardo/v21/wlpxgwjKBV1pqhv97IMx3ExNYCg.woff2 -o app/public/fonts/cardo-v21-latin-400-italic.woff2
+curl -fsSL https://fonts.gstatic.com/s/cardo/v21/wlpygwjKBV1pqhND-ZQW-WNlaiBW.woff2 -o app/public/fonts/cardo-v21-latin-700.woff2
+curl -fsSL https://raw.githubusercontent.com/google/fonts/main/ofl/cardo/OFL.txt -o app/public/fonts/CARDO-OFL.txt
+shasum -a 256 app/public/fonts/*
 ```
 
-Keep the existing `--space-*` and `--radius-*` scales, but drop `--radius-lg` to `6px`: a woodcut register has near-square corners.
+Expected hashes:
 
-- [ ] **Step 3:** Delete `--glow-gold` and `--glow-ember` and every rule consuming them. Grep for them across `app/src` and remove each usage rather than leaving dangling references.
-- [ ] **Step 4:** `npm run dev`, screenshot the match screen. It will look broken — that is expected at this step; only confirm the fonts load and no CSS variable is undefined.
-- [ ] **Step 5:** Commit.
+```text
+8e28b778b6e1a7ff9ca72f4dee2d53120aa2856dc1bfd0be44307e365b0e45bb  CARDO-OFL.txt
+bc802f41dcc8a73610b107af50373231bdc8dee8c0106a46be8efda44ea336b2  cardo-v21-latin-400-italic.woff2
+c0a8e24244241209f450c50f86a0dfcb5a891806184095b31abdbb136e9b38cc  cardo-v21-latin-400.woff2
+6985e79e5078958897e276228b9838c3bd5bb7bbaad662cb3f742e87c39e6e4c  cardo-v21-latin-700.woff2
+```
+
+- [ ] **Step 3: Define local fonts.** Create three `@font-face` blocks for Cardo 400 normal, 400 italic, and 700 normal with `font-display: swap`. Small caps use `font-variant-caps: small-caps`; there is no separate Cardo small-caps file.
+
+- [ ] **Step 4: Establish canonical tokens and temporary aliases.** Keep the spacing scale, set `--radius-lg: 6px`, and define the exact contract values:
+
+```css
+--ground: #14120F;
+--ground-deep: #0C0B09;
+--ground-rise: #1D1A15;
+--line: #E8E0CE;
+--line-dim: rgba(232, 224, 206, 0.38);
+--text: #E8E0CE;
+--text-dim: #A79E8A;
+--gules: #A81E22;
+--or: #B8913C;
+--house-ember: #B4341C;
+--house-choir: #C9BFA4;
+--house-vermin: #6B7A3A;
+--house-dragon: #8C5A1E;
+--house-roots: #3C6B44;
+--house-dance: #4A2F63;
+--house-bone: #8A8578;
+--house-pact: #6B1F2E;
+--house-coven: #2F3E6B;
+--house-star: #3E5C7A;
+--house-vigil: #A88C3E;
+--house-storm: #4A6B75;
+--beat: 140ms;
+--beat-long: 320ms;
+```
+
+To prevent undefined variables during Tasks 5–9, retain temporary aliases mapped to non-reserved Armorial colors:
+
+```css
+--bg-0: var(--ground);
+--bg-1: var(--ground-rise);
+--bg-2: var(--ground-deep);
+--border: var(--line-dim);
+--text-faint: var(--text-dim);
+--gold: var(--line);
+--gold-dim: var(--line-dim);
+--ember: var(--line);
+--ember-dim: var(--line-dim);
+--accent: var(--house-star);
+```
+
+Never map old decorative tokens to `--gules` or `--or`. Task 9 deletes every alias after consumers migrate.
+
+- [ ] **Step 5: Remove glow recipes immediately.** Delete `--glow-gold`, `--glow-ember`, and every consumer. Replace the body gradient and selection/focus glow in `index.css` with flat ground and hairline focus treatment.
+
+- [ ] **Step 6: Verify offline font behavior and production comment.** Build, grep the emitted HTML for `THESIS:`, launch the app, load once with browser networking disabled, and confirm computed `font-family` is Cardo with no failed font requests.
+
+```bash
+npx vitest run app/tests/armorialContract.test.ts
+npm run build -w app
+grep -q "THESIS: Twelve archetypes" app/dist/index.html
+```
+
+- [ ] **Step 7: Commit.**
+
+```bash
+git add app/public/fonts app/src/fonts.css app/src/theme.css app/src/index.css app/index.html app/tests/armorialContract.test.ts
+git commit -m "style(app): establish the Armorial foundation"
+```
 
 ---
 
-### Task 5: The Armorial — the card plate
+### Task 5: Armorial card plate
 
 **Files:**
-- Modify: `app/src/components/card.css`, `app/src/components/CardFrame.tsx`, `app/src/components/cardTreatment.ts`
+- Modify: `app/src/components/CardView.tsx`
+- Modify: `app/src/components/Card.tsx`
+- Modify: `app/src/components/CardFrame.tsx`
+- Modify: `app/src/components/card.css`
+- Modify: `app/src/components/cardTreatment.ts`
+- Modify: `app/src/components/keywordchip.css`
+- Modify: `app/src/components/CardArt.tsx`
+- Modify: `app/tests/cardArtWiring.test.ts`
+- Modify: `app/tests/boardSurface.test.ts`
+- Modify: `app/tests/cardTextWell.test.ts`
 
-- [ ] **Step 1: Hide the cost gem on board cards.** `CardFrame.tsx:120-122` renders `card__cost` unconditionally. Add a `showCost` prop, defaulting true, passed false from the board size. **This is the direct fix for the reported "defense stat" confusion** — leave a comment saying so.
-- [ ] **Step 2: Key the stats.** Attack and health pips gain small-caps labels from Cardo. No number on a board creature may appear bare.
-- [ ] **Step 3: Tincture by house.** `data-archetype` on the card root selects `--house-*` as the plate's field colour. The art window keeps its own neutral mount so tinctures never tint the committed illustration.
-- [ ] **Step 4: Flatten the frame.** Remove every gradient, inset shadow, and bevel from `card.css`. Rarity is expressed as hairline weight and, for legendary only, an `--or` rule.
-- [x] **Step 5: Rebuild the text well — the truncation defect. — DONE, superseded.**
+- [ ] **Step 1: Add failing runtime assertions.** Render hand and board sizes. Assert the hand plate has a cost marker, the board plate does not, and both attack/health values have accessible labels rather than bare numbers.
 
-  Shipped in `docs/superpowers/plans/2026-08-09-keyword-glossary-and-text-well.md` Task 1, merged as `3e3b2a9` / `0267058`. The line clamps are gone: `.card__text` is `flex: 0 0 auto` and never clamped, `.card__flavor` is `flex: 0 1 auto` and yields first, the `.card--hand .card__flavor` one-line override is deleted, and `.card--bleed .card__body` shrinks rather than running off the bottom of the frame. `app/tests/cardTextWell.test.ts` guards all of it — including a whole-file scan for `line-clamp`, so re-adding one anywhere fails CI.
+- [ ] **Step 2: Thread `showCost`.** Add `showCost?: boolean` through `CardView → Card → CardFrame`, default true, and pass false for `size="board"`. Keep the rationale comment: this prevents the cost gem from reading as a third defense stat.
 
-  **Do not redo this in Task 4's flatten pass.** Step 4 above strips gradients and bevels from `card.css` and will be editing the same file; leave the text-well region and the `.card--bleed .card__body` flex values alone. If a flatten edit trips `cardTextWell.test.ts`, the edit is wrong, not the test.
+- [ ] **Step 3: Key stats, house tinctures, and flat generated art.** Label Attack and Health in Cardo small caps. Map `data-archetype` to one `--house-*` field while the procedural art sits on an untinted neutral mount. Preserve the deterministic card-ID seed, scene composition, and generated-art component, but replace SVG `<linearGradient>`/`<radialGradient>` definitions and vignette fills with solid palette fields. Extend `cardArtWiring.test.ts` to prove card art still renders from the same spec without any SVG gradient element.
 
-- [ ] **Step 6:** Screenshot a hand card and a board card side by side at 1440×900. Verify both read correctly and the art is untinted. Include `coven-queen` and `ember-phoenix` in the shot — the longest flavor and the longest rules text — and confirm neither shows an ellipsis.
-- [ ] **Step 7:** Commit.
+- [ ] **Step 4: Flatten only the frame regions.** Remove gradients, inset shadows, bevels, decorative gold/ember, and every `filter: drop-shadow` recipe from `card.css`, including the `card-playable-glow` keyframes; replace playable state with a flat engraved-line affordance. Rarity is hairline weight; legendary alone uses `--or`. Preserve the text-well declarations guarded by `cardTextWell.test.ts`, and keep `.card--board .card__body { display: none }`.
+
+- [ ] **Step 5: Restyle shared keyword chips.** Preserve separate picker select/describe buttons and verify both in-card and Forge-picker variants.
+
+- [ ] **Step 6: Verify visually at 1440×900.** Capture one hand card and one board card together, with `coven-queen` and `ember-phoenix`; verify 5:7 proportion, untinted art, no ellipsis, no bare stat, and no board cost.
+
+```bash
+npx vitest run app/tests/boardSurface.test.ts app/tests/cardTextWell.test.ts app/tests/keywordChip.test.ts app/tests/cardArtWiring.test.ts
+npx tsc --noEmit -p app/tsconfig.json
+```
+
+- [ ] **Step 7: Commit.**
+
+```bash
+npm test
+npx tsc --noEmit -p app/tsconfig.json
+git add app/src/components/CardView.tsx app/src/components/Card.tsx app/src/components/CardFrame.tsx app/src/components/CardArt.tsx app/src/components/card.css app/src/components/cardTreatment.ts app/src/components/keywordchip.css app/tests/boardSurface.test.ts app/tests/cardTextWell.test.ts app/tests/cardArtWiring.test.ts
+git commit -m "style(app): rebuild the Armorial card plate"
+```
 
 ---
 
-### Task 6: The Armorial — the board as a ruled page
+### Task 6: Board as a ruled page and mana ledger
 
 **Files:**
-- Modify: `app/src/components/Board.tsx`, `app/src/components/board.css`
+- Modify: `core/src/types.ts`
+- Modify: `core/src/engine/game.ts`
+- Modify: `core/tests/overload.test.ts`
+- Create: `app/src/game/house.ts`
+- Modify: `app/src/components/Board.tsx`
+- Modify: `app/src/components/board.css`
+- Modify: `app/src/components/ManaTray.tsx`
+- Modify: `app/src/components/manatray.css`
+- Modify: `app/src/components/DeckCount.tsx`
+- Modify: `app/src/components/deckcount.css`
+- Create: `app/tests/house.test.ts`
+- Modify: `app/tests/board.test.ts`
+- Modify: `app/tests/manaTray.test.ts`
 
-- [ ] **Step 1: Add the token row.** Read `creature.token` (worker plan Task 3) and split each side into a creature register and a subordinate token sub-band. Tokens render at a smaller scale with the same plate language.
-- [ ] **Step 2: House banners.** Each side's margin carries its archetype's charge as inline SVG plus the house name in Cardo small caps.
-- [ ] **Step 3: Engraved rules.** Hairline `--line-dim` rules divide the registers. No panels, no cards-as-containers, no drop shadows.
-- [ ] **Step 4: Mana as a pip ledger.** Replace glowing crystals in `ManaTray.tsx` with filled/unfilled pips. Locked mana (overload) renders as a struck-through pip.
-- [ ] **Step 5:** Screenshot with a full board plus tokens on both sides. Verify no horizontal overflow at 1280px.
-- [ ] **Step 6:** Commit.
+- [ ] **Step 1: Add failing structure/state tests.** Given normal creatures and tokens on both sides, assert separate creature registers and token sub-bands. In core, assert overload is spent into `lockedMana` at `beginTurn`, remains known after mana is spent, serializes, and clears on `turnEnd`. In app, assert `lockedMana={2}` produces exactly two `aria-label="Locked mana"` pips without changing `pipStates(mana,maxMana)`.
 
+- [ ] **Step 2: Preserve spent overload for presentation.** Add `lockedMana: number` to `PlayerState`, initialize it to zero, assign the computed lock at `beginTurn`, and clear it in the existing `turnEnd` dispatch case. `overload` remains the amount waiting for the next turn; `lockedMana` is the amount visibly locked during the current turn. Plain JSON serialization carries both.
+
+- [ ] **Step 3: Split rows by `creature.token`.** Keep creature order stable within each partition. Tokens use the same CardView language at a smaller scale; do not count them against the normal row.
+
+- [ ] **Step 4: Derive house identity from the existing positional contract.** Create `houseOfHeroName(name)` in `app/src/game/house.ts` using `HEROES` zipped with `Object.keys(DECK_DEFS)` and the same first-entry fallback used elsewhere. Test all twelve hero names and the fallback. Each margin renders that house's name and a hand-authored flat inline-SVG charge.
+
+- [ ] **Step 5: Replace panel chrome with engraved rules.** Use `--line-dim` hairlines between registers. No container panels or depth shadows.
+
+- [ ] **Step 6: Convert mana to a pip ledger.** Preserve `pipStates(mana,maxMana)` for filled/unfilled state and add `lockedMana` as a separate prop. Locked pips remain struck through after ordinary mana spending and are accessibly labeled; update all six existing mana tests.
+
+- [ ] **Step 7: Verify at 1280×900 and 1440×900.** Capture full normal/token rows on both sides; confirm no horizontal overflow and exact locked-pip count.
+
+```bash
+npx vitest run core/tests/overload.test.ts app/tests/house.test.ts app/tests/board.test.ts app/tests/manaTray.test.ts
+npm run build -w core
+npx tsc --noEmit -p app/tsconfig.json
+npm test
+git add core/src/types.ts core/src/engine/game.ts core/tests/overload.test.ts app/src/game/house.ts app/src/components/Board.tsx app/src/components/board.css app/src/components/ManaTray.tsx app/src/components/manatray.css app/src/components/DeckCount.tsx app/src/components/deckcount.css app/tests/house.test.ts app/tests/board.test.ts app/tests/manaTray.test.ts
+git commit -m "feat(app): render Armorial board and locked mana"
+```
 ---
 
-### Task 7: Card inspect and hero power — the two reported UI bugs
+### Task 7: Live card inspect and permanent hero-power blazons
 
 **Files:**
-- Create: `app/src/components/InspectPanel.tsx`, `app/src/components/inspect.css`
-- Modify: `app/src/components/Board.tsx`, `app/src/components/CardView.tsx`, `app/src/components/Card.tsx`, `app/src/components/CardFrame.tsx`, `app/src/components/HeroPortrait.tsx`
+- Create: `app/src/components/InspectPanel.tsx`
+- Create: `app/src/components/inspect.css`
+- Modify: `app/src/components/Board.tsx`
+- Modify: `app/src/components/HeroPortrait.tsx`
+- Modify: `app/src/components/heroportrait.css`
+- Modify: `app/src/screens/Match.tsx`
+- Create: `app/tests/inspectPanel.test.tsx`
+- Modify: `app/tests/board.test.ts`
 
-- [ ] **Step 0: Render a board creature's LIVE keywords, not its card definition's.**
+**Consumes:** Task 0's live keyword/silence props and the existing `KeywordChip` popover.
 
-  This is a prerequisite for Step 1 and a standing bug in its own right. `Board.tsx:191` passes `card={def}` — the immutable registry definition. Only `attack`/`health` (line 194) and `exhausted`/`frozen`/`shields` (195-199) come from the live `CreatureState`. Everything else is the card as printed:
+- [ ] **Step 1: Add failing interaction tests.** Assert normal click inspects either side when idle; normal click targets rather than inspects while targeting; right-click always inspects and prevents the context menu; Escape closes; Tab wraps within the panel.
 
-  ```
-  Board.tsx:191   <CardView card={def} …/>        ← card DEFINITION
-  Card.tsx:79       keywords={card.keywords}      ← def.keywords, never c.keywords
-  Card.tsx:81       text={cardText(card)}         ← def effects, ignores c.silenced
-  ```
+- [ ] **Step 2: Render a full live plate.** Pass the selected `CreatureState` plus definition to `InspectPanel`. Show live attack, health, keywords, statuses, and silence-suppressed generated text. Render `<KeywordChip keyword={k}/>` for every live keyword. Never unhide the board mini text well.
 
-  This was nearly invisible before, because nothing in the game removed keywords and the one mutator (`giveKeyword`) was itself broken. The worker plan changes that: `silence` (Task 5), `stealth` (Task 8), and a repaired `giveKeyword` all mutate `c.keywords` at runtime, and **not one of them would show on the board**. A silenced creature would keep displaying "Deathrattle: Summon 2 Rats" forever.
+- [ ] **Step 3: Add permanent hero-power blazons for both heroes.** Show power name, cost, and `heroPowerText(power)` in each margin. Remove the hover-only `title` attribute from `HeroPortrait`.
 
-  - Thread an optional `keywords` prop through `CardView` → `Card` → `CardFrame`, defaulting to `card.keywords` when absent. `Board.tsx` passes `c.keywords`.
-  - Thread an optional `silenced` flag the same way. `Card.tsx` renders `silenced ? '' : cardText(card)` — a silenced creature has no rules text, which is also how the effect reads to a player.
-  - Hand cards pass neither: a card in hand has no `CreatureState`, so the defaults keep them rendering from the definition. This is why both props are optional rather than required.
-  - Write `app/tests/boardKeywords.test.ts`: build a board creature whose `CreatureState.keywords` differs from its card def (add one, remove one), render the board, and assert the chips match the creature, not the def.
+- [ ] **Step 4: Verify reports and accessibility.** Read an enemy creature without targeting, inspect while targeting via right-click, read both hero powers without hover, and traverse both dialogs/popovers by keyboard.
 
-- [ ] **Step 1: Inspect (report #2).** Clicking any board creature — **either side** — opens the full plate with generated `cardText`, its keywords, and live stats. Hands stay hidden. This must not collide with attack targeting: while targeting is active, a click targets; otherwise it inspects. Right-click inspects in both states.
+```bash
+npx vitest run app/tests/inspectPanel.test.tsx app/tests/board.test.ts app/tests/keywordChip.test.ts
+npx tsc --noEmit -p app/tsconfig.json
+```
 
-  **Do not build a keyword-text mechanism here — one exists.** `app/src/components/KeywordChip.tsx` (shipped in the keyword-glossary plan, Task 2, merged as `0d4573d`) renders one keyword and, on click, its `KEYWORD_TEXT` in a popover portalled to `document.body`. Render `<KeywordChip keyword={k} />` per keyword and the panel is done. It already handles Escape, click-outside, scroll/resize dismissal, and `stopPropagation` so a chip click never reaches the creature underneath — which matters here precisely because the creature is a click target.
+- [ ] **Step 5: Commit.**
 
-  This panel is also **the only place a board creature's keywords are legible at all.** `card.css` hides the whole text well on board minis (`.card--board .card__body { display: none }`) because at `zoom: 0.5` an 11px chip renders at 5.5px. The comment there points at this task by name. Do not answer that gap by un-hiding the well; answer it by making sure this panel actually shows the chips.
-- [ ] **Step 2: Hero power (report #1).** Render the power's name, cost, and `heroPowerText` as a permanent blazon in each hero's margin — **for both heroes**. Delete the `title` attribute at `HeroPortrait.tsx:174`; a hover-only tooltip is not an acceptable mechanism and was the whole bug.
-- [ ] **Step 3:** Keyboard: `Escape` closes the inspect panel; it is a focus trap while open.
-- [ ] **Step 4:** Verify against the original reports — open a match, click an enemy creature, read its text; read both hero powers without hovering.
-- [ ] **Step 5:** Commit.
+```bash
+npm test
+npx tsc --noEmit -p app/tsconfig.json
+git add app/src/components/InspectPanel.tsx app/src/components/inspect.css app/src/components/Board.tsx app/src/components/HeroPortrait.tsx app/src/components/heroportrait.css app/src/screens/Match.tsx app/tests/inspectPanel.test.tsx app/tests/board.test.ts
+git commit -m "feat(app): add live card inspection and hero blazons"
+```
 
 ---
 
-### Task 8: The animation overhaul
-
-The existing `useAnimationQueue` event loop and variant-factory pattern are sound. The animations themselves are thin: a slam, a fade, a pop. Rebuild the *content* against the Armorial's native motion — a woodcut world moves in **cuts and strikes**, not eases and glows.
+### Task 8: Rule-accurate Armorial animation
 
 **Files:**
-- Modify: `app/src/components/animations.ts`, `app/src/screens/animations.css`, `app/src/components/Projectile.tsx`, `app/src/components/DamagePopup.tsx`
+- Modify: `core/src/types.ts`
+- Modify: `core/src/engine/game.ts`
+- Modify: `core/tests/combat-simultaneous.test.ts`
+- Modify: `app/src/components/animations.ts`
+- Modify: `app/src/screens/animations.css`
+- Modify: `app/src/screens/Match.tsx`
+- Modify: `app/src/components/Board.tsx`
+- Modify: `app/src/components/Projectile.tsx`
+- Modify: `app/src/components/projectile.css`
+- Modify: `app/src/components/DamagePopup.tsx`
+- Modify: `app/src/components/TurnBanner.tsx`
+- Modify: `app/src/components/turnbanner.css`
+- Modify: `app/src/components/ManaTray.tsx`
+- Modify: `app/tests/animations.test.ts`
+- Modify: `app/tests/matchFx.test.ts`
 
-- [ ] **Step 1: Establish the motion grammar.** Document it at the top of `animations.ts`: linear and `steps()` easing over springs; short holds; no fades where a cut will do. Two durations only — `--beat: 140ms` and `--beat-long: 320ms` — so the whole game shares one rhythm.
-- [ ] **Step 2: Combat.** Simultaneous damage (worker plan Task 2) needs a *simultaneous* read: both creatures strike inward on the same frame, then both recoil. The current sequential attack animation now actively misrepresents the rules.
-- [ ] **Step 3: Damage numerals.** `--gules` numerals that strike in with no fade, hold, then drop away. This is the one place gules appears in motion.
-- [ ] **Step 4: Death.** Replace the ember dissolve (`deathFade`) — it belongs to the discarded world. A plate that dies is *struck through* with a gules rule, then removed.
-- [ ] **Step 5: Turn change.** Replace `bannerSweep` with a page-turn register shift; the active side's banner takes `--or`.
-- [ ] **Step 6: Card draw and play.** Draw slides from the deck edge with no scale-up. Play lands with a single hard step, not a spring overshoot.
-- [ ] **Step 7: Discover.** The three candidates deal in sequentially, one `--beat` apart.
-- [ ] **Step 8: Reduced motion.** Every new animation collapses to an instant state change under `prefers-reduced-motion: reduce`. Follow `Background.tsx:32`.
-- [ ] **Step 9:** Verify `skip()` still drains cleanly and that skipping never desyncs the state mirror.
-- [ ] **Step 10:** Commit.
+- [ ] **Step 1: Add one explicit combat cue.** Add this `GameEvent` member and a log-only dispatch case:
 
+```ts
+| { type: 'combatStarted'; attackerId: string; defenderId: string }
+```
+
+In creature combat, emit it after legality/attack-count updates but before either `dealDamage` call. This event carries both identities in one record, so triggers, deaths, and other events resolving between the two damage events cannot split the visual strike. Assert event order and IDs in `combat-simultaneous.test.ts`.
+
+- [ ] **Step 2: Establish one motion grammar.** Use only 140ms/`var(--beat)` and 320ms/`var(--beat-long)`, linear or CSS `steps()` easing, hard cuts, and short holds. Remove springs, glow, bounce, and depth fades.
+
+- [ ] **Step 3: Render combat simultaneously.** When `useAnimationQueue` delivers `combatStarted`, resolve both IDs through the existing persistent `slotPointRef` last-known positions and set one overlay state containing both endpoints. Draw both reciprocal strike cuts in the same React update; living plates may make the same 140ms inward nudge, while a creature already absent from the final state still gets its strike from the retained point. Keep subsequent `damageDealt` events for numerals and state-specific FX.
+
+- [ ] **Step 4: Replace each legacy motif.** Damage numerals strike in using gules, hold, and drop; death gets a gules strike-through then removal; turn change shifts registers like a page and marks only the active banner with or; draw slides from the deck edge; play lands in one hard step; Discover candidates deal sequentially one beat apart.
+
+- [ ] **Step 5: Add reduced-motion and skip tests.** Under `matchMedia('(prefers-reduced-motion: reduce)')`, every new transition reaches final state immediately. With fake timers, enqueue two batches, skip midway, and assert no later cosmetic handler fires while the authoritative driver state remains at the newest state. Keep the existing one-event queue API; `combatStarted` removes the need for fragile event grouping.
+
+- [ ] **Step 6: Verify and commit.**
+
+```bash
+npx vitest run core/tests/combat-simultaneous.test.ts app/tests/animations.test.ts app/tests/matchFx.test.ts
+npm run build -w core
+npx tsc --noEmit -p app/tsconfig.json
+npm test
+git add core/src/types.ts core/src/engine/game.ts core/tests/combat-simultaneous.test.ts app/src/components/animations.ts app/src/screens/animations.css app/src/screens/Match.tsx app/src/components/Board.tsx app/src/components/Projectile.tsx app/src/components/projectile.css app/src/components/DamagePopup.tsx app/src/components/TurnBanner.tsx app/src/components/turnbanner.css app/src/components/ManaTray.tsx app/tests/animations.test.ts app/tests/matchFx.test.ts
+git commit -m "feat(app): rebuild rule-accurate Armorial motion"
+```
+
+Capture normal and reduced-motion combat, damage, death, turn, draw/play, Discover, and skip outcomes before committing.
 ---
 
-### Task 9: The Forge and the Deck Builder
-
-The Forge is a card *authoring* tool that runs curated and player-made cards through the identical path. Its data defects — a hand-copied keyword set that hid `venom` and `stealth` from players, and incomplete effect presets — are fixed and merged (see Steps 1-3). What remains here is the visual work: the Forge and the Deck Builder are the last screens left in the discarded visual world.
+### Task 9: Complete the Armorial migration across every surface
 
 **Files:**
-- Modify: `app/src/screens/forge.css`, `app/src/screens/DeckBuilder.tsx`, `app/src/screens/deckbuilder.css`
+- Modify: `app/src/theme.css`
+- Modify: `app/src/index.css`
+- Modify: `app/src/screens/match.css`
+- Modify: `app/src/screens/lan.css`
+- Modify: `app/src/screens/forge.css`
+- Modify: `app/src/screens/deckbuilder.css`
+- Modify: `app/src/screens/DeckBuilder.tsx` only if semantic ruled-group markup is required
+- Modify: `app/src/screens/Forge.tsx`
+- Modify: `app/src/components/Background.tsx`
+- Modify: `app/src/components/background.css`
+- Modify: `app/src/components/board.css`
+- Modify: `app/src/components/card.css`
+- Modify: `app/src/components/cardview.css`
+- Modify: `app/src/components/deckcount.css`
+- Modify: `app/src/components/hand.css`
+- Modify: `app/src/components/heroportrait.css`
+- Modify: `app/src/components/keywordchip.css`
+- Modify: `app/src/components/manatray.css`
+- Modify: `app/src/components/passdevice.css`
+- Modify: `app/src/components/projectile.css`
+- Modify: `app/src/components/turnbanner.css`
+- Modify: `app/src/screens/animations.css`
+- Create: `app/tests/armorialMigration.test.ts`
 
-- [x] **Steps 1-3: Derive the keyword list, guard it, check the presets — DONE, superseded.**
+- [ ] **Step 1: Add a whole-tree migration guard.** Scan `app/src/**/*.{css,tsx}`. Fail on legacy tokens `--bg-0`, `--bg-1`, `--bg-2`, `--ember`, `--gold`, `--accent`, `--border`, `--gold-dim`, `--ember-dim`, `--text-faint`, `--glow-gold`, `--glow-ember`; CSS `linear-gradient(`/`radial-gradient(`; SVG `<linearGradient>`/`<radialGradient>`; any `box-shadow` or `text-shadow` value other than `none`; or any `filter: drop-shadow(` recipe, explicitly including `cardview-target-glow`. Replace Forge's inline palette gradient with two adjacent flat swatch fields and update stale gradient/glow comments in TSX. Also assert raw `#A81E22`/`#B8913C` occur only in `theme.css`, and keep explicit selector/file allowlists so `var(--gules)` appears only in damage/death FX while `var(--or)` appears only in legendary and active-turn treatments.
 
-  Shipped in `docs/superpowers/plans/2026-08-09-keyword-glossary-and-text-well.md` Task 3, merged as `23df962` / `0267058`. `KEYWORD_COST` is on the public surface (`core/src/index.ts:11`); `KEYWORDS` is derived from it and lives in `app/src/forge/formState.ts:168` beside `EFFECT_PRESETS`, **not** exported from `Forge.tsx` as this plan originally proposed — import it from `formState.js`. `app/tests/forgeKeywords.test.ts` asserts both the keyword set and full `EffectKind` preset coverage; `EFFECT_PRESETS` now covers all 18 kinds.
+- [ ] **Step 2: Migrate every remaining consumer.** Menu, Mode Select, Deck Pick, Victory, LAN Host/Join, match shell, hand, deck count, pass overlay, Forge, and Deck Builder use canonical ground/line/text/house tokens, Cardo, ruled groups, and flat focus states. Forge's picker keeps separate select and describe controls.
 
-  The picker also renders `KeywordChip variant="picker"` now, so each keyword carries a `?` that explains it. Selecting and describing are separate controls — Step 4's restyle must keep both reachable, and must not collapse them back into one button.
+- [ ] **Step 3: Delete every compatibility alias from Task 4.** Run the literal grep below and require zero matches outside the migration test's own string list:
 
-  **`.forge-chip` and `.forge-chip.active` are gone from `forge.css`; `.forge-chips` (the wrapper) remains.** Style `.kwchip--picker` in `app/src/components/keywordchip.css` instead. That file is shared with the in-card chip, so an Armorial restyle there lands on cards too — which is correct, but check both surfaces before committing.
+```bash
+rg --glob '*.css' -- '--(bg-[012]|ember(-dim)?|gold(-dim)?|accent|border|text-faint|glow-(gold|ember))' app/src
+```
 
-- [ ] **Step 4: Bring both screens into the Armorial.** Apply the Task 4 tokens and Task 5 plate language to `forge.css` and `deckbuilder.css`: `--ground`/`--line`, Cardo, hairline rules instead of panels, no gradients or bevels. The Forge's live card preview already renders through `CardFrame`, so it inherits Task 5 for free — what changes here is the surrounding chrome.
+- [ ] **Step 4: Verify all desktop surfaces.** At 1440×900 capture menu, mode select, deck pick, Victory, LAN Host, LAN Join, Forge with Discover and keyword chips, Deck Builder with 60 cards, and the match shell. At 1280×900 confirm no horizontal overflow.
 
-- [ ] **Step 5:** Screenshot the Forge with a creature in progress (keyword chips visible, including `venom` and `stealth`) and the Deck Builder with a full 60-card deck, both at 1440×900.
+```bash
+npx vitest run app/tests/armorialMigration.test.ts app/tests/forgeKeywords.test.ts
+npx tsc --noEmit -p app/tsconfig.json
+npm run build -w app
+```
 
-- [ ] **Step 6:** Commit.
+- [ ] **Step 5: Commit.**
+
+```bash
+npm test
+npm run build
+npx tsc --noEmit -p app/tsconfig.json
+git add app/src/theme.css app/src/index.css app/src/screens/match.css app/src/screens/lan.css app/src/screens/forge.css app/src/screens/deckbuilder.css app/src/screens/DeckBuilder.tsx app/src/screens/Forge.tsx app/src/screens/animations.css app/src/components/Background.tsx app/src/components/background.css app/src/components/board.css app/src/components/card.css app/src/components/cardview.css app/src/components/deckcount.css app/src/components/hand.css app/src/components/heroportrait.css app/src/components/keywordchip.css app/src/components/manatray.css app/src/components/passdevice.css app/src/components/projectile.css app/src/components/turnbanner.css app/tests/armorialMigration.test.ts
+git commit -m "style(app): complete the Armorial migration"
+```
 
 ---
 
-### Task 10: Finish review and DESIGN.md
+### Task 10: Finish review, verification, and DESIGN.md
 
-Required by the direction contract's FINISH line. **The build is not done until this task closes.**
+**Files:**
+- Create: `DESIGN.md`
+- Modify: only files required by material review findings
 
-- [ ] **Step 1:** Capture desktop screenshots of every changed surface: match (empty board, full board with tokens, targeting, discover overlay, inspect panel), menu, deck builder, Forge.
-- [ ] **Step 2:** Run `node .claude/skills/impeccable/scripts/detect.mjs --json` on the changed targets. Fix what is mechanical.
-- [ ] **Step 3:** Spawn `impeccable-finish-reviewer` fresh, with no forked history, passing: the original request, the confirmed answers, the artifact paths, the screenshot paths, the direction contract, the detector findings, and the craft-floor reference path.
-- [ ] **Step 4:** Apply material fixes in one batch, rebuild once, recapture, and send back for a verdict. Two rounds is the ceiling.
-- [ ] **Step 5:** Report the verdict table verbatim, open items included, under the reviewer's own disposition word.
-- [ ] **Step 6:** Spawn `impeccable-documenter` to write `DESIGN.md` from the built world.
-- [ ] **Step 7:** Commit.
+- [ ] **Step 1: Run fresh automated verification before screenshots.**
+
+```bash
+npm test
+npm run build
+npx tsc --noEmit -p app/tsconfig.json
+```
+
+Run `lens_diagnostics` with `mode=all`; resolve every blocking error in edited files.
+
+- [ ] **Step 2: Initialize browser evidence and capture proof screenshots.** Create one atomic browser-evidence requirement for each surface/state: menu; mode select; deck pick; Victory; LAN Host/Join; empty match; full normal/token board; targeting; owner Discover; opponent waiting; hotseat pass-before-Discover; inspect panel; both hero powers; Forge; Deck Builder; 1280px overflow; reduced motion; offline Cardo. Prove each only from a visible current frame and audit the checklist before review.
+
+- [ ] **Step 3: Run the mechanical detector exactly once.** The external feature worktree does not contain `.pi`, so invoke the original checkout's script by absolute path, pass every changed UI target, and do not run it again after reviewer fixes:
+
+```bash
+node "/Users/lucas/Local Storage/PROJECTS/tcg/.pi/skills/impeccable/scripts/detect.mjs" --json app/index.html app/src
+```
+
+Fix mechanical findings before the subjective review.
+
+- [ ] **Step 4: Run a fresh finish review with the available agent type.** Spawn a `general-purpose` agent using `deepseek-v4-flash-0731`, `thinking: xhigh`, no inherited history. Require it to read `/Users/lucas/Local Storage/PROJECTS/tcg/.pi/skills/impeccable/reference/degraded/finish-reviewer.md` and `/Users/lucas/Local Storage/PROJECTS/tcg/.pi/skills/impeccable/reference/craft-floor.md`; provide the request, approved decisions, artifact paths, screenshots, direction contract, detector JSON, and craft-floor reference. It reports findings only; main thread applies fixes.
+
+- [ ] **Step 5: Apply one material-fix batch and request the verdict.** Rebuild, recapture affected proof, then resume the same reviewer for a disposition and verdict table. Two reviewer rounds total is the ceiling. Report its disposition and open items verbatim.
+
+- [ ] **Step 6: Create `DESIGN.md` through a fresh documentation review.** Spawn another `general-purpose` agent with the same model/effort, no inherited history, requiring `/Users/lucas/Local Storage/PROJECTS/tcg/.pi/skills/impeccable/reference/degraded/documenter.md`. It drafts `DESIGN.md` from the built and reviewed world; main thread verifies the actual file.
+
+- [ ] **Step 7: Re-run final verification after reviewer/documentation edits.** Do **not** rerun the detector.
+
+```bash
+npm test
+npm run build
+npx tsc --noEmit -p app/tsconfig.json
+git diff --check
+```
+
+Run `lens_diagnostics mode=all`, audit browser evidence, and inspect `git status --short` before committing.
+
+- [ ] **Step 8: Commit.**
+
+```bash
+git add DESIGN.md app core server
+git commit -m "docs(app): finish and document the Armorial"
+```
 
 ---
 
 ## Self-Review
 
-**Spec coverage.** §5.4 Discover → Tasks 1-3 (engine, server gate, app). §7.1 direction contract → Task 4. §7.2 tokens and type → Task 4. §7.3 cost gem and keyed stats → Task 5; card inspect and hero power → Task 7; mana pip ledger → Task 6. Token row rendering → Task 6. Animation overhaul (added by user request, not in the spec) → Task 8. Forge and Deck Builder → Task 9. Finish and DESIGN.md → Task 10.
+**Spec coverage:** Discover engine/FIFO/serialization/bots/curated cards → Task 1; LAN owner/reconnect → Task 2; owner/waiting/hotseat/keyboard/Forge → Task 3; direction contract/offline type/tokens → Task 4; card plate → Task 5; token rows/mana → Task 6; inspect/hero powers → Task 7; rule-accurate motion/reduced motion/skip → Task 8; every remaining surface and zero legacy tokens → Task 9; browser evidence/review/verdict/DESIGN.md → Task 10.
 
-**Dependencies on the worker plan.** Task 6 needs `CreatureState.token` (worker Task 3). Task 7 needs `KEYWORD_TEXT` (worker Task 4). Task 7 Step 0 exists because of `silence` (worker Task 5), `stealth` (worker Task 8), and the repaired `giveKeyword` (worker Task 5). Task 8 Step 2 needs simultaneous combat (worker Task 2). Task 6 Step 4's struck pip needs `PlayerState.overload` (worker Task 10). Task 9 Step 1 needs `venom` and `stealth` in the `Keyword` union (worker Tasks 7 and 8). **Run the worker plan first, or at minimum its Tasks 2, 3, 4, and 10.**
+**Worker dependencies:** `CreatureState.token`, `PlayerState.overload`, `KEYWORD_TEXT`, simultaneous combat, `silence`, `stealth`, repaired `giveKeyword`, `Game.pickRandom`, and `CardRegistry.pool()` are all present in base `1e56fe7`. The worker plan must not be rerun.
 
-**The seam between the plans.** Four defects were found only by tracing a worker-plan change into the app, and none would have been caught by either plan's own tests: the board renders `def.keywords` while the workers mutate `c.keywords` (Task 7 Step 0); `Forge.tsx` restates the `Keyword` union by hand so new keywords never reach the picker (Task 9 Step 1); `card.css` clamps flavor to one line, truncating 279 of 285 cards (Task 5 Step 5); and generated rules text is clamped at four lines, which can hide an effect outright (same step). The pattern is the same each time — the engine's data is authoritative, and the app restates it. Anywhere the app holds a second copy of an engine fact is worth checking before Task 10.
+**Ordering:** Task 0 lands before any Armorial edit. Tasks 1→2→3 are the Discover chain. Tasks 4→9 are visually sequential. Task 8 consumes Discover and simultaneous combat. Task 10 starts only after all implementation tests/builds pass.
 
-Three of those four shipped in the keyword-glossary plan (`0267058`) and are struck through above. **The remaining one is the most consequential**: Task 7 Step 0, the board rendering `def.keywords`. It is still open, and every runtime keyword mutation the workers added — `silence`, `stealth`, the repaired `giveKeyword` — is invisible on the board until it lands. Do not let the Armorial restyle reach Task 7 before that step is done; a prettier plate that still shows a silenced creature's deleted rules text is a worse bug, not a better one.
+**Type consistency:** `PendingChoice.cardIds` and `pendingChoiceQueue: PendingChoice[]` are defined once in Task 1 and consumed unchanged. The intent uses a numeric `choice` index everywhere. `discoverOffered` creates/queues; `discoverResolved` adds to hand/rotates. Task 6's `overload` is future debt while `lockedMana` is the current visible lock. Task 8's single `combatStarted` event carries both creature IDs and leaves `damageDealt` unchanged.
 
-**Type consistency.** `pendingChoice` is defined in Task 1 and consumed in Tasks 2 and 3 with the same shape. The `discover` intent variant is defined once, in Task 1.
+**Plan hygiene:** The red-flag scan is clean. Every test step names exact behavior and every verification step names an executable command.
 
-**Known gap.** Task 8 has no automated test — animation quality is verified by screenshot and play, which is exactly why it is in this plan rather than the worker one.
+**Known visual boundary:** Subjective craft cannot be proven by unit tests. Tasks 4–9 require visible browser checks, and Task 10 requires evidence-linked screenshots plus a maximum-two-round independent finish review before completion.

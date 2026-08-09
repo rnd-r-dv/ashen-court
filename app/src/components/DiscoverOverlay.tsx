@@ -9,6 +9,9 @@
 //   - 1/2/3 submit the candidate by index (component-scoped keydown: the
 //     handler lives on the overlay root, so it dies with the overlay);
 //   - Escape cannot dismiss an unresolved choice — there is no dismiss path.
+// The plates render their keyword chips STATICALLY (CardView staticKeywords):
+// a nested <button> inside the choice button would be invalid DOM, so the
+// keyword text stays visible as a non-interactive span instead.
 // The board behind may be dimmed with a flat translucent veil (never a
 // gradient or glow). Pure presentational: Match decides when to show it and
 // what onChoose submits.
@@ -119,7 +122,7 @@ export default function DiscoverOverlay({ choice, viewer, getCard, onChoose }: D
                     aria-label={`Card ${i + 1}: ${card.name}`}
                     onClick={() => onChoose(i)}
                   >
-                    <CardView card={card} size="preview" />
+                    <CardView card={card} size="preview" staticKeywords />
                   </button>
                 );
               })}

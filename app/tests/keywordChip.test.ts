@@ -76,4 +76,22 @@ describe('KeywordChip', () => {
       expect(KEYWORD_TEXT[k].length).toBeGreaterThan(0);
     }
   });
+
+  it('plain variant renders a static span — visible text, no button, no popover', () => {
+    // Used inside the discover choice buttons (Task 3 review round 1): the
+    // keyword text stays visible on the plate, but as a non-interactive
+    // span — a <button> here would nest inside the choice button (invalid
+    // DOM) and a describe affordance would steal the choice click.
+    render(createElement(KeywordChip, { keyword: 'taunt', variant: 'plain' }));
+    const chip = host!.querySelector('.kwchip--plain');
+    expect(chip).not.toBeNull();
+    expect(chip!.tagName).toBe('SPAN');
+    expect(chip!.textContent).toBe('taunt');
+    expect(host!.querySelector('button')).toBeNull();
+    // Nothing to click — the keyword text is not a describe control.
+    act(() => {
+      chip!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(document.body.textContent).not.toContain(KEYWORD_TEXT.taunt);
+  });
 });

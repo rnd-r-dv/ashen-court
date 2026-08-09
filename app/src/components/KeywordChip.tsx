@@ -27,8 +27,11 @@ import './keywordchip.css';
 export interface KeywordChipProps {
   keyword: Keyword;
   /** Visual scale. 'card' is the in-frame chip; 'picker' is the larger Forge
-   *  selection chip, which also carries a selected state. */
-  variant?: 'card' | 'picker';
+   *  selection chip, which also carries a selected state. 'plain' is a
+   *  NON-INTERACTIVE span — same pill look, no describe affordance, no
+   *  popover — for surfaces where a nested <button> would be invalid DOM
+   *  (e.g. inside a discover choice button). */
+  variant?: 'card' | 'picker' | 'plain';
   /** Picker only: whether this keyword is currently chosen. */
   selected?: boolean;
   /** Picker only: fired on the SELECT affordance, not the describe one. */
@@ -74,6 +77,15 @@ export default function KeywordChip({
       window.removeEventListener('resize', close);
     };
   }, [open, close]);
+
+  // Plain, non-interactive presentation (e.g. inside a discover choice
+  // button, where a nested <button> would be invalid DOM): the keyword text
+  // stays visible with the same pill look, but there is no describe
+  // affordance and no popover. All hooks above still run unconditionally, so
+  // the hook order never changes if a parent flips the variant.
+  if (variant === 'plain') {
+    return <span className="kwchip kwchip--plain">{keyword}</span>;
+  }
 
   function describe(e: ReactMouseEvent<HTMLButtonElement>) {
     // A board creature is clickable for attack targeting and a hand card is

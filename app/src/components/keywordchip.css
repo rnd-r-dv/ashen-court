@@ -35,6 +35,17 @@
   cursor: pointer;
 }
 
+/* Non-interactive chip (discover choice plates): same pill look, but the
+   text is not a describe control — no help cursor, no hover shift. */
+.kwchip--plain {
+  cursor: default;
+}
+
+.kwchip--plain:hover {
+  border-color: #43434f;
+  color: #d8d2c2;
+}
+
 .kwchip--selected {
   background: #3f3a2a;
   border-color: #8a7742;

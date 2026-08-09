@@ -35,8 +35,13 @@ export interface CardFrameProps {
   health?: number;
   /** Keyword chips — card-definition keywords, unless Card.tsx overrides them
    *  with the creature's LIVE board keywords (silence empties the engine's
-   *  array, giveKeyword appends). Hand cards always pass the definition. */
+   *  array, giveKeyword appends). Hand cards always pass the definition.
+   *  staticKeywords renders the chips as non-interactive spans (no describe
+   *  affordance, no popover) — for surfaces where a nested <button> would be
+   *  invalid DOM, e.g. inside a discover choice button. */
   keywords?: readonly Keyword[];
+  /** Render keyword chips non-interactively (plain spans, no popover). */
+  staticKeywords?: boolean;
   flavor?: string;
   /** Rules text (Task 43) — Card.tsx passes cardText(card), or '' for a
    *  silenced board creature: its triggers live on the CARD, so only a flag
@@ -94,6 +99,7 @@ export default function CardFrame({
   attack,
   health,
   keywords,
+  staticKeywords = false,
   flavor,
   text,
   faceDown = false,
@@ -176,7 +182,7 @@ export default function CardFrame({
               {keywords && keywords.length > 0 && (
                 <div className="card__keywords">
                   {keywords.map((k) => (
-                    <KeywordChip key={k} keyword={k} />
+                    <KeywordChip key={k} keyword={k} variant={staticKeywords ? 'plain' : 'card'} />
                   ))}
                 </div>
               )}

@@ -88,6 +88,28 @@ describe('DiscoverOverlay — owner view', () => {
     for (const b of buttons) expect(b.textContent!.length).toBeGreaterThan(0);
   });
 
+  it('keeps keyword text visible but nests no interactive control inside the choice buttons', () => {
+    // Regression (Task 3 review round 1): the preview plates used to render
+    // each keyword as a <button> (KeywordChip) INSIDE the .discover-choice
+    // button — invalid DOM (React's validateDOMNesting rejects <button>
+    // inside <button>) and nested interactive controls with muddled
+    // screen-reader semantics. The keyword text must stay visible on the
+    // plate, just not as a nested button.
+    mount({ choice: choice(0, CANDIDATES), viewer: 0, getCard, onChoose: vi.fn() });
+    const buttons = document.querySelectorAll<HTMLButtonElement>('.discover-choice');
+    expect(buttons.length).toBe(3);
+    for (const b of buttons) {
+      expect(b.querySelector('button')).toBeNull();
+    }
+    // Keyword information is still readable on the plates (Wild Boar has
+    // rush, Village Militia has taunt) — rendered as static text, not buttons.
+    const plates = document.querySelectorAll<HTMLElement>(
+      '.discover-choice .cardview--preview',
+    );
+    expect(plates[0]!.querySelector('.card__keywords')!.textContent).toContain('rush');
+    expect(plates[1]!.querySelector('.card__keywords')!.textContent).toContain('taunt');
+  });
+
   it('initializes focus on the first card button', () => {
     mount({ choice: choice(0, CANDIDATES), viewer: 0, getCard, onChoose: vi.fn() });
     const first = document.querySelector<HTMLButtonElement>('.discover-choice');

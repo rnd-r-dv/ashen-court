@@ -37,6 +37,8 @@ export interface CardProps {
    *  is the creature's CURRENT keyword array (silence empties it, giveKeyword
    *  appends); omitted on hand cards, which render the immutable definition. */
   keywords?: readonly Keyword[];
+  /** Render keyword chips non-interactively (plain spans, no popover). */
+  staticKeywords?: boolean;
   /** Live silenced flag — board creatures only (Task 0). Suppresses the
    *  cardText rules text, whose triggers live on the CARD and so cannot be
    *  removed by clearing the creature's keyword array. */
@@ -52,6 +54,7 @@ export default function Card({
   playable = false,
   selected = false,
   keywords,
+  staticKeywords = false,
   silenced,
   onClick,
 }: CardProps) {
@@ -94,6 +97,7 @@ export default function Card({
       attack={card.attack}
       health={card.health}
       keywords={shownKeywords}
+      staticKeywords={staticKeywords}
       flavor={card.flavor}
       text={shownText}
       faceDown={faceDown}

@@ -53,6 +53,10 @@ export interface CardViewProps {
   /** Live board keywords override — board creatures only (Task 0). Hand
    *  cards omit it and keep the immutable card-definition chips. */
   keywords?: readonly Keyword[];
+  /** Render keyword chips non-interactively (plain spans, no popover) — for
+   *  surfaces where a nested <button> would be invalid DOM, e.g. inside a
+   *  discover choice button. */
+  staticKeywords?: boolean;
   /** Live silenced flag — board creatures only (Task 0). A silenced creature
    *  renders no rules text: its triggers live on the CARD, not the creature,
    *  so the engine clears CreatureState.keywords AND sets this flag, and only
@@ -73,6 +77,7 @@ export default function CardView({
   muted = false,
   stats,
   keywords,
+  staticKeywords = false,
   silenced,
   status,
   onClick,
@@ -108,6 +113,7 @@ export default function CardView({
         playable={playable && !muted && !faceDown}
         selected={selected}
         keywords={keywords}
+        staticKeywords={staticKeywords}
         silenced={silenced}
       />
       {badges.map((b) => (

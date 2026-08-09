@@ -70,4 +70,30 @@ describe('generated art wiring', () => {
     expect(host.querySelector('.card--bleed')).toBeNull();
     cleanup();
   });
+
+  it('renders the same spec as flat solids — no SVG gradient elements', () => {
+    // Armorial direction (Task 5): the procedural composition is preserved
+    // (same seeded layers from the same recipe) but drawn in flat tinctures.
+    // Any reintroduced <linearGradient>/<radialGradient> definition or
+    // url(#...) fill reference is a direction regression.
+    const { host, cleanup } = render(common);
+    const svg = host.querySelector('.card__art svg')!;
+    expect(svg).not.toBeNull();
+    // Comma selector: jsdom's nwsapi throws on the bare SVG tag name
+    // ('linearGradient') but resolves the comma form correctly.
+    expect(svg.querySelectorAll('linearGradient, radialGradient').length).toBe(0);
+    expect(svg.querySelectorAll('defs').length).toBe(0);
+    // The composition still renders its layers from the same spec: sky rect,
+    // silhouette paths, runic glyph, and ember specks.
+    expect(svg.querySelector('rect')).not.toBeNull();
+    expect(svg.querySelectorAll('path').length).toBeGreaterThan(0);
+    expect(svg.querySelector('text')).not.toBeNull();
+    expect(svg.querySelectorAll('circle').length).toBeGreaterThan(0);
+    // Every fill is a solid color, never a url(#gradient) reference.
+    const gradientRefs = [...svg.querySelectorAll('[fill]')].filter((el) =>
+      (el.getAttribute('fill') ?? '').startsWith('url('),
+    );
+    expect(gradientRefs).toEqual([]);
+    cleanup();
+  });
 });

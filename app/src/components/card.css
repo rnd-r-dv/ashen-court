@@ -1,9 +1,14 @@
 /* ============================================================
-   Card chrome — frame, rarity layers, ribbon, gems and pips.
-   Task 37. Scoped strictly to `.card*` classes; does not depend
-   on the theme tokens (app/src/theme.css, Task 36) so it renders
-   standalone. The `.card-preview*` stub styles in forge.css are
-   retired with the old Card.tsx.
+   Card chrome — frame, rarity hairlines, ribbon, cost gem, and
+   labeled stat pips. Task 37, restyled in the Armorial register
+   (Task 5): flat heraldic tinctures on the iron-gall ground, cream
+   engraved hairlines, Cardo throughout. The theme tokens
+   (app/src/theme.css) are the only colors used here.
+
+   Flatness is a direction contract, not a preference — this file
+   contains NO gradients, bevels, glows, drop-shadows, box-shadows,
+   or text-shadows (cardTextWell.test.ts guards that). Depth is
+   expressed by hairlines and tincture, never by shadow.
    ============================================================ */
 
 .card {
@@ -22,18 +27,24 @@
   --card-top-h: 32px;
   /* ---- art panel geometry -------------------------------------
      ONE decision expressed twice would drift, so the panel height
-     is DERIVED from the ratio, never typed in. The banded panel  
-     only hosts 3:2 generated art: common/rare are requested at   
-     exactly this ratio (scripts/art/prompt.ts, aspectForRarity); 
-     epic/legendary with art skip the panel entirely via the      
-     full-bleed treatment (cardTreatment.ts); cards without art   
-     render the procedural SVG. So banded art always agrees with  
+     is DERIVED from the ratio, never typed in. The banded panel
+     only hosts 3:2 generated art: common/rare are requested at
+     exactly this ratio (scripts/art/prompt.ts, aspectForRarity);
+     epic/legendary with art skip the panel entirely via the
+     full-bleed treatment (cardTreatment.ts); cards without art
+     render the procedural SVG. So banded art always agrees with
      the panel and nothing crops. Change --card-art-ratio and the  */
   --card-art-w: calc(var(--card-w) - 2 * var(--card-pad) - 4px);  /* 220px */
   --card-art-ratio: 1.5;                                          /* 3:2   */
   --card-art-h: calc(var(--card-art-w) / var(--card-art-ratio));  /* 147px */
 
-  --rarity-color: #8a8a8a;
+  /* House tincture (Task 5): data-archetype maps one of the twelve
+     --house-* fields to --house, the frame's only color — the top
+     band and the ribbon mark. Neutrals/tokens stay on this cream
+     default. The art mount is deliberately NEVER tinted by it.    */
+  --house: var(--line-dim);
+  /* Rarity color — hairline weight only (see rarity blocks below). */
+  --rarity-color: var(--line-dim);
   position: relative;
   box-sizing: border-box;
   width: var(--card-w);
@@ -41,9 +52,25 @@
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-body); /* Cardo throughout */
   transition: transform 0.16s ease;
 }
+
+/* ---- house tinctures: frame/register identity only -----------
+   One field per archetype (DECK_DEFS keys), consumed as --house by
+   the top band and the ribbon icon/mark. Never by the art mount.  */
+.card[data-archetype='ember']   { --house: var(--house-ember); }
+.card[data-archetype='choir']   { --house: var(--house-choir); }
+.card[data-archetype='vermin']  { --house: var(--house-vermin); }
+.card[data-archetype='dragon']  { --house: var(--house-dragon); }
+.card[data-archetype='roots']   { --house: var(--house-roots); }
+.card[data-archetype='dance']   { --house: var(--house-dance); }
+.card[data-archetype='bone']    { --house: var(--house-bone); }
+.card[data-archetype='pact']    { --house: var(--house-pact); }
+.card[data-archetype='coven']   { --house: var(--house-coven); }
+.card[data-archetype='star']    { --house: var(--house-star); }
+.card[data-archetype='vigil']   { --house: var(--house-vigil); }
+.card[data-archetype='storm']   { --house: var(--house-storm); }
 
 /* ---- sizes --------------------------------------------------
    `zoom` scales the box AND the type together, so one base geometry
@@ -87,115 +114,62 @@
   display: flex;
   flex-direction: column;
   padding: var(--card-pad);
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
-/* common: flat charcoal + thin border */
+/* House band: a 2px tincture rule across the top of the plate —
+   the card's register line. Clipped to the frame radius by the
+   frame's own overflow. */
+.card__frame::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--house);
+  pointer-events: none;
+}
+
+/* ---- rarity: hairline weight only ---------------------------
+   Rarity is expressed by the LINE, never by color — common = dim
+   hairline, rare = full cream, epic = heavier cream, legendary =
+   2px --or (the ONE reserved gold on the plate). --rarity-color
+   feeds the ribbon's rarity label and the selected-state ring.   */
+.card--rarity-common { --rarity-color: var(--line-dim); }
+.card--rarity-rare   { --rarity-color: var(--line); }
+.card--rarity-epic   { --rarity-color: var(--line); }
+.card--rarity-legendary { --rarity-color: var(--or); }
+
 .card--rarity-common .card__frame {
-  border: 1px solid #3c3c46;
-  background: linear-gradient(180deg, #23232c, #1a1a21);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--line-dim);
+  background: var(--ground-rise);
 }
-
-/* rare: gilded gradient edge (border-box layer shows through the
-   transparent border; padding-box layer covers the card face)     */
 .card--rarity-rare .card__frame {
-  border: 2px solid transparent;
-  background:
-    linear-gradient(180deg, #26231c, #1c1a16) padding-box,
-    linear-gradient(160deg, #8a6d2a 0%, #d4af37 40%, #f6e3a0 55%, #b8912e 100%) border-box;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--line);
+  background: var(--ground-rise);
 }
-
-/* epic: gem accent (::after facet, top-right) + soft glow */
 .card--rarity-epic .card__frame {
-  border: 2px solid transparent;
-  background:
-    linear-gradient(180deg, #241d2e, #191226) padding-box,
-    linear-gradient(160deg, #6d28d9 0%, #a855f7 45%, #d8b4fe 55%, #7c3aed 100%) border-box;
-  box-shadow: 0 0 18px rgba(168, 85, 247, 0.35), 0 4px 14px rgba(0, 0, 0, 0.5);
+  border: 2px solid var(--line);
+  background: var(--ground-rise);
 }
-.card--rarity-epic .card__frame::after {
-  content: '';
-  position: absolute;
-  top: 9px;
-  right: 9px;
-  width: 12px;
-  height: 12px;
-  transform: rotate(45deg);
-  border-radius: 2px;
-  background: linear-gradient(135deg, #e9d5ff 0%, #a855f7 55%, #6d28d9 100%);
-  box-shadow: 0 0 8px rgba(168, 85, 247, 0.9);
-  pointer-events: none;
-}
-.card--rarity-epic .card__nameplate {
-  margin-right: 16px; /* keep long names clear of the corner gem */
-}
-
-/* legendary: animated shimmer — border gradient and face sheen
-   sweep via background-position keyframes (alternate, seamless)   */
 .card--rarity-legendary .card__frame {
-  border: 2px solid transparent;
-  background:
-    linear-gradient(180deg, #2a2118, #1c150e) padding-box,
-    linear-gradient(115deg, #ff9d2e 0%, #ffd08a 20%, #7a4400 40%, #ff9d2e 55%, #ffcf8a 70%, #6b3c00 90%, #ff9d2e 100%) border-box;
-  background-size: auto, 200% 100%;
-  background-position: 0 0, 100% 0;
-  box-shadow: 0 0 22px rgba(255, 157, 46, 0.28), 0 4px 14px rgba(0, 0, 0, 0.5);
-  animation: card-shimmer-edge 3s linear infinite alternate;
-}
-.card--rarity-legendary .card__frame::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    transparent 38%,
-    rgba(255, 205, 130, 0.10) 46%,
-    rgba(255, 235, 200, 0.20) 50%,
-    rgba(255, 205, 130, 0.10) 54%,
-    transparent 62%
-  );
-  background-size: 200% 100%;
-  background-position: 100% 0;
-  animation: card-shimmer-face 3s linear infinite alternate;
-}
-@keyframes card-shimmer-edge {
-  0% { background-position: 0 0, 100% 0; }
-  100% { background-position: 0 0, 0% 0; }
-}
-@keyframes card-shimmer-face {
-  0% { background-position: 100% 0; }
-  100% { background-position: 0% 0; }
+  border: 2px solid var(--or);
+  background: var(--ground-rise);
 }
 
-/* ---- face-down: grayscaled silhouette + darkened frame -------
+/* ---- face-down: grayscaled silhouette + flat card back -------
    Locked ruling (coverage audit): unrevealed enemy cards render as
-   grayscale silhouettes with a darkened frame; name/cost/ribbon are
-   suppressed in CardFrame.tsx. Placed after the rarity rules so it
-   wins at equal specificity.                                      */
-/* Card back. Previously a near-black rectangle with a 16%-opacity sigil,
-   which read as an empty box rather than a card. Now a woven field with a
-   visible border and a legible sigil, so a row of them reads as "cards in
-   hand" at a glance. */
+   grayscale silhouettes with a flat ink back — a woven gold field
+   would be decorative chrome this direction does not own. The back
+   is ground-deep ink, a hairline border, and a faint cream sigil. */
 .card--face-down .card__frame {
-  border: 1px solid var(--gold-dim, #6d4c10);
-  background:
-    repeating-linear-gradient(45deg, rgba(217, 164, 65, 0.05) 0 6px, transparent 6px 12px),
-    radial-gradient(circle at 50% 38%, #2b2340 0%, #171226 60%, #0e0b18 100%);
-  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.6), 0 4px 14px rgba(0, 0, 0, 0.5);
-  animation: none;
+  border: 1px solid var(--line-dim);
+  background: var(--ground-deep);
 }
-
 .card--face-down .card__sigil {
-  color: rgba(217, 164, 65, 0.42);
-  text-shadow: 0 0 14px rgba(217, 164, 65, 0.3);
-}
-.card--face-down .card__frame::after {
-  display: none; /* no rarity gems/sheen on the back */
+  color: rgba(232, 224, 206, 0.32);
 }
 
 /* ---- top row: cost gem + name plate ------------------------- */
@@ -214,21 +188,20 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1.5px solid #0c0a12;
-  background: radial-gradient(circle at 35% 30%, #fdfdfd, var(--rarity-color) 62%, #201507);
-  color: #120d04;
+  border: 1px solid var(--line-dim);
+  background: var(--ground-deep);
+  color: var(--text);
   font-size: 17px;
-  font-weight: 800;
-  filter: drop-shadow(0 0 4px var(--rarity-color));
+  font-weight: 700;
 }
 .card__nameplate {
   flex: 1;
   min-width: 0;
   padding: 4px 8px;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #2a2a33, #1c1c24);
-  border: 1px solid #3f3f4a;
-  color: #f0e6d0;
+  border-radius: 3px;
+  background: var(--ground-deep);
+  border: 1px solid var(--line-dim);
+  color: var(--text);
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.4px;
@@ -237,13 +210,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.card--rarity-rare .card__nameplate { color: #f2e2b3; }
-.card--rarity-epic .card__nameplate { color: #e3d2ff; }
-.card--rarity-legendary .card__nameplate { color: #ffd9a0; }
 
 /* ---- art slot ------------------------------------------------
    The wrapper is the pips' positioning context and must not clip;
-   the inner panel clips the (slice-scaled) SVG to the rounded box. */
+   the inner panel clips the (slice-scaled) SVG to the rounded box.
+   The mount is a flat neutral ink — generated/custom art is never
+   tinted by the house tincture.                                  */
 .card__artwrap {
   position: relative;
   flex: 0 0 var(--card-art-h);
@@ -253,10 +225,10 @@
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   line-height: 0;
-  background: #101014;
+  background: var(--ground-deep);
 }
 /* Face-down cards carry no chrome below the art, so the panel takes the
    whole frame — the box still matches a face-up card exactly. */
@@ -269,7 +241,7 @@
    back-sigil span) into one bitmap before applying, so the sigil would be
    desaturated with the art. CardArt renders a direct <svg> (procedural) or a
    direct <div><img/></div> (custom imageUrl) — both are matched here; the
-   sigil's <span> is not, so it keeps its gold color and glow. */
+   sigil's <span> is not, so it keeps its cream color. */
 .card__art--face-down > svg,
 .card__art--face-down > div {
   filter: grayscale(1) brightness(0.5) contrast(1.15);
@@ -280,28 +252,35 @@
   display: grid;
   place-items: center;
   font-size: 72px;
-  color: rgba(210, 210, 220, 0.16);
   pointer-events: none;
 }
 
-/* ---- type ribbon --------------------------------------------- */
+/* ---- type ribbon + house mark -------------------------------- */
 .card__ribbon {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  gap: 6px;
+  gap: 5px;
   margin-top: 6px;
   padding: 2px 8px;
-  border-radius: 5px;
-  background: #23232c;
-  border: 1px solid #3a3a44;
-  color: #cfc7b5;
+  border-radius: 3px;
+  background: var(--ground-deep);
+  border: 1px solid var(--line-dim);
+  color: var(--text-dim);
   font-size: 12.5px;
-  font-variant: small-caps;
+  font-variant-caps: small-caps;
   letter-spacing: 0.6px;
   white-space: nowrap;
 }
-.card__ribbon-icon { color: var(--rarity-color); font-size: 13px; }
+/* House lozenge — the same tincture as the top band, rotated square. */
+.card__house-mark {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  transform: rotate(45deg);
+  background: var(--house);
+}
+.card__ribbon-icon { color: var(--house); font-size: 13px; }
 .card__ribbon-label { font-weight: 700; }
 .card__ribbon-rarity {
   margin-left: auto;
@@ -337,12 +316,17 @@
   flex: 0 0 auto;
 }
 
-/* ---- creature stats pips --------------------------------------
+/* ---- creature stat pips ----------------------------------------
    INSIDE the art panel's lower corners, not straddling its edge.
    The previous rule hung them 13px below the panel, where the type
    ribbon lives, so on every creature the pips covered the ribbon's
    icon and its rarity label. Keeping them inside makes the overlap
-   structurally impossible — no per-type padding, no special cases. */
+   structurally impossible — no per-type padding, no special cases.
+
+   Each pip is a WORD over a NUMERAL in Cardo small caps — a bare
+   number would leave the player guessing which stat it is
+   (PRODUCT.md principle 2). The words are visible and repeated in
+   each pip's aria-label. Gules and or never decorate pips.        */
 .card__stats {
   position: absolute;
   left: 6px;
@@ -353,27 +337,34 @@
   pointer-events: none;
 }
 .card__stat {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid #0c0a12;
-  font-size: 17px;
-  font-weight: 800;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  height: 42px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--ground);
+  border: 1px solid var(--line-dim);
+  color: var(--text);
 }
-.card__stat--attack {
-  background: radial-gradient(circle at 35% 30%, #f5c97b, #c97f2b 60%, #6e3a12);
-  color: #1c0f02;
+.card__stat-label {
+  font-variant-caps: small-caps;
+  font-size: 8.5px;
+  letter-spacing: 0.7px;
+  color: var(--text-dim);
+  line-height: 1;
 }
-.card__stat--health {
-  background: radial-gradient(circle at 35% 30%, #f08d8d, #c0392b 60%, #6e1510);
-  color: #fff4f0;
+.card__stat-value {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 /* ---- rules text and flavor -------------------------------------
-   These live inside .card__body (line 316), which is already a flex
+   These live inside .card__body (line ~380), which is already a flex
    column that absorbs whatever height the art panel and ribbon leave
    over. They used to clamp by FIXED LINE COUNT — rules text at 4
    lines, flavor at 2, flavor in hand at 1 — counts chosen for a worst
@@ -391,7 +382,7 @@
   flex: 0 0 auto;         /* sizes to content, and wins the space race */
   margin: 7px 4px 0;
   font-size: 12.5px;
-  color: #e6e0d0;
+  color: var(--text);
   line-height: 1.32;
   text-align: center;
 }
@@ -402,7 +393,7 @@
   margin: 5px 4px 0;
   font-size: 11.5px;
   font-style: italic;
-  color: #a79e88;
+  color: var(--text-dim);
   line-height: 1.3;
   text-align: center;
   overflow: hidden;
@@ -428,18 +419,21 @@
   transform: translateY(-6px);
 }
 .card--selected .card__frame {
-  outline: 3px solid var(--rarity-color);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.06), 0 8px 18px rgba(0, 0, 0, 0.6);
+  outline: 2px solid var(--rarity-color);
+  outline-offset: 2px;
 }
 
-/* playable: golden pulse glow (hand cards legal to play) */
-.card--playable {
-  animation: card-playable-glow 1.8s ease-in-out infinite;
-}
-@keyframes card-playable-glow {
-  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 205, 80, 0.35)); }
-  50% { filter: drop-shadow(0 0 10px rgba(255, 205, 80, 0.75)); }
+/* playable (hand cards legal to play): a flat engraved ring — a 1px
+   cream rule inset from the plate edge, in the engraver's register.
+   The old card-playable-glow drop-shadow pulse is gone; a playable
+   card is distinguished by line, not light. */
+.card--playable .card__frame::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  pointer-events: none;
 }
 
 /* Board minis: at half zoom the ribbon and rules copy are 6px tall — noise,
@@ -460,10 +454,27 @@
   display: none;
 }
 
+/* Board minis still carry stats — the pip labels must survive the zoom,
+   so the pips and their type step up in card units (zoom halves them on
+   screen). */
+.card--board .card__stat {
+  min-width: 62px;
+  height: 46px;
+  padding: 3px 8px;
+}
+.card--board .card__stat-label {
+  font-size: 13px;
+}
+.card--board .card__stat-value {
+  font-size: 21px;
+}
+
 /* ============================================================
    Full-bleed treatment — epic and legendary cards WITH generated
-   art (cardTreatment.ts). Art fills the box; the name row and the
-   text well float over it on gradient scrims.
+   art (cardTreatment.ts). Art fills the box; the name row, the
+   ribbon, and the text well float over it on flat ink plates —
+   no gradient scrims, no text-shadow (Task 5). The plates carry
+   legibility by contrast, which is the flat world's only tool.
 
    The card box is unchanged: same --card-w / --card-h as a banded
    card. Only the internal layout differs, so the fixed-box
@@ -480,7 +491,7 @@
    Deliberately NO z-index here. Setting one would make this element a
    stacking context, which would trap .card__stats (its child) beneath
    .card__body's z-index — the pips would vanish behind the bottom
-   scrim on exactly the cards meant to look premium. Positioned with
+   plate on exactly the cards meant to look premium. Positioned with
    z-index:auto, it paints below the relatively-positioned rows by DOM
    order, and .card__stats stays free to out-rank them. */
 .card--bleed .card__artwrap {
@@ -501,21 +512,23 @@
   z-index: 1;
 }
 
-/* Top scrim: dark at the very top, clear by the time it reaches the art. */
+/* The name row floats on the art with no scrim behind it: the
+   nameplate and cost gem are their own solid plates, so art shows
+   between them and the type ribbon without washing the name out. */
 .card--bleed .card__top {
   margin: 0;
-  padding: var(--card-pad) var(--card-pad) 14px;
-  background: linear-gradient(180deg, rgba(8, 6, 14, 0.92) 0%, rgba(8, 6, 14, 0) 100%);
+  padding: var(--card-pad) var(--card-pad) 6px;
 }
 
-/* Bottom scrim: carries the rules text, so it is the denser of the two.
-   Pushed to the bottom of the frame by the auto margin. */
+/* The ribbon and the text well read as one ruled legend plate over
+   the art; the 1px line between them is the engraved join. */
 .card--bleed .card__ribbon {
   margin: auto var(--card-pad) 0;
-  background: rgba(20, 18, 28, 0.82);
+  background: var(--ground-deep);
+  border: 1px solid var(--line-dim);
 }
 
-/* padding-bottom reserves the pip row (32px pip + breathing room), so
+/* padding-bottom reserves the pip row (46px pip + breathing room), so
    rules text can never run underneath the stats.
 
    `0 1 auto`, not `0 0 auto`. The panel sizes to its content, but it must
@@ -533,25 +546,14 @@
   flex: 0 1 auto;
   min-height: 0;
   padding: 6px var(--card-pad) 44px;
-  background: linear-gradient(180deg, rgba(8, 6, 14, 0) 0%, rgba(8, 6, 14, 0.9) 26%, rgba(8, 6, 14, 0.96) 100%);
+  border-top: 1px solid var(--line-dim);
+  background: var(--ground-deep);
 }
 
-/* Legibility is a hard requirement, not a nice-to-have: rules text must
-   survive the BRIGHTEST image in the generated set. The scrim does most
-   of the work; the shadow covers the rest. */
-.card--bleed .card__text,
-.card--bleed .card__flavor {
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.7);
-}
-
-.card--bleed .card__text {
-  color: #f2ecdc;
-}
-
-/* Pips sit in the card's bottom corners, over the scrim. Anchored to the
+/* Pips sit in the card's bottom corners, on the ink plate. Anchored to the
    bottom rather than offset from the top — a top offset would be a magic
    number that silently breaks if --card-h ever changes. z-index out-ranks
-   .card__body (1) so the pips paint above the scrim; this works only
+   .card__body (1) so the pips paint above the plate; this works only
    because .card__artwrap has no z-index of its own (see above). */
 .card--bleed .card__stats {
   top: auto;

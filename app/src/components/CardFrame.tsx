@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { CardType, Keyword, Rarity } from '@ashen/core';
 import type { Treatment } from './cardTreatment.js';
 import KeywordChip from './KeywordChip.js';
@@ -9,12 +9,10 @@ import './card.css';
  * attack/health pips and name plate. The art slot (`children`) is filled
  * by Card.tsx with CardArt — CardFrame only knows the frame and text.
  *
- * Rarity treatments:
- *  - common:    flat charcoal + thin border
- *  - rare:      gilded gradient edge (padding-box/border-box trick)
- *  - epic:      gem accent (::after facet) + soft purple glow
- *  - legendary: animated shimmer — the border gradient and a face sheen
- *               sweep via `background-position` keyframes (alternate)
+ * Rarity treatments (Armorial, Task 5): hairline weight only, declared in
+ * card.css — common = 1px dim hairline, rare = 1px cream, epic = 2px cream,
+ * legendary = 2px --or (the one reserved gold). No gradients, bevels, glows,
+ * or depth shadows anywhere on the plate.
  *
  * faceDown renders the card back: the art is grayscaled into a silhouette
  * and every chrome element (name, cost, ribbon, stats) is suppressed.
@@ -30,6 +28,15 @@ export interface CardFrameProps {
   type: CardType;
   name: string;
   cost: number;
+  /** House archetype id ('ember', 'coven', …; '' for neutrals/tokens). Rendered
+   *  as data-archetype so card.css can map it to one --house-* tincture for
+   *  frame/register identity; the art mount stays neutral (Task 5). */
+  archetype?: string;
+  /** Show the mana-cost gem. Default true. CardView passes false at board
+   *  size: a board creature's cost is already paid, and a rendered gem reads
+   *  as a third defense stat — the exact misread recorded in app/PRODUCT.md.
+   *  The cost must leave the DOM, not merely be styled away. */
+  showCost?: boolean;
   /** Creature stats — attack/health pips render only for creatures. */
   attack?: number;
   health?: number;
@@ -58,14 +65,6 @@ export interface CardFrameProps {
   children?: ReactNode;
 }
 
-/** Controller-pinned rarity palette (Task 37). */
-const RARITY_COLOR: Record<Rarity, string> = {
-  common: '#8a8a8a',
-  rare: '#d4af37',
-  epic: '#a855f7',
-  legendary: '#ff9d2e',
-};
-
 const RARITY_LABEL: Record<Rarity, string> = {
   common: 'Common',
   rare: 'Rare',
@@ -91,11 +90,22 @@ const TYPE_ICON: Record<CardType, string> = {
 
 const BACK_SIGIL = '\u2726';
 
+/** Visible stat labels — Cardo small caps over the numeral (Task 5). The
+ *  words carry the meaning (a player must never guess which stat a number
+ *  is), so the aria-label repeats them for AT and the visible span renders
+ *  them in small caps. */
+const STAT_LABEL = {
+  attack: 'Attack',
+  health: 'Health',
+} as const;
+
 export default function CardFrame({
   rarity,
   type,
   name,
   cost,
+  archetype,
+  showCost = true,
   attack,
   health,
   keywords,
@@ -124,15 +134,17 @@ export default function CardFrame({
       className={classes}
       data-rarity={rarity}
       data-type={type}
+      data-archetype={archetype}
       onClick={onClick}
-      style={{ '--rarity-color': RARITY_COLOR[rarity] } as CSSProperties}
     >
       <div className="card__frame">
         {!faceDown && (
           <div className="card__top">
-            <span className="card__cost" aria-label={`${cost} mana`}>
-              {cost}
-            </span>
+            {showCost && (
+              <span className="card__cost" aria-label={`${cost} mana`}>
+                {cost}
+              </span>
+            )}
             <span className="card__nameplate">{name || 'Unnamed card'}</span>
           </div>
         )}
@@ -151,14 +163,22 @@ export default function CardFrame({
           </div>
 
           {/* Corner pips, not a layout row: a creature and a spell must occupy
-              the SAME box, so stats are lifted out of the flow entirely. */}
+              the SAME box, so stats are lifted out of the flow entirely. Each
+              pip is a word in small caps over the numeral — never a bare
+              number (PRODUCT.md: every number must be unambiguous). */}
           {!faceDown && isCreature && attack !== undefined && health !== undefined && (
             <div className="card__stats">
-              <span className="card__stat card__stat--attack" title="Attack">
-                {attack}
+              <span className="card__stat card__stat--attack" aria-label={`${STAT_LABEL.attack} ${attack}`}>
+                <span className="card__stat-label" aria-hidden="true">
+                  {STAT_LABEL.attack}
+                </span>
+                <span className="card__stat-value">{attack}</span>
               </span>
-              <span className="card__stat card__stat--health" title="Health">
-                {health}
+              <span className="card__stat card__stat--health" aria-label={`${STAT_LABEL.health} ${health}`}>
+                <span className="card__stat-label" aria-hidden="true">
+                  {STAT_LABEL.health}
+                </span>
+                <span className="card__stat-value">{health}</span>
               </span>
             </div>
           )}
@@ -167,6 +187,7 @@ export default function CardFrame({
         {!faceDown && (
           <>
             <div className="card__ribbon">
+              <span className="card__house-mark" aria-hidden="true" />
               <span className="card__ribbon-icon" aria-hidden="true">
                 {TYPE_ICON[type]}
               </span>

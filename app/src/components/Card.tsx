@@ -43,6 +43,9 @@ export interface CardProps {
    *  cardText rules text, whose triggers live on the CARD and so cannot be
    *  removed by clearing the creature's keyword array. */
   silenced?: boolean;
+  /** Show the mana-cost gem (default true). CardView passes false at board
+   *  size — see CardFrame for the rationale. */
+  showCost?: boolean;
   /** Click handler receives the card (identity for play/target logic). */
   onClick?: (card: CardSpec) => void;
 }
@@ -56,6 +59,7 @@ export default function Card({
   keywords,
   staticKeywords = false,
   silenced,
+  showCost = true,
   onClick,
 }: CardProps) {
   // Generated art (art-pipeline plan). A miss returns null and CardArt renders
@@ -94,6 +98,8 @@ export default function Card({
       type={card.type}
       name={card.name}
       cost={card.cost}
+      archetype={card.archetype}
+      showCost={showCost}
       attack={card.attack}
       health={card.health}
       keywords={shownKeywords}

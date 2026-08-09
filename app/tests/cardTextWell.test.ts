@@ -13,6 +13,10 @@ const css = readFileSync(
   'utf8',
 );
 
+/** CSS with block comments stripped — prose may name the dead recipes; only
+ *  executable rules are a regression. Same idiom as armorialContract.test.ts. */
+const executableCss = css.replace(/\/\*[\s\S]*?\*\//g, '');
+
 /** Escape a selector for literal use inside a regex. */
 function esc(selector: string): string {
   return selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -81,5 +85,29 @@ describe('card text well', () => {
     // already a flex column. It is here so that a later edit cannot quietly
     // take the property away and reintroduce the clamp-by-necessity problem.
     expect(block('.card__body')).toMatch(/display:\s*flex/);
+  });
+
+  it('keeps the board mini text well hidden', () => {
+    // Board minis are zoom 0.5 — an 11px chip renders at 5.5px, unreadable
+    // and unclickable. Their keywords/rules live in the inspect panel
+    // (main-thread plan, Task 7); un-hiding this reintroduces noise, not
+    // information. Do not make this pass by dropping the rule: the body must
+    // be OFF the board mini, not merely clipped.
+    expect(block('.card--board .card__body')).toMatch(/display:\s*none/);
+  });
+
+  it('keeps the card plate flat: no gradients, glows, or depth shadows', () => {
+    // Armorial direction contract (Task 5): flat heraldic tinctures, cream
+    // engraved hairlines. The frame regions were stripped of gradients,
+    // inset/depth shadows, bevels, and every filter: drop-shadow recipe
+    // (including the old card-playable-glow pulse); a reintroduction is a
+    // direction regression, not a style tweak. Box/text shadows count too —
+    // the flat world has no depth system for them to belong to. Face-down
+    // grayscale filters (filter: grayscale…) are fine; drop-shadow is not.
+    expect(executableCss).not.toMatch(/gradient\(/);
+    expect(executableCss).not.toMatch(/card-playable-glow/);
+    expect(executableCss).not.toMatch(/drop-shadow/);
+    expect(executableCss).not.toMatch(/box-shadow/);
+    expect(executableCss).not.toMatch(/text-shadow/);
   });
 });

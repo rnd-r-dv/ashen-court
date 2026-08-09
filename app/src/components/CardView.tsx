@@ -62,6 +62,11 @@ export interface CardViewProps {
    *  so the engine clears CreatureState.keywords AND sets this flag, and only
    *  the flag can suppress the def's generated text. */
   silenced?: boolean;
+  /** Show the mana-cost gem. Default true; forced false at board size. A
+   *  board creature's cost is already paid, and a rendered gem reads as a
+   *  third defense stat — the exact misread recorded in app/PRODUCT.md. The
+   *  cost must leave the DOM, not merely be styled away. */
+  showCost?: boolean;
   status?: CardViewStatus;
   /** Click handler; receives the event so parents can stopPropagation. */
   onClick?: (e: ReactMouseEvent<HTMLDivElement>) => void;
@@ -79,6 +84,7 @@ export default function CardView({
   keywords,
   staticKeywords = false,
   silenced,
+  showCost,
   status,
   onClick,
 }: CardViewProps) {
@@ -115,6 +121,7 @@ export default function CardView({
         keywords={keywords}
         staticKeywords={staticKeywords}
         silenced={silenced}
+        showCost={showCost ?? size !== 'board'}
       />
       {badges.map((b) => (
         <span className="cardview-badge" key={b}>

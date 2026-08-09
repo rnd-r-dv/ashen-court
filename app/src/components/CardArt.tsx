@@ -4,18 +4,26 @@ import { ARCANE_PRESET, PRESETS, type ArtPreset } from './artPresets.js';
 import { mulberry32, shapePaths, type Size } from './artShapes.js';
 
 /**
- * Procedural card art v2 (Task 38).
+ * Procedural card art v2 (Task 38), flattened to the Armorial register
+ * (Task 5).
  *
  * Renders a card's ArtRecipe as a layered SVG composed in a 250×350 space,
  * every layer derived from a pure seeded PRNG (mulberry32 over recipe.seed)
  * so the same recipe always produces the identical image — no Math.random,
  * no state:
  *
- *   1. sky — linear gradient (recipe.palette override, else preset gradient)
- *   2. midground — silhouette shape paths from artShapes.ts (per-shape rng)
- *   3. runic glyph — recipe.glyph (or preset glyph) with a seeded tilt
- *   4. embers — seeded particle specks drifting through the scene
- *   5. vignette — radial darkening around the edges
+ *   1. sky — a flat field (recipe.palette override, else the preset's
+ *            light stop), no gradient
+ *   2. ground band — a flat register across the bottom (the preset's dark
+ *            stop), replacing the old radial vignette
+ *   3. midground — silhouette shape paths from artShapes.ts (per-shape rng)
+ *   4. runic glyph — recipe.glyph (or preset glyph) with a seeded tilt
+ *   5. embers — seeded particle specks drifting through the scene
+ *
+ * The seed, the layer order, the rng draw sequence, and the composition are
+ * unchanged from the gradient era — only the paint is flat. The SVG defines
+ * no <linearGradient>/<radialGradient> and every fill is a solid color
+ * (cardArtWiring.test.ts guards that).
  *
  * Rarity glow is intentionally absent: ArtRecipe carries no rarity (that
  * belongs to CardFrame / Task 37). When the recipe carries an imageUrl
@@ -55,6 +63,11 @@ export const VIEW_H = 180;
 /** Art-panel aspect ratio (width / height) — card.css mirrors this. */
 export const ART_ASPECT = VIEW_W / VIEW_H;
 
+/** Height of the flat ground band at the bottom of the panel (~25% of the
+ *  view): the silhouettes' bases bleed off the bottom edge, and the band
+ *  anchors them the way a vignette used to — flat tincture, not darkening. */
+const GROUND_H = 46;
+
 const frameStyle: CSSProperties = {
   width: '100%',
   height: '100%',
@@ -72,16 +85,10 @@ const imgCoverStyle: CSSProperties = {
 
 const svgStyle: CSSProperties = { display: 'block', width: '100%', height: '100%' };
 
-/** Per-recipe gradient id — hashes preset + seed + palette so sibling SVGs never collide. */
-function gradientId(recipe: ArtRecipe): string {
-  let h = 0;
-  const src = `${recipe.preset}|${recipe.seed}|${recipe.palette.join(',')}`;
-  for (let i = 0; i < src.length; i++) h = (Math.imul(h, 31) + src.charCodeAt(i)) | 0;
-  return `cardart-g${(h >>> 0).toString(36)}`;
-}
-
-/** Recipe palette overrides the preset gradient when it carries two stops. */
-function gradientOf(preset: ArtPreset, palette: string[]): [string, string] {
+/** Recipe palette overrides the preset fields when it carries two stops:
+ *  [0] is the sky field, [1] the ground band — both rendered as SOLID fills
+ *  (the preset pair stays pairwise-distinct data, see artPresets.test.ts). */
+function fieldOf(preset: ArtPreset, palette: string[]): [string, string] {
   if (palette.length >= 2 && palette[0] && palette[1]) return [palette[0], palette[1]];
   return preset.gradient;
 }
@@ -101,8 +108,7 @@ export default function CardArt({ recipe, className }: CardArtProps) {
   }
 
   const preset: ArtPreset = PRESETS[recipe.preset] ?? ARCANE_PRESET;
-  const gradient = gradientOf(preset, recipe.palette);
-  const gid = gradientId(recipe);
+  const [sky, ground] = fieldOf(preset, recipe.palette);
   const glyph = recipe.glyph || preset.glyph;
 
   // Layers each draw from their own derived stream: same seed → same art.
@@ -147,28 +153,28 @@ export default function CardArt({ recipe, className }: CardArtProps) {
       aria-label={`${preset.shape} art`}
       style={svgStyle}
     >
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={gradient[0]} />
-          <stop offset="100%" stopColor={gradient[1]} />
-        </linearGradient>
-        <radialGradient id={`${gid}-vig`} cx="50%" cy="40%" r="80%">
-          <stop offset="55%" stopColor="#000" stopOpacity="0" />
-          <stop offset="100%" stopColor="#000" stopOpacity="0.65" />
-        </radialGradient>
-      </defs>
+      {/* 1. sky — a flat field; square corners, the art slot supplies
+             the rounding */}
+      <rect x={VIEW_X} y={VIEW_Y} width={VIEW_W} height={VIEW_H} fill={sky} />
 
-      {/* 1. sky — square corners; the art slot supplies the rounding */}
-      <rect x={VIEW_X} y={VIEW_Y} width={VIEW_W} height={VIEW_H} fill={`url(#${gid})`} />
+      {/* 2. ground register — the flat dark field across the bottom,
+             anchoring the silhouettes' bases (the old vignette is gone) */}
+      <rect
+        x={VIEW_X}
+        y={VIEW_Y + VIEW_H - GROUND_H}
+        width={VIEW_W}
+        height={GROUND_H}
+        fill={ground}
+      />
 
-      {/* 2. midground silhouette */}
+      {/* 3. midground silhouette */}
       <g fill={preset.accent} fillRule="evenodd" opacity="0.32">
         {shapes.map((d, i) => (
           <path key={i} d={d} />
         ))}
       </g>
 
-      {/* 3. runic glyph */}
+      {/* 4. runic glyph */}
       <text
         x={glyphX}
         y={glyphY}
@@ -183,13 +189,10 @@ export default function CardArt({ recipe, className }: CardArtProps) {
         {glyph}
       </text>
 
-      {/* 4. ember / particle specks */}
+      {/* 5. ember / particle specks */}
       {embers.map((e, i) => (
         <circle key={i} cx={e.x.toFixed(1)} cy={e.y.toFixed(1)} r={e.r.toFixed(1)} fill={preset.accent} opacity={e.o.toFixed(3)} />
       ))}
-
-      {/* 5. vignette */}
-      <rect x={VIEW_X} y={VIEW_Y} width={VIEW_W} height={VIEW_H} fill={`url(#${gid}-vig)`} />
     </svg>
   );
 }

@@ -214,6 +214,57 @@
   .heroportrait-power { font-size: 11px; padding: 3px 8px; }
 }
 
+/* ---- permanent hero-power blazon (Task 7) ----
+   Rendered by Board in each house margin, for BOTH heroes: the power's name,
+   its cost gem, and its GENERATED text. No hover, no title tooltip — the
+   read is permanent (app/PRODUCT.md records hover-only affordances as a
+   known weakness that must not be extended). Flat ink plate, canonical
+   tokens, cream hairline. */
+.heroblazon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 108px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-dim);
+  border-radius: var(--radius-sm);
+  background: var(--ground-deep);
+  color: var(--text-dim);
+}
+
+.heroblazon-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.heroblazon-cost {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--ground-deep);
+  background: var(--line);
+}
+
+.heroblazon-text {
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--text-dim);
+}
+
 /* ---- targeting: ember ring + pulse (valid target) ---- */
 .heroportrait--target {
   cursor: crosshair;

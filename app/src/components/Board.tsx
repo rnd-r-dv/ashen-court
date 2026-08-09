@@ -5,7 +5,7 @@ import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, T
 import { BOARD_CAP } from '@ashen/core';
 import type { ArchetypeId } from '@ashen/core';
 import CardView, { FACE_DOWN_CARD } from './CardView.js';
-import HeroPortrait from './HeroPortrait.js';
+import HeroPortrait, { HeroPowerBlazon } from './HeroPortrait.js';
 import DeckCount from './DeckCount.js';
 import ManaTray from './ManaTray.js';
 import { deathFade, playSlam } from './animations.js';
@@ -127,6 +127,12 @@ function HouseBanner({ heroName }: { heroName: string }) {
  * under its house banner in the margin, tokens sit in a subordinate sub-band
  * that never consumes a normal-row slot, and both zones keep every
  * targeting/right-click/keyword/silence/death/animation wire intact.
+ *
+ * Task 7: left-click inspects any revealed creature when neither targeting
+ * nor attack-selection takes precedence; right-click ALWAYS inspects and
+ * suppresses the native context menu, even during targeting. Both margins
+ * carry a permanent hero-power blazon (name, cost, generated text) so each
+ * hero's power reads without hover.
  */
 
 /**
@@ -162,6 +168,8 @@ export interface BoardProps {
   onEndTurn: () => void;
   /** Cancel the active targeting mode (empty-space click). */
   onCancel: () => void;
+  /** Open the inspect panel for a revealed board creature (Task 7). */
+  onInspect: (creatureId: string) => void;
   /** Enemy board creatures revealed (first enemy play/summon, Task 39). */
   enemyRevealed?: boolean;
   /** Animation duration scale (fast mode 0.5). */
@@ -206,6 +214,7 @@ export default function Board({
   onHeroPower,
   onEndTurn,
   onCancel,
+  onInspect,
   enemyRevealed = true,
   animScale = 1,
   heroFx = undefined,
@@ -252,19 +261,39 @@ export default function Board({
     const targetable = isTarget(ref);
     const selectable = friendly && myTurn && !inTargeting && attackers.has(c.id);
     const selected = friendly && targeting?.kind === 'attack' && targeting.attackerId === c.id;
+    // Task 7: an unrevealed enemy (face-down) must never leak its identity or
+    // state through the inspect surface — only revealed creatures are
+    // readable. The click grammar layers onto the existing wires: left-click
+    // targets a valid target, else selects an attack-ready friendly creature,
+    // else inspects; right-click ALWAYS inspects (suppressing the native
+    // context menu), including during targeting.
+    const inspectable = friendly || enemyRevealed;
+    const inspect = () => onInspect(c.id);
     return (
       // Task 39: creatures slam in on mount (playSlam) and dissolve into
       // embers on death (deathFade, via the row's AnimatePresence exit).
       // Tokens share every wire (targeting, selection, live stats, silence,
-      // death slot) — only the scale differs (Task 6).
+      // death slot) — only the scale differs (Task 6). tabIndex -1 makes the
+      // slot programmatically focusable so closing the inspect panel can
+      // return focus to the creature that opened it (Task 7).
       <motion.div
         key={c.id}
         className={`board-slot${token ? ' board-slot--token' : ''}`}
         data-creature-id={c.id}
+        tabIndex={-1}
         variants={{ ...playSlam(animScale), ...deathFade(animScale) }}
         initial="slam"
         animate="enter"
         exit="exit"
+        onContextMenu={
+          inspectable
+            ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                inspect();
+              }
+            : undefined
+        }
       >
         <CardView
           card={def}
@@ -285,7 +314,12 @@ export default function Board({
                     e.stopPropagation();
                     onSelectAttacker(c.id);
                   }
-                : undefined
+                : inspectable
+                  ? (e) => {
+                      e.stopPropagation();
+                      inspect();
+                    }
+                  : undefined
           }
         />
       </motion.div>
@@ -308,6 +342,9 @@ export default function Board({
       >
         <div className="board-margin">
           <HouseBanner heroName={foeP.hero.name} />
+          {/* Permanent hero-power blazon — the enemy power reads without
+              hover (Task 7). */}
+          <HeroPowerBlazon hero={foeP.hero} />
         </div>
         <div className="board-zone-body">
           <div className="board-side board-side--top">
@@ -353,6 +390,9 @@ export default function Board({
       >
         <div className="board-margin">
           <HouseBanner heroName={meP.hero.name} />
+          {/* Permanent hero-power blazon — the player's own power reads
+              without hover (Task 7). */}
+          <HeroPowerBlazon hero={meP.hero} />
         </div>
         <div className="board-zone-body">
           <div className="board-register">

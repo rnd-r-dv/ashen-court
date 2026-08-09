@@ -171,13 +171,33 @@ export default function HeroPortrait({
             onPowerClick?.();
           }}
           disabled={!powerEnabled}
-          title={`${hero.power.name} — ${heroPowerText(hero.power)}`}
         >
           {hero.power.name}
           <span className="heroportrait-power-cost">{hero.power.cost}</span>
           {hero.usedPower && <span className="heroportrait-power-used">used</span>}
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Permanent hero-power blazon (Task 7): the power's name, cost, and GENERATED
+ * text, always visible in the board margin — no hover, no tooltip. Replaces
+ * the hover-only `title` tooltip on the power button, which app/PRODUCT.md
+ * records as a known weakness that must not be extended. Board renders one in
+ * each house margin so the enemy power reads without hover too.
+ */
+export function HeroPowerBlazon({ hero }: { hero: HeroState }) {
+  return (
+    <div className="heroblazon" aria-label={`${hero.power.name}: ${heroPowerText(hero.power)}`}>
+      <span className="heroblazon-name">
+        <span className="heroblazon-title">{hero.power.name}</span>
+        <span className="heroblazon-cost" aria-label={`${hero.power.cost} mana`}>
+          {hero.power.cost}
+        </span>
+      </span>
+      <span className="heroblazon-text">{heroPowerText(hero.power)}</span>
     </div>
   );
 }

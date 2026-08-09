@@ -13,8 +13,8 @@ import Match from '../src/screens/Match.js';
 import { buildMatchEntry } from '../src/game/matchSetup.js';
 import Board from '../src/components/Board.js';
 import type { BoardTargeting } from '../src/components/Board.js';
-import { BOARD_CAP } from '@ashen/core';
-import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, PlayerState } from '@ashen/core';
+import { BOARD_CAP, heroPowerText } from '@ashen/core';
+import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, PlayerState, TargetRef } from '@ashen/core';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -210,7 +210,9 @@ function playerState(board: CreatureState[]): PlayerState {
       hp: 30,
       maxHp: 30,
       shields: 0,
-      power: { name: 'Ember Bolt', cost: 2, effects: [] },
+      // A real effect so heroPowerText is non-empty — the permanent blazon
+      // assertions in the Task 7 suite read the generated sentence.
+      power: { name: 'Ember Bolt', cost: 2, effects: [{ kind: 'dealDamage', value: 2, target: 'any' }] },
       usedPower: false,
       discountMostExpensive: 0,
       discountNextSpell: 0,
@@ -267,6 +269,7 @@ describe('board registers and token sub-bands (Task 6)', () => {
           onHeroPower: () => {},
           onEndTurn: () => {},
           onCancel: () => {},
+          onInspect: () => {},
         }),
       );
     });
@@ -327,5 +330,176 @@ describe('board registers and token sub-bands (Task 6)', () => {
   it('passes the friendly lockedMana through to the mana tray', () => {
     renderBoard(boardState([], []));
     expect(host!.querySelectorAll('[aria-label="Locked mana"]')).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 7: inspection replaces nothing — it layers onto the click grammar.
+// When idle, a left-click on an attack-ready friendly creature still selects
+// the attacker; a left-click on an enemy creature or a friendly creature
+// without attack-selection precedence inspects it. While targeting, a valid
+// target left-click resolves targeting rather than inspecting. A right-click
+// on either side ALWAYS suppresses the native context menu and inspects —
+// including during targeting. Both house margins carry a permanent
+// hero-power blazon (name, cost, generated text) and the hover-only `title`
+// tooltip is gone from the hero power button.
+// ---------------------------------------------------------------------------
+describe('board inspection and hero blazons (Task 7)', () => {
+  let host: HTMLDivElement | null = null;
+  let root: Root | null = null;
+
+  interface RenderOpts {
+    legal?: Intent[];
+    myTurn?: boolean;
+    targeting?: BoardTargeting | null;
+    onInspect?: (id: string) => void;
+    onSelectAttacker?: (id: string) => void;
+    onTargetClick?: (ref: TargetRef) => void;
+  }
+
+  function renderBoard(state: GameState, opts: RenderOpts = {}) {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => {
+      root!.render(
+        createElement(Board, {
+          state,
+          viewer: 0,
+          getCard: () => WARDEN,
+          legal: opts.legal ?? [],
+          targeting: opts.targeting ?? null,
+          myTurn: opts.myTurn ?? false,
+          onSelectAttacker: opts.onSelectAttacker ?? (() => {}),
+          onTargetClick: opts.onTargetClick ?? (() => {}),
+          onHeroPower: () => {},
+          onEndTurn: () => {},
+          onCancel: () => {},
+          onInspect: opts.onInspect ?? (() => {}),
+        }),
+      );
+    });
+  }
+
+  afterEach(() => {
+    act(() => {
+      root?.unmount();
+    });
+    host?.remove();
+    host = null;
+    root = null;
+  });
+
+  it('left-click on an enemy creature while idle inspects it', () => {
+    const onInspect = vi.fn();
+    renderBoard(boardState([creature('foe-1', false, 1)], []), { onInspect });
+    click(host!.querySelector('.board-row--top .cardview'));
+    expect(onInspect).toHaveBeenCalledTimes(1);
+    expect(onInspect).toHaveBeenCalledWith('foe-1');
+  });
+
+  it('left-click on a friendly attack-ready creature still selects the attacker', () => {
+    const onInspect = vi.fn();
+    const onSelectAttacker = vi.fn();
+    renderBoard(boardState([], [creature('me-1', false)]), {
+      myTurn: true,
+      legal: [{ kind: 'attack', attackerId: 'me-1', target: { type: 'hero', player: 1 } }],
+      onInspect,
+      onSelectAttacker,
+    });
+    click(host!.querySelector('.board-row--bottom .cardview'));
+    expect(onSelectAttacker).toHaveBeenCalledTimes(1);
+    expect(onSelectAttacker).toHaveBeenCalledWith('me-1');
+    expect(onInspect).not.toHaveBeenCalled();
+  });
+
+  it('left-click on a friendly creature without attack precedence inspects it', () => {
+    const onInspect = vi.fn();
+    renderBoard(boardState([], [creature('me-1', false)]), { onInspect });
+    click(host!.querySelector('.board-row--bottom .cardview'));
+    expect(onInspect).toHaveBeenCalledTimes(1);
+    expect(onInspect).toHaveBeenCalledWith('me-1');
+  });
+
+  it('left-click on a valid target while targeting resolves targeting, not inspection', () => {
+    const onInspect = vi.fn();
+    const onTargetClick = vi.fn();
+    renderBoard(boardState([creature('foe-1', false, 1)], [creature('me-1', false)]), {
+      myTurn: true,
+      legal: [{ kind: 'attack', attackerId: 'me-1', target: { type: 'creature', id: 'foe-1' } }],
+      targeting: { kind: 'attack', attackerId: 'me-1' },
+      onInspect,
+      onTargetClick,
+    });
+    click(host!.querySelector('.board-row--top .cardview'));
+    expect(onTargetClick).toHaveBeenCalledTimes(1);
+    expect(onTargetClick).toHaveBeenCalledWith({ type: 'creature', id: 'foe-1' });
+    expect(onInspect).not.toHaveBeenCalled();
+  });
+
+  it('right-click inspects and prevents the context menu — even while targeting', () => {
+    const onInspect = vi.fn();
+    renderBoard(boardState([creature('foe-1', false, 1)], [creature('me-1', false)]), {
+      myTurn: true,
+      legal: [{ kind: 'attack', attackerId: 'me-1', target: { type: 'creature', id: 'foe-1' } }],
+      targeting: { kind: 'attack', attackerId: 'me-1' },
+      onInspect,
+    });
+    const el = host!.querySelector('.board-row--top .cardview')!;
+    let prevented = false;
+    act(() => {
+      const evt = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      prevented = !el.dispatchEvent(evt);
+    });
+    expect(prevented).toBe(true);
+    expect(onInspect).toHaveBeenCalledTimes(1);
+    expect(onInspect).toHaveBeenCalledWith('foe-1');
+  });
+
+  it('right-click on an attack-ready friendly creature inspects instead of selecting', () => {
+    const onInspect = vi.fn();
+    const onSelectAttacker = vi.fn();
+    renderBoard(boardState([], [creature('me-1', false)]), {
+      myTurn: true,
+      legal: [{ kind: 'attack', attackerId: 'me-1', target: { type: 'hero', player: 1 } }],
+      onInspect,
+      onSelectAttacker,
+    });
+    const el = host!.querySelector('.board-row--bottom .cardview')!;
+    let prevented = false;
+    act(() => {
+      const evt = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      prevented = !el.dispatchEvent(evt);
+    });
+    expect(prevented).toBe(true);
+    expect(onInspect).toHaveBeenCalledTimes(1);
+    expect(onInspect).toHaveBeenCalledWith('me-1');
+    expect(onSelectAttacker).not.toHaveBeenCalled();
+  });
+
+  it('renders a permanent hero-power blazon in both house margins', () => {
+    renderBoard(boardState([], []));
+    const blazons = host!.querySelectorAll('.heroblazon');
+    expect(blazons).toHaveLength(2);
+    expect(host!.querySelectorAll('.board-zone--top .heroblazon')).toHaveLength(1);
+    expect(host!.querySelectorAll('.board-zone--bottom .heroblazon')).toHaveLength(1);
+    // Name, cost, and the GENERATED power text, all without hover.
+    const text = heroPowerText({ name: 'Ember Bolt', cost: 2, effects: [{ kind: 'dealDamage', value: 2, target: 'any' }] });
+    expect(text.length).toBeGreaterThan(0);
+    for (const b of blazons) {
+      expect(b.textContent).toContain('Ember Bolt');
+      expect(b.textContent).toContain('2');
+      expect(b.textContent).toContain(text);
+    }
+  });
+
+  it('drops the hover-only title from the hero power button', () => {
+    renderBoard(boardState([], []));
+    const btn = host!.querySelector<HTMLButtonElement>('.heroportrait-power');
+    expect(btn).not.toBeNull();
+    expect(btn!.hasAttribute('title')).toBe(false);
+    // The player's legal-power behavior survives: the button is still there
+    // and still the power control (the blazon is read-only).
+    expect(btn!.textContent).toContain('Ember Bolt');
   });
 });

@@ -15,6 +15,7 @@ import DamagePopup from '../components/DamagePopup.js';
 import type { DamageEntry } from '../components/DamagePopup.js';
 import DiscoverOverlay from '../components/DiscoverOverlay.js';
 import Hand from '../components/Hand.js';
+import InspectPanel from '../components/InspectPanel.js';
 import PassDevice from '../components/PassDevice.js';
 import Projectile, { aoeFlightTime, flightTime } from '../components/Projectile.js';
 import type { ProjectileEntry, ProjectileKind } from '../components/Projectile.js';
@@ -101,6 +102,10 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
 
   const [targeting, setTargeting] = useState<BoardTargeting | null>(null);
   const [awaiting, setAwaiting] = useState(false); // submit in flight (button re-click guard)
+  // Task 7: the board creature currently inspected in the read-only modal.
+  // Board opens it (left-click on a non-actionable creature, right-click on
+  // any revealed creature); closing the panel returns focus to its slot.
+  const [inspecting, setInspecting] = useState<string | null>(null);
   // I1 (audit 04): rejected-intent banner — a transient top-center alert,
   // auto-dismissed after ERROR_BANNER_MS (or replaced by the next error).
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -777,6 +782,18 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     <PassDevice player={actor} onConfirm={() => setViewer(actor)} />
   ) : null;
 
+  // Task 7: the inspected creature is resolved from the live mirror, so a
+  // damage tick or silence mid-inspection re-renders the plate (and a
+  // creature that leaves the board closes the panel). The def comes from the
+  // same registry getCard the board uses.
+  const inspected =
+    inspecting !== null
+      ? (state.players[0].board.find((c) => c.id === inspecting) ??
+        state.players[1].board.find((c) => c.id === inspecting) ??
+        null)
+      : null;
+  const inspectedDef = inspected ? getCard(inspected.cardId) : undefined;
+
   // Discover overlay (Task 3): rendered independently of myTurn whenever a
   // choice is open. In hotseat, candidates stay behind the pass: the device
   // must physically reach the owner (viewer === actor) before any candidate
@@ -917,6 +934,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
           onHeroPower={onHeroPower}
           onEndTurn={() => submitOnce({ kind: 'endTurn' })}
           onCancel={() => setTargeting(null)}
+          onInspect={setInspecting}
           enemyRevealed={enemyRevealed}
           animScale={animScale}
           heroFx={heroFx}
@@ -1003,6 +1021,9 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
 
       {discoverOverlay}
       {passOverlay}
+      {inspected && inspectedDef && (
+        <InspectPanel creature={inspected} def={inspectedDef} onClose={() => setInspecting(null)} />
+      )}
     </div>
   );
 }

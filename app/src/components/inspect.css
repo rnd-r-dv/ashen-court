@@ -1,0 +1,94 @@
+/* InspectPanel (Task 7) — the read-only modal that explains a board
+ * creature. A full preview plate with LIVE stats, keywords, statuses, and
+ * silence-suppressed generated text, over a flat backdrop veil.
+ *
+ * Armorial register: canonical tokens only (--ground-rise / --line /
+ * --line-dim / --text / --text-dim), cream hairlines, no gradients, glows,
+ * or depth shadows — the same discipline as discover.css's veil, which this
+ * mirrors. z-index sits between the pass-device (30) and the discover modal
+ * (40): a pending discover must never open underneath, and a keyword
+ * popover (portalled to body at 60) must stay readable above the panel. */
+
+.inspect-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  place-items: center;
+}
+
+/* Flat translucent ground — the exact veil recipe discover.css uses. */
+.inspect-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 5, 12, 0.72);
+}
+
+.inspect-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 2px double var(--line-dim);
+  border-radius: var(--radius-md);
+  background: var(--ground-rise);
+  outline: none;
+}
+
+.inspect-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.inspect-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.inspect-close {
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 3px 12px;
+  border: 1px solid var(--line-dim);
+  border-radius: var(--radius-sm);
+  background: var(--ground);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.inspect-close:hover {
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.inspect-close:focus-visible {
+  outline: 1px solid var(--line);
+  outline-offset: 2px;
+}
+
+/* The plate itself sizes its own well; the overlay only hosts it. */
+.inspect-plate {
+  display: grid;
+  place-items: center;
+}
+
+/* Status legend — names every status the plate renders visually (frozen
+ * tint, exhausted dim, shield badge) so a state is never left to color
+ * alone (PRODUCT.md: every state must be unambiguous). */
+.inspect-status {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}

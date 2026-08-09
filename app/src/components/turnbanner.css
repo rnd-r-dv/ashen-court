@@ -17,7 +17,7 @@
   padding: 18px 32px 16px;
   pointer-events: none;
   text-align: center;
-  background: rgba(13, 10, 22, 0.85);
+  background: color-mix(in srgb, var(--ground-deep) 85%, transparent);
   border-top: 1px solid var(--line-dim);
   border-bottom: 1px solid var(--line-dim);
 }

@@ -92,11 +92,12 @@
   margin: 0;
 }
 
-/* Error note: cream ink on a flat or-tinged wash — the warm tint marks the
-   alert without borrowing the reserved tinctures. */
+/* Error note: cream ink on a flat house-vigil wash — the vigil field marks
+   the alert without touching the reserved tinctures (or stays reserved for
+   legendary and active-turn treatments only). */
 .lan-error {
   color: var(--line);
-  background: rgba(184, 145, 60, 0.1);
+  background: color-mix(in srgb, var(--house-vigil) 10%, transparent);
   border: 1px solid var(--line-dim);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);

@@ -64,22 +64,24 @@
 /* ---- damage / heal / hero-power flash overlays (Task 39 -> Task 9) ----
    Flat translucent washes in the tincture's own colour — the radial
    gradients and glow box-shadows are gone. Gules-derived for damage,
-   heal-green and or-derived for the others, all flat veils. */
+   heal-green and vigil-derived for the others, all flat veils. */
 .heroportrait-fx {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   pointer-events: none;
-  background: rgba(168, 30, 34, 0.35); /* flat gules wash — damage */
+  background: color-mix(in srgb, var(--gules) 40%, transparent); /* flat gules wash — damage */
 }
 
 .heroportrait-fx--heal {
   background: rgba(143, 227, 160, 0.3);
 }
 
-/* hero power glyph flash (Task 40): flat or wash around the sigil. */
+/* hero power glyph flash (Task 40): flat vigil wash around the sigil (or
+   stays reserved for legendary/active-turn, so the power uses the house
+   vigil field). */
 .heroportrait-fx--power {
-  background: rgba(184, 145, 60, 0.4);
+  background: color-mix(in srgb, var(--house-vigil) 40%, transparent);
 }
 
 /* ---- name ---- */

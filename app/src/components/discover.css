@@ -13,7 +13,7 @@
 .discover-veil {
   position: absolute;
   inset: 0;
-  background: rgba(7, 5, 12, 0.72); /* flat translucent ground — no gradient */
+  background: color-mix(in srgb, var(--ground-deep) 72%, transparent); /* flat translucent ground — no gradient */
 }
 
 .discover-dialog {

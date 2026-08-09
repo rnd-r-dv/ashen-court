@@ -1,0 +1,37 @@
+/* fonts.css — self-hosted Cardo, the Armorial voice (Task 4).
+ *
+ * Cardo (SIL OFL 1.1, David J. Perry) is the only type in this world:
+ * "Cardo throughout" per the direction contract. The three woff2 files
+ * below are the official Google Fonts Latin assets, downloaded and
+ * checksum-pinned by Task 4 (see public/fonts/CARDO-OFL.txt for the
+ * license). Everything resolves under /fonts/ so a page load never
+ * touches the network — offline play must not depend on a CDN.
+ *
+ * Cardo has no small-caps file: small caps come from the 400 weight via
+ * font-variant-caps: small-caps, never from a synthetic face.
+ *
+ * font-display: swap keeps text on screen while the woff2 streams in.
+ */
+@font-face {
+  font-family: 'Cardo';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/cardo-v21-latin-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Cardo';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/cardo-v21-latin-400-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Cardo';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/cardo-v21-latin-700.woff2') format('woff2');
+}

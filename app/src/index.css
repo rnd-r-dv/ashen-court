@@ -1,9 +1,10 @@
-/* Global styles (Task 28) upgraded to the Task 36 theme system. The design
- * tokens in theme.css drive the page background, typography, selection and
- * focus states, and the gothic-framed buttons below. Screen stylesheets
- * (shell.css etc.) load before this file, so these rules win ties and can
- * override the old hardcoded palette where the theme needs to. */
+/* Global styles (Task 28) on the Task 4 Armorial foundation. The canonical
+ * tokens in theme.css drive the flat iron-gall ground, cream hairlines, and
+ * hairline focus/selection treatment. The old violet palette's glow recipes
+ * (--glow-gold / --glow-ember) were deleted with the swap: the Armorial
+ * world is flat tincture on ground, and nothing here may box-shadow glow. */
 @import './theme.css';
+@import './fonts.css';
 
 :root {
   color-scheme: dark;
@@ -18,14 +19,14 @@ body,
 }
 
 body {
-  /* Fallback gradient — the fixed ambient Background layer paints over this. */
-  background: linear-gradient(180deg, var(--bg-0) 0%, var(--bg-2) 100%);
+  /* Flat iron-gall ground — the Armorial world has no gradients. */
+  background: var(--ground);
   color: var(--text);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Georgia serif for display/headings; body text uses the system sans stack. */
+/* Cardo throughout: display and body both run the self-hosted serif. */
 h1,
 h2,
 h3,
@@ -42,29 +43,32 @@ button {
 }
 
 ::selection {
-  background: var(--accent);
-  color: var(--bg-2);
+  /* Flat parchment inverse — readable on the iron-gall ground. */
+  background: var(--line);
+  color: var(--ground-deep);
 }
 
 :focus-visible {
-  outline: 2px solid var(--gold);
+  /* Hairline cream rule — flat, no glow. */
+  outline: 1px solid var(--line);
   outline-offset: 2px;
 }
 
-/* ---- gothic-framed buttons (Task 36) ----
- * The .gothic-frame recipe from theme.css applied to every shell button:
- * double border, gold corner brackets, warm hover glow. */
+/* ---- shell buttons (Task 36 recipe, flat on the Armorial foundation) ----
+ * Flat tincture fields with cream hairline borders; the double border and
+ * corner brackets come from the .gothic-frame recipe in theme.css. No
+ * gradients and no glows — hover is a hairline and ink change only. */
 
 .shell-btn {
   position: relative;
   border: 2px double var(--gold-dim);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  background: var(--bg-1);
   color: var(--text);
   padding: 0.7rem 1.6rem;
   font-size: 1.05rem;
   cursor: pointer;
-  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease, color 150ms ease;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
 }
 
 .shell-btn::before,
@@ -92,12 +96,12 @@ button {
 
 .shell-btn:hover {
   border-color: var(--gold);
-  color: #f5edda;
-  background: linear-gradient(180deg, #221a33 0%, #140d20 100%);
-  box-shadow: var(--glow-gold);
+  color: var(--line);
 }
 
-/* Primary actions burn ember instead of gold. */
+/* Primary actions keep the cream hairline treatment through the temporary
+ * aliases until their consumers migrate (Tasks 5-9); the old ember burn no
+ * longer exists as a token and no glow returns here. */
 .shell-btn-primary {
   border-color: var(--ember-dim);
 }
@@ -109,5 +113,4 @@ button {
 
 .shell-btn-primary:hover {
   border-color: var(--ember);
-  box-shadow: var(--glow-ember);
 }

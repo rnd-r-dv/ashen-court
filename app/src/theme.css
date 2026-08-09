@@ -1,32 +1,55 @@
-/* theme.css — design tokens for the Ashen Court TCG (Task 36).
- * Loaded from index.css before every other app stylesheet. Screens should
- * consume these custom properties instead of hardcoded colors. */
+/* theme.css — design tokens for the Ashen Court TCG (Task 4: the Armorial
+ * foundation). Loaded from index.css before every other app stylesheet.
+ * Screens should consume these custom properties instead of hardcoded
+ * colors.
+ *
+ * The canonical tincture tokens below are pinned by app/tests/
+ * armorialContract.test.ts — changing a value without changing the test is
+ * a contract violation. The trailing aliases are TEMPORARY compatibility
+ * bridges for consumers still on the old violet/gothic palette; Task 9
+ * deletes them once every consumer migrates to the canonical tokens. They
+ * are deliberately mapped to non-reserved Armorial colors and never to
+ * --gules or --or, which are reserved for the roll of arms. */
 
 :root {
   color-scheme: dark;
 
-  /* ---- palette: deep violet night ---- */
-  --bg-0: #0d0a16;   /* deep violet — page base */
-  --bg-1: #171226;   /* indigo — raised surfaces */
-  --bg-2: #07050c;   /* near-black — deepest shadows */
+  /* ---- armorial ground: iron-gall ink on the page ---- */
+  --ground: #14120F;      /* iron-gall ground — page base */
+  --ground-deep: #0C0B09; /* deepest ink — shadow register */
+  --ground-rise: #1D1A15; /* raised surfaces */
 
-  --ember: #ffb454;  /* firelight orange */
-  --gold: #d9a441;   /* gilded accents */
-  --text: #e8e0d0;   /* warm parchment */
-  --accent: #8f6bff; /* arcane violet */
+  /* ---- engraved hairlines and ink ---- */
+  --line: #E8E0CE;        /* cream engraved hairline — rules, borders */
+  --line-dim: rgba(232, 224, 206, 0.38);
+  --text: #E8E0CE;        /* cream ink on the iron-gall ground */
+  --text-dim: #A79E8A;    /* muted blazon grey */
 
-  /* ---- derived tones ---- */
-  --text-dim: #b9b3a6;
-  --text-faint: #8a857a;
-  --gold-dim: rgba(217, 164, 65, 0.5);
-  --ember-dim: rgba(255, 180, 84, 0.55);
-  --border: #2a2440;
-  --glow-gold: 0 0 14px rgba(217, 164, 65, 0.25), 0 0 34px rgba(217, 164, 65, 0.12);
-  --glow-ember: 0 0 14px rgba(255, 180, 84, 0.3), 0 0 34px rgba(255, 180, 84, 0.15);
+  /* ---- reserved tinctures (roll of arms) ---- */
+  --gules: #A81E22;
+  --or: #B8913C;
 
-  /* ---- type: Georgia serif display + system sans body ---- */
-  --font-display: Georgia, 'Palatino Linotype', Palatino, 'Book Antiqua', 'Times New Roman', serif;
-  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* ---- house tinctures ---- */
+  --house-ember: #B4341C;
+  --house-choir: #C9BFA4;
+  --house-vermin: #6B7A3A;
+  --house-dragon: #8C5A1E;
+  --house-roots: #3C6B44;
+  --house-dance: #4A2F63;
+  --house-bone: #8A8578;
+  --house-pact: #6B1F2E;
+  --house-coven: #2F3E6B;
+  --house-star: #3E5C7A;
+  --house-vigil: #A88C3E;
+  --house-storm: #4A6B75;
+
+  /* ---- motion ---- */
+  --beat: 140ms;
+  --beat-long: 320ms;
+
+  /* ---- type: Cardo throughout (self-hosted — see fonts.css) ---- */
+  --font-display: 'Cardo', Georgia, 'Times New Roman', serif;
+  --font-body: 'Cardo', Georgia, 'Times New Roman', serif;
 
   /* ---- spacing scale ---- */
   --space-1: 0.25rem;
@@ -39,13 +62,29 @@
   /* ---- radii ---- */
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 14px;
+  --radius-lg: 6px;
+
+  /* ---- TEMPORARY aliases (Task 4 -> Task 9) ----
+   * Compatibility bridges while screens migrate off the old violet/gothic
+   * palette. Mapped to non-reserved Armorial tokens only — never --gules
+   * or --or. Deleted in Task 9 after every consumer moves to canonical
+   * tokens; do not build new code on these. */
+  --bg-0: var(--ground);
+  --bg-1: var(--ground-rise);
+  --bg-2: var(--ground-deep);
+  --border: var(--line-dim);
+  --text-faint: var(--text-dim);
+  --gold: var(--line);
+  --gold-dim: var(--line-dim);
+  --ember: var(--line);
+  --ember-dim: var(--line-dim);
+  --accent: var(--house-star);
 }
 
-/* ---- gothic frame recipe (reusable) ----
- * Double border + gold corner brackets drawn with pseudo-elements. Apply the
+/* ---- gothic frame recipe (Task 36, retained) ----
+ * Double border + corner brackets drawn with pseudo-elements. Apply the
  * class to any element to frame it; index.css applies the same recipe to
- * buttons via .shell-btn. */
+ * buttons via .shell-btn. The recipe is flat — hairline only, no glow. */
 
 .gothic-frame {
   position: relative;

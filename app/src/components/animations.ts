@@ -1,10 +1,13 @@
-// animations.ts (Task 39): Framer Motion variants + useAnimationQueue, the
-// event-driven animation loop for the board.
+// animations.ts (Task 39 + Task 8): Framer Motion variants + useAnimationQueue,
+// the event-driven animation loop for the board.
 //
-// Variants are FACTORIES taking a duration scale (0.5 in fast mode; Match
-// threads its settings read through every usage) so fastMode actually halves
-// every framer-driven duration — the CSS-driven animations (slam ripple,
-// hand draw) read the `--anim-scale` custom property from the .match root.
+// Task 8 establishes ONE motion grammar for the Armorial board:
+//   - one beat = 140ms (--beat), one long beat = 320ms (--beat-long);
+//   - linear or CSS steps() easing, hard cuts, short holds;
+//   - no springs, bounce, glow (brightness/saturate filters), or depth fades.
+// Every variant factory takes a duration scale: fast mode 0.5 halves every
+// duration, and reduced motion (usePrefersReducedMotion, matched in Match)
+// passes 0 so every transition reaches its final state immediately.
 //
 // useAnimationQueue consumes useMatch's GameEvent stream one event at a time
 // (~spacing ms apart), drains useMatch's queue so it stays bounded, and
@@ -15,6 +18,37 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Variants } from 'framer-motion';
 import type { GameEvent } from '@ashen/core';
+
+/**
+ * prefers-reduced-motion, read once at mount (like Background.tsx). jsdom
+ * has no matchMedia — the try/catch keeps every consumer alive in tests and
+ * older browsers; the hook is also the reduced-motion switch tests stub.
+ */
+export function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState<boolean>(() => {
+    try {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const onChange = (): void => setReduced(mq.matches);
+      if (typeof mq.addEventListener === 'function') {
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+      }
+      // Safari < 14 legacy API.
+      (mq as unknown as { addListener(cb: () => void): void }).addListener(onChange);
+      return () => (mq as unknown as { removeListener(cb: () => void): void }).removeListener(onChange);
+    } catch {
+      return undefined;
+    }
+  }, []);
+  return reduced;
+}
 
 /** Per-hero animation sequence counters (portrait flash / heal glow). */
 export interface HeroFX {
@@ -28,59 +62,73 @@ export interface HeroFX {
 
 export const HERO_FX_ZERO: HeroFX = { flash: 0, heal: 0, kind: 'flash' };
 
-/** Hand cards fading/lifting in as they enter the fanned hand. */
+/** Draw (cardDrawn / cardDrawnExtra / opening hand): the card slides in from
+ *  the deck edge (the viewer's deck sits left of the hand), one linear long
+ *  beat — a deal, not a fade-and-lift. */
 export function handEnter(scale = 1): Variants {
   return {
-    handIn: { opacity: 0, y: 24, transition: { duration: 0.01 } },
-    enter: { opacity: 1, y: 0, transition: { duration: 0.32 * scale, ease: 'easeOut' } },
+    handIn: { opacity: 0, x: -26 },
+    enter: { opacity: 1, x: 0, transition: { duration: 0.32 * scale, ease: 'linear' } },
   };
 }
 
-/** A creature landing on the board: overshoot slam from above + fade in. */
+/** Play (cardPlayed / creatureSummoned): ONE hard landing — scale 1.35 → 1 in
+ *  a single 140ms linear step, no spring, no bounce, no fade-in. */
 export function playSlam(scale = 1): Variants {
   return {
-    slam: { scale: 1.5, opacity: 0, y: -26, transition: { duration: 0.01 } },
-    enter: {
-      scale: 1,
-      opacity: 1,
-      y: 0,
-      transition: { type: 'spring', stiffness: 380, damping: 22, duration: 0.42 * scale },
-    },
+    slam: { scale: 1.35, opacity: 0, y: -14 },
+    enter: { scale: 1, opacity: 1, y: 0, transition: { duration: 0.14 * scale, ease: 'linear' } },
   };
 }
 
-/** creatureDied: ember dissolve (AnimatePresence exit on the board slot). */
+/** Death (creatureDied): the plate holds one half-beat then cuts out on a
+ *  linear beat — the gules strike-through is drawn by Match's eager
+ *  deathStrike FX (animations.css), so the plate itself only has to get out
+ *  of the way quickly. No dissolve, no scale-away depth fade. */
 export function deathFade(scale = 1): Variants {
   return {
     exit: {
-      opacity: 0,
-      scale: 1.18,
-      filter: 'brightness(2.4) saturate(0.15)',
-      transition: { duration: 0.5 * scale, ease: 'easeIn' },
+      opacity: [1, 1, 0],
+      transition: { duration: 0.14 * scale, times: [0, 0.5, 1], ease: 'linear' },
     },
   };
 }
 
-/** manaChanged: crystal tray pop. */
+/** manaChanged: crystal tray pulse — a flat hard step, no brightness glow. */
 export function manaPop(scale = 1): Variants {
   return {
-    pop: { scale: 1.45, filter: 'brightness(1.7)', transition: { duration: 0.01 } },
-    enter: { scale: 1, filter: 'brightness(1)', transition: { duration: 0.3 * scale, ease: 'easeOut' } },
+    pop: { scale: 1.18 },
+    enter: { scale: 1, transition: { duration: 0.14 * scale, ease: 'linear' } },
   };
 }
 
-/** Turn banner sweep (wired in Task 40's TurnBanner). */
+/** Turn change: the banner lays down like a page register — drops from above
+ *  on a linear long beat, exits on one beat. Only the active banner carries
+ *  or (turnbanner.css). */
 export function bannerSweep(scale = 1): Variants {
   return {
     enter: {
-      x: ['-110%', '0%'],
+      y: ['-130%', '0%'],
       opacity: [0, 1],
-      transition: { duration: 0.5 * scale, ease: 'easeOut' },
+      transition: { duration: 0.32 * scale, ease: 'linear' },
     },
     exit: {
-      x: '110%',
+      y: '110%',
       opacity: 0,
-      transition: { duration: 0.35 * scale, ease: 'easeIn' },
+      transition: { duration: 0.14 * scale, ease: 'linear' },
+    },
+  };
+}
+
+/** Turn end: the register dims over one beat, holds to the long beat, then
+ *  cuts back out — a page register being laid, not a fade to darkness. The
+ *  0.44 split lands the full dim at exactly one beat (0.44 × 320ms = 140ms),
+ *  mirroring the armorial-strike-cue keyframes' 44% strike-in. */
+export function dimVeil(scale = 1): Variants {
+  return {
+    enter: {
+      opacity: [0, 0.85, 0],
+      transition: { duration: 0.32 * scale, times: [0, 0.44, 1], ease: 'linear' },
     },
   };
 }

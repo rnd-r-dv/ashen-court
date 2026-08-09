@@ -1,11 +1,14 @@
-// TurnBanner (Task 40): full-width banner that sweeps in from the left, holds
-// briefly, and sweeps out — driven by the bannerSweep variants (animations.ts)
-// so fast mode halves every duration. Used for turn changes ("Your Turn" or
-// the incoming hero's name) and the game-over title. Self-removing: the exit
-// sweep completes → onDone and the parent drops the entry.
+// TurnBanner (Task 40 -> Task 8): full-width banner that lays down like a
+// page register — drops from above on one long beat, holds, then pushes away
+// on one beat — driven by the bannerSweep variants (animations.ts) so fast
+// mode halves every duration. Used for turn changes ("Your Turn" or the
+// incoming hero's name) and the game-over title. Only the ACTIVE (mine)
+// banner is marked with or (turnbanner.css). Self-removing: the exit sweep
+// completes → onDone and the parent drops the entry. Under reduced motion the
+// banner appears at its final pose immediately (Match passes scale 0).
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { bannerSweep } from './animations.js';
+import { bannerSweep, usePrefersReducedMotion } from './animations.js';
 import './turnbanner.css';
 
 export interface TurnBannerEntry {
@@ -14,7 +17,7 @@ export interface TurnBannerEntry {
   text: string;
   /** Small line above the text ("Turn 3"). */
   kicker?: string;
-  /** Gold styling for the viewer's own turn / win. */
+  /** Or styling for the viewer's own turn / win. */
   mine?: boolean;
   /** Hold time before the sweep-out (default 1200ms; shorter for the win title). */
   holdMs?: number;
@@ -31,20 +34,21 @@ const DEFAULT_HOLD_MS = 1200;
 
 export interface TurnBannerProps {
   entry: TurnBannerEntry;
-  /** Animation duration scale (fast mode 0.5). */
+  /** Animation duration scale (fast mode 0.5; 0 under reduced motion). */
   scale?: number;
   onDone?: () => void;
 }
 
 export default function TurnBanner({ entry, scale = 1, onDone }: TurnBannerProps) {
+  const reduced = usePrefersReducedMotion();
   const [leaving, setLeaving] = useState(false);
   const hold = entry.holdMs ?? DEFAULT_HOLD_MS;
 
   useEffect(() => {
     setLeaving(false);
-    const t = setTimeout(() => setLeaving(true), hold * scale);
+    const t = setTimeout(() => setLeaving(true), hold * (reduced ? 1 : scale));
     return () => clearTimeout(t);
-  }, [entry.id, scale, hold]);
+  }, [entry.id, scale, hold, reduced]);
 
   return (
     <AnimatePresence onExitComplete={() => onDone?.()}>
@@ -52,8 +56,8 @@ export default function TurnBanner({ entry, scale = 1, onDone }: TurnBannerProps
         <motion.div
           key={entry.id}
           className={`turnbanner${entry.mine ? ' turnbanner--mine' : ''}`}
-          variants={bannerSweep(scale)}
-          initial={{ x: '-110%', opacity: 0 }}
+          variants={bannerSweep(reduced ? 0 : scale)}
+          initial={reduced ? false : { y: '-130%', opacity: 0 }}
           animate="enter"
           exit="exit"
         >

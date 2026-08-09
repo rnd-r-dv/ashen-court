@@ -10,7 +10,16 @@ import { act, createElement, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import type { GameEvent } from '@ashen/core';
-import { useAnimationQueue } from '../src/components/animations.js';
+import type { Variants } from 'framer-motion';
+import {
+  useAnimationQueue,
+  handEnter,
+  playSlam,
+  deathFade,
+  manaPop,
+  bannerSweep,
+  dimVeil,
+} from '../src/components/animations.js';
 
 // React 18's act() requires the testing-environment flag (see drivers.test.ts).
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -29,6 +38,8 @@ interface QueueHarness {
   skip(): void;
   /** Events played so far, in order. */
   played: GameEvent[];
+  /** Stand-in for the authoritative driver mirror: bumps on every batch. */
+  version: number;
   unmount(): void;
 }
 
@@ -46,6 +57,7 @@ function mountQueue(): QueueHarness {
     add: ((batch: GameEvent[]) => void) | undefined;
     skip: (() => void) | undefined;
   } = { add: undefined, skip: undefined };
+  const version = { n: 0 };
 
   function Probe() {
     const [events, setEvents] = useState<GameEvent[]>([]);
@@ -57,7 +69,10 @@ function mountQueue(): QueueHarness {
       spacing: SPACING,
     });
     useEffect(() => {
-      holder.add = (batch) => setEvents((prev) => [...prev, ...batch]);
+      holder.add = (batch) => {
+        version.n += 1; // the authoritative mirror lands at the newest batch
+        setEvents((prev) => [...prev, ...batch]);
+      };
       holder.skip = queue.skip;
     });
     return null;
@@ -77,6 +92,9 @@ function mountQueue(): QueueHarness {
         holder.skip!();
       }),
     played,
+    get version() {
+      return version.n;
+    },
     unmount: () => {
       act(() => {
         root.unmount();
@@ -155,5 +173,98 @@ describe('useAnimationQueue', () => {
     });
     expect(h.played.map((e) => (e as { mana: number }).mana)).toEqual([0, 1, 4]);
     h.unmount();
+  });
+
+  it('skip midway through two batches fires no later cosmetics and keeps the newest authoritative state', () => {
+    const h = mountQueue();
+    // Batch one starts playing.
+    h.add([ev(0), ev(1), ev(2), ev(3)]);
+    act(() => {
+      vi.advanceTimersByTime(SPACING); // ev(0) on ingest, ev(1) at the tick
+    });
+    expect(h.played).toHaveLength(2);
+
+    // A NEWER batch arrives mid-playback; the mirror is already at it.
+    h.add([ev(4), ev(5), ev(6), ev(7), ev(8)]);
+    expect(h.version).toBe(2);
+    act(() => {
+      vi.advanceTimersByTime(SPACING); // ev(2) from batch one fires before the skip
+    });
+    expect(h.played).toHaveLength(3);
+
+    h.skip(); // midway through the second batch
+    act(() => {
+      vi.advanceTimersByTime(30 * SPACING);
+    });
+    // No later cosmetic handler fires — batch two's events never play.
+    expect(h.played.map((e) => (e as { mana: number }).mana)).toEqual([0, 1, 2]);
+    // The authoritative driver state stays at the newest batch (never reverted).
+    expect(h.version).toBe(2);
+    h.unmount();
+  });
+});
+
+describe('Task 8 — Armorial motion grammar', () => {
+  // Every exported variant factory must speak one grammar: the two Armorial
+  // beats (140ms / 320ms) with linear or stepped easing, hard cuts, short
+  // holds. No springs, bounce, glow (brightness/saturate filters), or depth
+  // fades (scale-away / blur). scale=0 is the reduced-motion contract — every
+  // transition reaches its final state instantly.
+  const factories: Record<string, (scale?: number) => Variants> = {
+    handEnter,
+    playSlam,
+    deathFade,
+    manaPop,
+    bannerSweep,
+    dimVeil,
+  };
+
+  interface GrammarTransition {
+    duration?: number;
+    ease?: unknown;
+    type?: string;
+  }
+
+  function collectTransitions(node: unknown, out: GrammarTransition[] = []): GrammarTransition[] {
+    if (!node || typeof node !== 'object' || Array.isArray(node)) return out;
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === 'transition') out.push(value as GrammarTransition);
+      else collectTransitions(value, out);
+    }
+    return out;
+  }
+
+  it('uses only the two Armorial beats, linearly, with no springs anywhere', () => {
+    for (const [name, make] of Object.entries(factories)) {
+      const transitions = collectTransitions(make(1));
+      expect(transitions.length, `${name} must carry explicit transitions`).toBeGreaterThan(0);
+      for (const t of transitions) {
+        expect(t.type, `${name} must not spring or bounce`).not.toBe('spring');
+        expect(t.ease, `${name} must move linearly (or step)`).toBe('linear');
+        if (t.duration !== undefined) {
+          expect([0.14, 0.32], `${name} may only use 140ms or 320ms`).toContain(t.duration);
+        }
+      }
+    }
+  });
+
+  it('carries no glow or depth-fade recipes in any variant', () => {
+    for (const [name, make] of Object.entries(factories)) {
+      const json = JSON.stringify(make(1));
+      expect(json, `${name} must not glow`).not.toContain('brightness');
+      expect(json, `${name} must not saturate`).not.toContain('saturate');
+      expect(json, `${name} must not depth-fade`).not.toContain('blur');
+      expect(json, `${name} must not drop-shadow`).not.toContain('drop-shadow');
+      expect(json, `${name} must not box-shadow`).not.toContain('boxShadow');
+    }
+  });
+
+  it('scale 0 (reduced motion) zeroes every transition duration', () => {
+    for (const [name, make] of Object.entries(factories)) {
+      const transitions = collectTransitions(make(0));
+      for (const t of transitions) {
+        expect(t.duration, `${name} reduced-motion duration`).toBe(0);
+      }
+    }
   });
 });

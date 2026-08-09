@@ -71,6 +71,7 @@ afterEach(() => {
   // stubRects() spies on Element.prototype — restore it, or the next test
   // silently inherits the previous one's geometry.
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   root = null;
   container = null;
 });
@@ -354,5 +355,139 @@ describe('bug 26 — spell damage popup lands on the projectile impact', () => {
     // the same exported constant rather than duplicating a magic number.
     expect(aoeFlightTime(1)).toBeGreaterThan(0);
     expect(aoeFlightTime(0.5)).toBeCloseTo(aoeFlightTime(1) * 0.5, 6);
+  });
+});
+
+// ---------------------------------------------------------------- Task 8 ---
+
+/** jsdom lacks matchMedia — stub it so usePrefersReducedMotion reads true. */
+function stubReducedMotion() {
+  const reduce = '(prefers-reduced-motion: reduce)';
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string): MediaQueryList =>
+      ({
+        matches: query === reduce,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
+  );
+}
+
+describe('Task 8 — simultaneous combat strikes', () => {
+  it('combatStarted draws both reciprocal cuts in one update, from retained points', () => {
+    stubRects();
+    const entry = hotseatEntry();
+    const driver = scriptedDriver(entry.setup.driver);
+    mountMatch({ ...entry.setup, driver });
+    reachMain(driver);
+
+    act(() => {
+      driver.push([
+        { type: 'combatStarted', attackerId: 't-att', defenderId: 't-def' },
+        { type: 'damageDealt', target: { type: 'creature', id: 't-def' }, amount: 3, sourceCardId: 't-att' },
+        { type: 'damageDealt', target: { type: 'creature', id: 't-att' }, amount: 2, sourceCardId: 't-def' },
+      ]);
+    });
+
+    // The cue plays FIRST and mounts BOTH cuts in the same update — the two
+    // ids cannot be split by the damage events that follow.
+    expect(container!.querySelectorAll('.combat-strike')).toHaveLength(2);
+    expect(container!.querySelectorAll('.combat-strike--from-attacker')).toHaveLength(1);
+    expect(container!.querySelectorAll('.combat-strike--from-defender')).toHaveLength(1);
+
+    // Both ids resolve even though neither creature is on the board
+    // (last-known/retained points under stubRects geometry).
+    const strikes = container!.querySelectorAll('.combat-strike');
+    expect(strikes[0]!.getAttribute('style')).not.toBeNull();
+    expect(strikes[1]!.getAttribute('style')).not.toBeNull();
+
+    // Each cut clears itself after one long beat.
+    advance(320);
+    expect(container!.querySelectorAll('.combat-strike')).toHaveLength(0);
+  });
+
+  it('reduced motion: strikes reach the final pose immediately and clear after the hold', () => {
+    stubReducedMotion();
+    stubRects();
+    const entry = hotseatEntry();
+    const driver = scriptedDriver(entry.setup.driver);
+    mountMatch({ ...entry.setup, driver });
+    reachMain(driver);
+
+    // The reduced-motion contract zeroes the anim scale on the match root, so
+    // every framer duration and CSS animation reaches its final state at once.
+    const matchRoot = container!.querySelector('.match') as HTMLElement;
+    expect(matchRoot.style.getPropertyValue('--anim-scale')).toBe('0');
+
+    act(() => {
+      driver.push([{ type: 'combatStarted', attackerId: 't-att', defenderId: 't-def' }]);
+    });
+
+    const strikes = container!.querySelectorAll('.combat-strike');
+    expect(strikes).toHaveLength(2);
+    // Static final pose (no CSS animation attached) — the line is fully drawn.
+    for (const s of strikes) {
+      expect(s.classList.contains('combat-strike--reduce')).toBe(true);
+    }
+
+    // The hold is a pause, not a transition; the FX still clears itself.
+    advance(320);
+    expect(container!.querySelectorAll('.combat-strike')).toHaveLength(0);
+  });
+
+  it('creatureDied cuts a gules strike across the creature\'s last-known slot, eagerly', () => {
+    stubRects();
+    const entry = hotseatEntry();
+    const driver = scriptedDriver(entry.setup.driver);
+    mountMatch({ ...entry.setup, driver });
+    reachMain(driver);
+
+    // The state mirror already removed the creature when the batch lands, so
+    // the death strike must render EAGERLY (not queue-paced) and resolve the
+    // point from the retained last-known position.
+    act(() => {
+      driver.push([
+        { type: 'creatureDied', player: 0, creatureId: 't-dead', cardId: 't-def' },
+        { type: 'damageDealt', target: { type: 'creature', id: 't-dead' }, amount: 3, sourceCardId: 't-att' },
+      ]);
+    });
+    expect(container!.querySelectorAll('.death-strike')).toHaveLength(1);
+
+    advance(320);
+    expect(container!.querySelectorAll('.death-strike')).toHaveLength(0);
+  });
+});
+
+describe('Task 8 — reduced motion everywhere else', () => {
+  it('spell damage pops immediately under reduced motion (no flight wait)', () => {
+    stubReducedMotion();
+    stubRects();
+    const entry = hotseatEntry();
+    const driver = scriptedDriver(entry.setup.driver);
+    mountMatch({ ...entry.setup, driver });
+    reachMain(driver);
+
+    act(() => {
+      driver.push([
+        { type: 'damageDealt', target: { type: 'hero', player: 1 }, amount: 4, sourceCardId: 'hero-power' },
+        { type: 'effectResolved', player: 0, sourceCardId: 'hero-power', kind: 'dealDamage' },
+      ]);
+    });
+
+    // t = SPACING: effectResolved launches the projectile. Under reduced
+    // motion the flight budget collapses to zero, so the damage popup must
+    // fire immediately — it cannot wait out a flight that no longer exists
+    // (the reduced-motion contract: every transition reaches its final state
+    // at once; a delayed popup is a transition that never happened).
+    advance(SPACING);
+    const popups = container!.querySelectorAll('.damagepopup');
+    expect(popups).toHaveLength(1);
+    expect(popups[0]!.textContent).toBe('-4');
   });
 });

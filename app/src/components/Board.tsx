@@ -180,6 +180,11 @@ export interface BoardProps {
   powerFx?: [number, number];
   /** manaChanged sequence counter — retriggers the crystal pop. */
   manaPulse?: number;
+  /** combatStarted cue (Task 8): both combatants nudge inward one beat; the
+   *  seq key re-triggers the nudge for a fresh exchange. Living plates only —
+   *  a combatant already absent from the final state gets its strike from the
+   *  retained point (Match's fx layer) instead. */
+  combatCue?: { attackerId: string; defenderId: string; seq: number } | null;
 }
 
 function refKey(ref: TargetRef): string {
@@ -220,6 +225,7 @@ export default function Board({
   heroFx = undefined,
   powerFx = undefined,
   manaPulse = 0,
+  combatCue = null,
 }: BoardProps) {
   const me = viewer;
   const foe = (1 - viewer) as PlayerIndex;
@@ -260,8 +266,7 @@ export default function Board({
     const ref: TargetRef = { type: 'creature', id: c.id };
     const targetable = isTarget(ref);
     const selectable = friendly && myTurn && !inTargeting && attackers.has(c.id);
-    const selected = friendly && targeting?.kind === 'attack' && targeting.attackerId === c.id;
-    // Task 7: an unrevealed enemy (face-down) must never leak its identity or
+    const selected = friendly && targeting?.kind === 'attack' && targeting.attackerId === c.id;    // Task 7: an unrevealed enemy (face-down) must never leak its identity or
     // state through the inspect surface — only revealed creatures are
     // readable. The click grammar layers onto the existing wires: left-click
     // targets a valid target, else selects an attack-ready friendly creature,
@@ -275,6 +280,40 @@ export default function Board({
     // path during targeting.
     const inspectable = friendly || enemyRevealed;
     const inspect = () => onInspect(c.id);
+    // Task 8: the living plate makes the same 140ms inward nudge toward the
+    // combatant (friendly → up, enemy → down), re-keyed per combatStarted seq
+    // so a fresh exchange replays it. Only while the cue names this creature.
+    const struckNow =
+      combatCue !== null && (combatCue.attackerId === c.id || combatCue.defenderId === c.id);
+    const plate = (
+      <CardView
+        card={def}
+        size="board"
+        faceDown={!friendly && !enemyRevealed}
+        stats={{ attack: c.attack, health: c.health }}
+        keywords={c.keywords}
+        silenced={c.silenced}
+        status={{ exhausted: c.exhausted, frozen: c.frozen, shields: c.shields }}
+        targetable={targetable}
+        selected={selected}
+        muted={inTargeting && !targetable}
+        onClick={
+          targetable
+            ? targetClick(ref)
+            : selectable
+              ? (e) => {
+                  e.stopPropagation();
+                  onSelectAttacker(c.id);
+                }
+              : !inTargeting && inspectable
+                ? (e) => {
+                    e.stopPropagation();
+                    inspect();
+                  }
+                : undefined
+        }
+      />
+    );
     return (
       // Task 39: creatures slam in on mount (playSlam) and dissolve into
       // embers on death (deathFade, via the row's AnimatePresence exit).
@@ -301,33 +340,18 @@ export default function Board({
             : undefined
         }
       >
-        <CardView
-          card={def}
-          size="board"
-          faceDown={!friendly && !enemyRevealed}
-          stats={{ attack: c.attack, health: c.health }}
-          keywords={c.keywords}
-          silenced={c.silenced}
-          status={{ exhausted: c.exhausted, frozen: c.frozen, shields: c.shields }}
-          targetable={targetable}
-          selected={selected}
-          muted={inTargeting && !targetable}
-          onClick={
-            targetable
-              ? targetClick(ref)
-              : selectable
-                ? (e) => {
-                    e.stopPropagation();
-                    onSelectAttacker(c.id);
-                  }
-                : !inTargeting && inspectable
-                  ? (e) => {
-                      e.stopPropagation();
-                      inspect();
-                    }
-                  : undefined
-          }
-        />
+        {struckNow && combatCue !== null ? (
+          <motion.div
+            key={`nudge-${combatCue.seq}`}
+            initial={{ y: 0 }}
+            animate={{ y: [0, friendly ? -6 : 6, 0] }}
+            transition={{ duration: 0.14 * animScale, ease: 'linear' }}
+          >
+            {plate}
+          </motion.div>
+        ) : (
+          plate
+        )}
       </motion.div>
     );
   }

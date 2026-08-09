@@ -1,7 +1,8 @@
-/* DamagePopup (Task 39) — floating damage/heal numbers. The popup element is
-   positioned by framer (transform), so horizontal centering lives in the
-   animated `x: '-50%'`; left comes inline from the entry's drift. Theme
-   tokens. */
+/* DamagePopup (Task 39 -> Task 8) — floating damage/heal numbers. The popup
+   element is positioned by framer (transform), so horizontal centering lives
+   in the animated `x: '-50%'`; left comes inline from the entry's drift.
+   Damage numerals are GULES (reserved for damage); heal keeps its green.
+   Flat tinctures — no text-shadow depth. Theme tokens. */
 
 .damagepopup {
   position: absolute;
@@ -11,13 +12,12 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
   z-index: 30;
   pointer-events: none;
 }
 
 .damagepopup--damage {
-  color: #ff6a55;
+  color: var(--gules);
 }
 
 .damagepopup--heal {

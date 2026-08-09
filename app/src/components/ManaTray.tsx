@@ -41,7 +41,8 @@ export default function ManaTray({ mana, maxMana, lockedMana = 0, pulse = 0, ani
   const locked = Math.min(Math.max(lockedMana, 0), MAX_PIPS);
   return (
     <div className="manatray" title={`${mana}/${maxMana} mana`} aria-label={`Mana ${mana} of ${maxMana}`}>
-      {/* Task 39: keyed by the pulse counter so each manaChanged replays the pop */}
+      {/* Task 39: keyed by the pulse counter so each manaChanged replays the
+          pop — Task 8 grammar: a flat hard step (manaPop), no glow. */}
       <motion.div
         key={pulse}
         className="manatray-pips"

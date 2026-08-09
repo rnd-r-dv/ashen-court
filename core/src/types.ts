@@ -117,6 +117,7 @@ export type GameEvent =
   | { type: 'cardDrawn'; player: PlayerIndex; cardId: string }
   | { type: 'manaChanged'; player: PlayerIndex; mana: number; maxMana: number }
   | { type: 'cardPlayed'; player: PlayerIndex; cardId: string; creatureId?: string; target?: TargetRef }
+  | { type: 'combatStarted'; attackerId: string; defenderId: string }
   | { type: 'creatureSummoned'; player: PlayerIndex; creatureId: string; cardId: string }
   | { type: 'damageDealt'; target: TargetRef; amount: number; sourceCardId: string }
   | { type: 'creatureDied'; player: PlayerIndex; creatureId: string; cardId: string }

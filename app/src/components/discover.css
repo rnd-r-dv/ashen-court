@@ -37,12 +37,41 @@
 }
 
 /* Each candidate is a real button so the ring is keyboard-navigable; the
-   plate inside must not be independently focusable. */
+   plate inside must not be independently focusable. Task 8: the three
+   candidates DEAL one beat apart — each lands in a hard step on its own
+   beat (--beat), stacked by nth-child so no component change is needed.
+   Reduced motion leaves the plates at their final pose immediately. */
 .discover-choice {
   border: 0;
   background: none;
   padding: 0;
   cursor: pointer;
+  animation: discover-deal var(--beat) linear both;
+}
+
+.discover-choice:nth-child(2) {
+  animation-delay: calc(var(--beat) * 1);
+}
+
+.discover-choice:nth-child(3) {
+  animation-delay: calc(var(--beat) * 2);
+}
+
+@keyframes discover-deal {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discover-choice {
+    animation: none;
+  }
 }
 
 .discover-choice:focus-visible {

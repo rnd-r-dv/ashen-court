@@ -247,6 +247,11 @@ export class Game implements Resolver {
         // the defender may already be off the board (dispatch(creatureDied)
         // removes it during the first drain), so re-reading defender.attack
         // afterwards would read a removed creature.
+        // Task 8: one log-only combat cue naming BOTH combatants, emitted after
+        // legality/attack-count/reveal updates and before either dealDamage —
+        // triggers, deaths, and events resolving between the two damage events
+        // cannot split the visual strike. No state mutation, no RNG draw.
+        this.emit({ type: 'combatStarted', attackerId: attacker.id, defenderId: defender.id });
         const attackerPower = attacker.attack;
         const defenderPower = defender.attack;
         this.dealDamage(attacker, defender, attackerPower);
@@ -491,6 +496,7 @@ export class Game implements Resolver {
       case 'spellFizzled':
       case 'heroHealed':
       case 'heroDamaged':   // log-only marker (hero hp already applied inline in damageTarget)
+      case 'combatStarted': // log-only marker (both damage events carry the real effects)
       case 'buffApplied':
       case 'cardDrawnExtra':
       case 'tokenSummoned':

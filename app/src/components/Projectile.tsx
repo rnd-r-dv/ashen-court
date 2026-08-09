@@ -87,7 +87,8 @@ export default function Projectile({ entry, scale = 1, onDone }: ProjectileProps
   }
 
   // Traveller: parent anchors the source point; the orb flies via transform
-  // deltas and the impact burst pops at the landing point.
+  // deltas and the impact burst (Task 8: gules damage landing, flat ring)
+  // pops at the landing point.
   const flightAnim =
     kind === 'fireball'
       ? {

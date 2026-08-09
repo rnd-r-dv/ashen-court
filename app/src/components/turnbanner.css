@@ -1,6 +1,8 @@
-/* TurnBanner (Task 40) — full-width turn/win banner. The sweep motion comes
-   from Framer (bannerSweep variants, scaled by the fast-mode `scale` prop);
-   this file styles the banner card. Theme tokens only. */
+/* TurnBanner (Task 40 -> Task 8) — full-width turn/win banner. The page-drop
+   motion comes from Framer (bannerSweep variants, scaled by the fast-mode
+   `scale` prop); this file styles the banner card. Only the ACTIVE (mine)
+   banner carries or — the one reserved tincture on this surface; everything
+   else is flat ground/line tokens (no gradients, no depth shadows). */
 
 .turnbanner {
   position: absolute;
@@ -15,7 +17,7 @@
   padding: 18px 32px 16px;
   pointer-events: none;
   text-align: center;
-  background: linear-gradient(90deg, rgba(13, 10, 22, 0) 0%, rgba(13, 10, 22, 0.82) 22%, rgba(13, 10, 22, 0.82) 78%, rgba(13, 10, 22, 0) 100%);
+  background: rgba(13, 10, 22, 0.85);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
@@ -34,13 +36,13 @@
   font-variant: small-caps;
   letter-spacing: 0.06em;
   color: var(--text);
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
 }
 
 .turnbanner--mine .turnbanner-text {
-  color: var(--gold);
+  color: var(--or);
 }
 
 .turnbanner--mine .turnbanner-kicker {
-  color: var(--gold-dim);
+  color: var(--or);
+  opacity: 0.75;
 }

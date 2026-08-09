@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { Fragment } from 'react';
 import { motion } from 'framer-motion';
 import type { Card as CardSpec, GameEvent, Intent, PlayerIndex, TargetRef } from '@ashen/core';
 import { useMatch } from '../game/useMatch.js';
@@ -21,7 +22,7 @@ import Projectile, { aoeFlightTime, flightTime } from '../components/Projectile.
 import type { ProjectileEntry, ProjectileKind } from '../components/Projectile.js';
 import TurnBanner from '../components/TurnBanner.js';
 import type { TurnBannerEntry } from '../components/TurnBanner.js';
-import { useAnimationQueue } from '../components/animations.js';
+import { useAnimationQueue, usePrefersReducedMotion, dimVeil } from '../components/animations.js';
 import { HERO_FX_ZERO } from '../components/animations.js';
 import type { HeroFX } from '../components/animations.js';
 import './animations.css';
@@ -76,6 +77,13 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // rescales every animation on the spot.
   const [fastMode, setFastMode] = useState(() => loadSettings().fastMode);
   const animScale = fastMode ? 0.5 : 1;
+  // Task 8 reduced-motion contract: one flag zeroes EVERY framer duration and
+  // CSS animation (--anim-scale 0 on the .match root), so every transition
+  // reaches its final state immediately. Queue pacing (useAnimationQueue
+  // spacing) and FX hold timers stay on the raw animScale — a pause is not a
+  // transition.
+  const reduced = usePrefersReducedMotion();
+  const effectiveScale = reduced ? 0 : animScale;
   const { state, events, submit, legal: hookLegal, drainEvents } = useMatch({
     driver: setup.driver,
     myPlayer: setup.myPlayer,
@@ -135,13 +143,31 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const [heroFx, setHeroFx] = useState<[HeroFX, HeroFX]>([HERO_FX_ZERO, HERO_FX_ZERO]);
   const [manaPulse, setManaPulse] = useState(0);
   const fxIdRef = useRef(0);
+  /** Task 8 register page-shift re-trigger target (.match-boardwrap). */
+  const boardwrapRef = useRef<HTMLDivElement | null>(null);
+
+  // ---- Task 8: simultaneous combat / death strikes ----
+  // One combatStarted event carries BOTH combatant ids; the queue handler
+  // resolves both through slotPointRef and pushes ONE overlay entry holding
+  // both endpoints, so the two reciprocal cuts render in the same update.
+  // `seq` re-triggers the living-plate inward nudge in Board (a fresh key).
+  const [combatStrikes, setCombatStrikes] = useState<
+    { id: number; attacker: { x: number; y: number }; defender: { x: number; y: number } }[]
+  >([]);
+  const [deathStrikes, setDeathStrikes] = useState<{ id: number; at: { x: number; y: number } }[]>([]);
+  const [combatCue, setCombatCue] = useState<{
+    attackerId: string;
+    defenderId: string;
+    seq: number;
+  } | null>(null);
+  const combatSeqRef = useRef(0);
 
   // ---- Task 40: spell / turn / win animation state ----
   const [projectiles, setProjectiles] = useState<ProjectileEntry[]>([]);
   const [banners, setBanners] = useState<TurnBannerEntry[]>([]);
   const [tokenBursts, setTokenBursts] = useState<{ id: number; side: 'top' | 'bottom' }[]>([]);
   const [dims, setDims] = useState<{ id: number }[]>([]);
-  const [turnPulseSeq, setTurnPulseSeq] = useState(0);
+
   const [powerFx, setPowerFx] = useState<[number, number]>([0, 0]);
   const [gameOverFx, setGameOverFx] = useState(0); // 0 = cinematic off; >0 = key
   // Damage targets per sourceCardId since the last effectResolved (the spell's
@@ -284,6 +310,14 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     setDims((prev) => prev.filter((d) => d.id !== id));
   }
 
+  function removeCombatStrike(id: number) {
+    setCombatStrikes((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  function removeDeathStrike(id: number) {
+    setDeathStrikes((prev) => prev.filter((s) => s.id !== id));
+  }
+
   // ---- Task 40: screen-position + projectile-kind helpers ----
   // Positions are resolved against the .match root (the .match-fx overlay is
   // inset: 0 over it), so queried bounding rects are translated into fx-space.
@@ -327,6 +361,19 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   function targetPoint(ref: TargetRef): { x: number; y: number } | null {
     if (ref.type === 'hero') return heroCircle(ref.player);
     return creatureSlot(ref.id) ?? slotPointRef.current.get(ref.id) ?? heroCircle(foe);
+  }
+
+  /**
+   * Point for a combat/death strike. Task 8: the state mirror refreshes at
+   * batch arrival, so a combatant killed in this resolution is gone from the
+   * board — and its slot unmounted — when the queue plays combatStarted.
+   * Resolve through the persistent slotPointRef last-known position (the
+   * point recorded while the creature was still alive), so a creature absent
+   * from the final state still gets its strike. The zone-center fallback
+   * covers jsdom/unmounted lookups (same pattern as targetPoint).
+   */
+  function combatPointOf(id: string): { x: number; y: number } | null {
+    return creatureSlot(id) ?? slotPointRef.current.get(id) ?? zoneCenter(creatureSideOf(id));
   }
 
   /** Board half a damageDealt target belongs to. */
@@ -405,7 +452,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     ]);
     // Same two points the entry carries → Projectile computes the identical
     // duration for the orb (bug 26: this used to be a hardcoded 0.55s guess).
-    return flightTime(fromPt, toPt, animScale);
+    return flightTime(fromPt, toPt, effectiveScale);
   }
 
   /**
@@ -420,7 +467,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
       ...prev,
       { id: ++fxIdRef.current, kind, from: center, to: center, aoe: true, side },
     ]);
-    return aoeFlightTime(animScale);
+    return aoeFlightTime(effectiveScale);
   }
 
   /**
@@ -467,6 +514,31 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         setRipples((prev) => [...prev, { id: ++fxIdRef.current, side: sideOf(e.player) }]);
         if (e.type === 'tokenSummoned') {
           setTokenBursts((prev) => [...prev, { id: ++fxIdRef.current, side: sideOf(e.player) }]);
+        }
+        break;
+      case 'combatStarted':
+        // Task 8: ONE cue carries both combatant ids, so the two reciprocal
+        // strike cuts render in the same update — triggers, deaths, and the
+        // two damageDealt events that follow cannot split the visual strike.
+        // Resolve BOTH points through the last-known slot positions (a
+        // combatant already absent from the final state still gets its
+        // strike); set one overlay entry holding both endpoints.
+        {
+          const attackerPt = combatPointOf(e.attackerId);
+          const defenderPt = combatPointOf(e.defenderId);
+          if (attackerPt && defenderPt) {
+            const id = ++fxIdRef.current;
+            setCombatStrikes((prev) => [...prev, { id, attacker: attackerPt, defender: defenderPt }]);
+            const t = setTimeout(() => removeCombatStrike(id), 320 * animScale);
+            pendingFxRef.current.add(t);
+          }
+          // Living plates nudge inward one beat (Board reads the cue); the
+          // seq key re-triggers the nudge for a fresh exchange.
+          setCombatCue({
+            attackerId: e.attackerId,
+            defenderId: e.defenderId,
+            seq: ++combatSeqRef.current,
+          });
         }
         break;
       case 'damageDealt':
@@ -562,7 +634,11 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         );
         break;
       case 'turnStart':
-        // Turn banner sweep + board pulse (Task 40).
+        // Turn banner page-drop (Task 8) + register page shift. The shift is
+        // a CSS animation re-triggered by class toggle + reflow (framer's
+        // keyframe path would not run y/scale keyframes on this wrapper in
+        // Chromium — the x shake runs, y/scale stay inert; the CSS route
+        // re-triggers reliably and honors --anim-scale / reduced motion).
         setBanners((prev) => [
           ...prev,
           {
@@ -572,7 +648,14 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
             mine: e.player === viewer,
           },
         ]);
-        setTurnPulseSeq((n) => n + 1);
+        {
+          const el = boardwrapRef.current;
+          if (el) {
+            el.classList.remove('match-shift');
+            void el.offsetWidth; // force reflow so the animation re-runs
+            el.classList.add('match-shift');
+          }
+        }
         break;
       case 'turnEnd':
         // Dim-out veil as the turn hands over (Task 40).
@@ -625,9 +708,14 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     setTokenBursts([]);
     setDims([]);
     setGameOverFx(0);
+    setCombatStrikes([]);
+    setDeathStrikes([]);
+    setCombatCue(null);
     // Cancel spell-damage popups that were delayed to the projectile impact,
-    // and drop the ones still waiting for a launch whose effectResolved this
-    // skip just discarded (they must not leak onto the next spell).
+    // drop the ones still waiting for a launch whose effectResolved this
+    // skip just discarded, and clear the strike-removal holds — later
+    // cosmetic callbacks must never fire while the authoritative driver
+    // mirror stays at the newest state.
     for (const t of pendingFxRef.current) clearTimeout(t);
     pendingFxRef.current.clear();
     pendingPopupsRef.current = {};
@@ -659,6 +747,26 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
     );
     if (revealed) setEnemyRevealed(true);
   }, [events, enemyRevealed, foe]);
+
+  // Death strike (Task 8): gules strike-through then removal. Eager over the
+  // raw event stream (not the animation queue) because the state mirror
+  // already removed the creature when the batch lands — the plate's exit is
+  // underway (or, for the last token, the whole band unmounted), so the gules
+  // line must cut across the creature's last-known point NOW, while the
+  // removal reads, not at a later queue tick. A creature still mid-exit is
+  // located live; a gone one resolves from slotPointRef. skip() cancels the
+  // removal timers and the overlay entries.
+  useEffect(() => {
+    for (const e of events) {
+      if (e.type !== 'creatureDied') continue;
+      const pt = combatPointOf(e.creatureId);
+      if (!pt) continue;
+      const id = ++fxIdRef.current;
+      setDeathStrikes((prev) => [...prev, { id, at: pt }]);
+      const t = setTimeout(() => removeDeathStrike(id), 320 * animScale);
+      pendingFxRef.current.add(t);
+    }
+  }, [events, animScale]);
 
   // A submit is acknowledged once the next event batch arrives (LAN echo /
   // local resolution tree). One edge emits no batch: the mulligan keep-all
@@ -693,10 +801,6 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   // Board shake: a new keyframes array identity per damageDealt re-runs the
   // framer timeline; memoizing keeps unrelated re-renders from re-triggering.
   const shakeX = useMemo(() => (shakeSeq ? [0, -7, 7, -5, 5, -2, 0] : 0), [shakeSeq]);
-
-  // Turn-start board pulse (Task 40): a fresh keyframes identity per turnStart
-  // re-runs the subtle scale pop alongside any active shake.
-  const pulseScale = useMemo(() => (turnPulseSeq ? [1, 1.012, 1] : 1), [turnPulseSeq]);
 
   function submitOnce(intent: Intent) {
     // I1 (audit 04): one submit in flight at a time. `awaiting` is set here
@@ -894,7 +998,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   return (
     <div
       className={`match${showWinFx ? ' match--gameover' : ''}`}
-      style={{ '--anim-scale': animScale } as CSSProperties}
+      style={{ '--anim-scale': effectiveScale } as CSSProperties}
       onClick={(e) => {
         // Click anywhere while the animation queue is playing skips the rest;
         // empty-space click while aiming still cancels targeting.
@@ -918,9 +1022,10 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
       </div>
 
       <motion.div
+        ref={boardwrapRef}
         className="match-boardwrap"
-        animate={{ x: shakeX, scale: pulseScale }}
-        transition={{ duration: 0.45 * animScale, ease: 'easeOut' }}
+        animate={{ x: shakeX }}
+        transition={{ duration: 0.32 * effectiveScale, ease: 'linear' }}
       >
         <Board
           state={state}
@@ -936,10 +1041,11 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
           onCancel={() => setTargeting(null)}
           onInspect={setInspecting}
           enemyRevealed={enemyRevealed}
-          animScale={animScale}
+          animScale={effectiveScale}
           heroFx={heroFx}
           powerFx={powerFx}
           manaPulse={manaPulse}
+          combatCue={combatCue}
         />
       </motion.div>
 
@@ -954,6 +1060,45 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
             onAnimationEnd={() => removeRipple(r.id)}
           />
         ))}
+        {combatStrikes.map((s) => {
+          // Both reciprocal cuts share the line of engagement: each gules cut
+          // runs along the attacker→defender axis at its target's plate.
+          const angle =
+            (Math.atan2(s.defender.y - s.attacker.y, s.defender.x - s.attacker.x) * 180) / Math.PI;
+          return (
+            <Fragment key={s.id}>
+              {/* the attacker's cut lands at the defender's plate */}
+              <div
+                className={`combat-strike combat-strike--from-attacker${reduced ? ' combat-strike--reduce' : ''}`}
+                style={
+                  {
+                    left: s.defender.x,
+                    top: s.defender.y,
+                    '--strike-angle': `${angle}deg`,
+                  } as CSSProperties
+                }
+              />
+              {/* the defender's retaliatory cut lands at the attacker's plate */}
+              <div
+                className={`combat-strike combat-strike--from-defender${reduced ? ' combat-strike--reduce' : ''}`}
+                style={
+                  {
+                    left: s.attacker.x,
+                    top: s.attacker.y,
+                    '--strike-angle': `${angle}deg`,
+                  } as CSSProperties
+                }
+              />
+            </Fragment>
+          );
+        })}
+        {deathStrikes.map((s) => (
+          <div
+            key={s.id}
+            className={`death-strike${reduced ? ' death-strike--reduce' : ''}`}
+            style={{ left: s.at.x, top: s.at.y }}
+          />
+        ))}
         {tokenBursts.map((t) => (
           <div
             key={t.id}
@@ -962,15 +1107,15 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
           />
         ))}
         {projectiles.map((p) => (
-          <Projectile key={p.id} entry={p} scale={animScale} onDone={() => removeProjectile(p.id)} />
+          <Projectile key={p.id} entry={p} scale={effectiveScale} onDone={() => removeProjectile(p.id)} />
         ))}
         {dims.map((d) => (
           <motion.div
             key={d.id}
             className="turn-dim"
+            variants={dimVeil(effectiveScale)}
             initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 0.85, 0] }}
-            transition={{ duration: 0.6 * animScale, times: [0, 0.35, 1], ease: 'easeInOut' }}
+            animate="enter"
             onAnimationComplete={() => removeDim(d.id)}
           />
         ))}
@@ -1014,7 +1159,7 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
             interactive={canAct}
             targeting={inTargeting}
             onCardClick={onHandCardClick}
-            animScale={animScale}
+            animScale={effectiveScale}
           />
         )}
       </div>

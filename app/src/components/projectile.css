@@ -124,7 +124,9 @@
   box-shadow: 0 0 14px 6px rgba(255, 233, 168, 0.85);
 }
 
-/* ---- impact burst (single-target landing) ---- */
+/* ---- impact burst (single-target landing, Task 8): the damage landing is
+   GULES — the one reserved damage tincture — with a flat ring, no glow, no
+   gradient halo. The kind variants keep their spell-theme border colors only. */
 .projectile-impact {
   position: absolute;
   width: 74px;
@@ -132,27 +134,19 @@
   margin: -37px 0 0 -37px;
   border-radius: 50%;
   pointer-events: none;
-  border: 3px solid var(--ember);
-  box-shadow: 0 0 18px 4px rgba(255, 180, 84, 0.5);
-  background: radial-gradient(circle, rgba(255, 180, 84, 0.35) 0%, rgba(255, 180, 84, 0) 70%);
+  border: 3px solid var(--gules);
 }
 
 .projectile-impact--frost {
   border-color: #7fd4ff;
-  box-shadow: 0 0 18px 4px rgba(127, 212, 255, 0.55);
-  background: radial-gradient(circle, rgba(127, 212, 255, 0.35) 0%, rgba(127, 212, 255, 0) 70%);
 }
 
 .projectile-impact--shadow {
   border-color: #a06bff;
-  box-shadow: 0 0 18px 4px rgba(140, 90, 255, 0.55);
-  background: radial-gradient(circle, rgba(140, 90, 255, 0.35) 0%, rgba(140, 90, 255, 0) 70%);
 }
 
 .projectile-impact--starbeam {
   border-color: #ffe9a8;
-  box-shadow: 0 0 18px 4px rgba(255, 233, 168, 0.6);
-  background: radial-gradient(circle, rgba(255, 233, 168, 0.4) 0%, rgba(255, 233, 168, 0) 70%);
 }
 
 /* ---- AoE: expanding ring from the zone center + screen tint ---- */

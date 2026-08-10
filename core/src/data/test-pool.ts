@@ -15,6 +15,7 @@ const art = (seed: number): ArtRecipe => ({
 /** Named vanilla fixtures: t-001 is 3-cost 3/3, t-007 is 7-cost 7/7. */
 const vanilla = (id: string, cost: number, attack: number, health: number, seed: number): Card => ({
   id, name: `Test ${id}`, type: 'creature', cost, attack, health,
+  reflect: attack,   // Task 1 transitional: mirrors Attack like the curated builders
   keywords: [], effects: [], rarity: 'common', archetype: 'neutral',
   art: art(seed), author: 'curated', version: 1,
 });
@@ -48,6 +49,7 @@ function proceduralCreature(i: number): Card {
   const health = stats - attack;
   return {
     id, name: `Test ${id}`, type: 'creature', cost, attack, health,
+    reflect: attack,   // Task 1 transitional: mirrors Attack like the curated builders
     keywords, effects: [], rarity: 'common', archetype: 'neutral',
     art: art(i), author: 'curated', version: 1,
   };
@@ -82,7 +84,7 @@ export function createTestPool(): Card[] {
       rarity: 'common', archetype: 'neutral', art: art(906), author: 'curated', version: 1,
     },
     {
-      id: 'bc-2dmg', name: 'Battlecry 2 Damage', type: 'creature', cost: 2, attack: 2, health: 2,
+      id: 'bc-2dmg', name: 'Battlecry 2 Damage', type: 'creature', cost: 2, attack: 2, health: 2, reflect: 2,
       keywords: [], effects: [], triggers: [{ when: 'battlecry', effects: [{ kind: 'dealDamage', value: 2, target: 'allEnemies' }] }],
       rarity: 'common', archetype: 'neutral', art: art(903), author: 'curated', version: 1,
     },
@@ -92,7 +94,7 @@ export function createTestPool(): Card[] {
       rarity: 'common', archetype: 'neutral', art: art(904), author: 'curated', version: 1,
     },
     {
-      id: 't-rush', name: 'Test Rusher', type: 'creature', cost: 2, attack: 2, health: 1,
+      id: 't-rush', name: 'Test Rusher', type: 'creature', cost: 2, attack: 2, health: 1, reflect: 2,
       keywords: ['rush'], effects: [], rarity: 'common', archetype: 'neutral', art: art(905), author: 'curated', version: 1,
     },
     // Task 3 token-row fixture: a token-archetype creature so summon effects
@@ -100,7 +102,7 @@ export function createTestPool(): Card[] {
     // spends 2 <= 2 + STAT_BUDGET_SLACK). Kept in the TEST pool — tokens are
     // archetypes, not production cards.
     {
-      id: 'token-rat', name: 'Token Rat', type: 'creature', cost: 0, attack: 1, health: 1,
+      id: 'token-rat', name: 'Token Rat', type: 'creature', cost: 0, attack: 1, health: 1, reflect: 1,
       keywords: [], effects: [], rarity: 'common', archetype: 'token', art: art(907), author: 'curated', version: 1,
     },
   ];

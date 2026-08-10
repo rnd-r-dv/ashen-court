@@ -11,8 +11,10 @@ const creature = (
   rarity: Rarity, keywords: Keyword[] = [], flavor?: string,
 ): Card => ({
   id, name, type: 'creature', cost, attack, health,
+  // Task 1 transitional: Reflect mirrors Attack (see archetypeCards).
+  reflect: attack,
   keywords, effects: [], rarity, archetype: 'neutral',
-  art: arcaneArt(id), author: 'curated', version: 1, flavor,
+  art: arcaneArt(id), author: 'curated', version: 1, schemaVersion: 2, flavor,
 });
 
 const spell = (
@@ -21,7 +23,7 @@ const spell = (
 ): Card => ({
   id, name, type: 'spell', cost,
   keywords: [], effects, rarity, archetype: 'neutral',
-  art: arcaneArt(id), author: 'curated', version: 1, flavor,
+  art: arcaneArt(id), author: 'curated', version: 1, schemaVersion: 2, flavor,
 });
 
 const artifact = (
@@ -30,7 +32,7 @@ const artifact = (
 ): Card => ({
   id, name, type: 'artifact', cost,
   keywords: [], effects: [], triggers, rarity, archetype: 'neutral',
-  art: arcaneArt(id), author: 'curated', version: 1, flavor,
+  art: arcaneArt(id), author: 'curated', version: 1, schemaVersion: 2, flavor,
 });
 
 export const NEUTRAL_CARDS: Card[] = [

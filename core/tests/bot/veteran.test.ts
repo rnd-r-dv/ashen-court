@@ -15,6 +15,7 @@ const chargeBeast = (id: string, attack: number, health: number): Card => ({
   cost: 1,
   attack,
   health,
+  reflect: attack,   // Task 1 transitional fixture parity
   keywords: ['charge'],
   effects: [],
   rarity: 'common',

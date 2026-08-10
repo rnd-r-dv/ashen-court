@@ -19,7 +19,9 @@ describe('pool balance', () => {
     for (const card of pool) {
       if (card.type !== 'creature') continue;
       if (cardText(card).length > 0) continue;   // text pays for stats
-      const spent = (card.attack ?? 0) + (card.health ?? 0)
+      // Task 1 weighted spend (matches validateCard): Attack and Reflect are
+      // complementary halves of one axis, so they are averaged together.
+      const spent = (card.health ?? 0) + ((card.attack ?? 0) + (card.reflect ?? 0)) / 2
         + card.keywords.reduce((s, k) => s + KEYWORD_COST[k], 0);
       // A vanilla body must land within 2 of its budget in either direction.
       if (spent < statBudget(card.cost) - 2) under.push(`${card.id} (${spent} vs ${statBudget(card.cost)})`);
@@ -30,7 +32,7 @@ describe('pool balance', () => {
   it('no creature exceeds the ceiling', () => {
     for (const card of pool) {
       if (card.type !== 'creature') continue;
-      const spent = (card.attack ?? 0) + (card.health ?? 0)
+      const spent = (card.health ?? 0) + ((card.attack ?? 0) + (card.reflect ?? 0)) / 2
         + card.keywords.reduce((s, k) => s + KEYWORD_COST[k], 0);
       expect(spent, card.id).toBeLessThanOrEqual(statBudget(card.cost) + STAT_BUDGET_SLACK);
     }

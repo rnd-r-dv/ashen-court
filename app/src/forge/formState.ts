@@ -77,9 +77,32 @@ export function draftToCard(d: ForgeDraft): Card {
   if (d.type === 'creature') {
     card.attack = toStat(d.attack);
     card.health = toStat(d.health);
+    // Task 1 compatibility bridge (temporary): Forge has no Reflect field
+    // yet, so a created creature mirrors its Attack (the core contract
+    // requires reflect >= 0 on every creature). Task 3 adds the explicit
+    // Forge Reflect input and replaces this default.
+    card.reflect = toStat(d.attack);
   }
   if (!isSpell && d.trigger) {
     card.triggers = [{ when: d.trigger, effects: d.effects }];
+  }
+  return card;
+}
+
+/**
+ * Task 1 compatibility bridge (temporary; replaced by Task 3's explicit
+ * Forge Reflect input and schemaVersion migration). Custom creatures created
+ * or stored/imported before the Reflect contract existed carry no `reflect`;
+ * normalize them deterministically to Reflect = Attack so they pass core
+ * validation and fight with mirror-stat parity. Only cards without a
+ * schemaVersion: 2 stamp are repaired — a 2-stamped creature missing Reflect
+ * is authored under the new contract and is a genuine error, so it must
+ * surface rather than be silently rewritten (Task 3 owns that gate). IDs and
+ * existing `version` values are preserved untouched.
+ */
+export function normalizeLegacyReflect(card: Card): Card {
+  if (card.type === 'creature' && card.reflect === undefined && card.schemaVersion !== 2) {
+    return { ...card, reflect: card.attack ?? 0 };
   }
   return card;
 }

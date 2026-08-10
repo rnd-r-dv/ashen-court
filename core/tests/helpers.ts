@@ -1,4 +1,4 @@
-import { Game } from '../src/engine/game.js';
+import type { Game } from '../src/engine/game.js';
 import type { Card, CreatureState, EffectSpec, HeroSpec, Keyword, PlayerIndex, Trigger } from '../src/types.js';
 
 export const hero = (name: string): HeroSpec => ({ name, power: { name: 'Test Power', cost: 2, effects: [{ kind: 'dealDamage', value: 1, target: 'any' }] } });
@@ -15,6 +15,9 @@ export interface AddCreatureInput {
   id: string;
   attack: number;
   health: number;
+  /** Independent counter-damage stat (Task 1). Defaults to attack for
+   *  fixture parity with the transitional curated builders. */
+  reflect?: number;
   cost?: number;
   keywords?: Keyword[];
   /** When present, the registered card def gets triggers: [{ when, effects }] (Task 8 lookups). */
@@ -45,6 +48,7 @@ export function addCreature(game: Game, player: PlayerIndex, partial: AddCreatur
     attack: partial.attack,
     health: partial.health,
     maxHealth: partial.health,
+    reflect: partial.reflect ?? partial.attack,
     keywords,
     exhausted: partial.exhausted ?? true,
     attacksLeft: keywords.includes('windfury') ? 2 : 1,
@@ -63,6 +67,7 @@ export function addCreature(game: Game, player: PlayerIndex, partial: AddCreatur
     cost: partial.cost ?? 1,
     attack: partial.attack,
     health: partial.health,
+    reflect: partial.reflect ?? partial.attack,
     keywords,
     effects: [],
     rarity: 'common',

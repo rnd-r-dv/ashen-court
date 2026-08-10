@@ -8,7 +8,6 @@ import {
   loadDecks,
   deleteDeck,
   deckKey,
-  deckSlug,
   exportCardsJson,
   importCardsJson,
   saveSettings,
@@ -16,7 +15,7 @@ import {
 } from '../src/storage.js';
 
 const card = (over: Partial<Card> = {}): Card => ({
-  id: 'custom-001', name: 'Test', type: 'creature', cost: 3, attack: 3, health: 3,
+  id: 'custom-001', name: 'Test', type: 'creature', cost: 3, attack: 3, health: 3, reflect: 3,
   keywords: [], effects: [], rarity: 'common', archetype: 'neutral',
   art: { preset: 'shadow', palette: ['#111', '#333'], seed: 1 },
   author: 'custom', version: 1, ...over,
@@ -28,6 +27,27 @@ describe('custom cards', () => {
   it('saves and loads a custom card', () => {
     saveCustomCard(card());
     expect(loadCustomCards()).toEqual([card()]);
+  });
+  // Task 1 compatibility bridge: storage written before the Reflect contract
+  // existed holds creatures with no `reflect`. Loading normalizes them
+  // deterministically to Reflect = Attack (ids and `version` untouched) so
+  // they validate and fight with mirror-stat parity. Task 3 replaces this
+  // bridge with an explicit Forge input + schemaVersion migration.
+  it('normalizes stored legacy creatures missing Reflect to Reflect = Attack (Task 1 bridge)', () => {
+    const legacy = card({ id: 'legacy-001', name: 'Old Guard', version: 7 });
+    delete legacy.reflect;   // shape as saved before the field existed
+    localStorage.setItem('tcg.customCards', JSON.stringify([legacy]));
+    const [loaded] = loadCustomCards();
+    expect(loaded!.reflect).toBe(3);      // attack of the legacy 3/3
+    expect(loaded!.id).toBe('legacy-001'); // identity preserved
+    expect(loaded!.version).toBe(7);      // revision value preserved
+  });
+  it('does NOT silently repair a schemaVersion-2 creature missing Reflect (Task 3 owns the gate)', () => {
+    const schema2 = card({ id: 'schema2-001', schemaVersion: 2 });
+    delete schema2.reflect;
+    localStorage.setItem('tcg.customCards', JSON.stringify([schema2]));
+    const [loaded] = loadCustomCards();
+    expect(loaded!.reflect).toBeUndefined();  // a 2-stamped card is authored, not legacy
   });
   it('upserts by id when the name is unchanged (re-saving an edit)', () => {
     saveCustomCard(card());

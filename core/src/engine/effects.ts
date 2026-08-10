@@ -131,7 +131,8 @@ function applyEffectInner(game: Resolver, ctx: EffectCtx, spec: EffectSpec, expl
     case 'buff': {
       const atk = spec.value ?? 0;
       const hp = spec.value2 ?? atk;
-      for (const ref of refs) buffRef(game, ref, atk, hp);
+      const refl = spec.value3 ?? 0;
+      for (const ref of refs) buffRef(game, ref, atk, hp, refl);
       break;
     }
     case 'summon':
@@ -473,14 +474,17 @@ function healRef(game: Resolver, ref: TargetRef, amount: number): void {
   }
 }
 
-/** Buff adds attack and health/maxHealth; negative values shrink (0-health death uses the normal death path). */
-function buffRef(game: Resolver, ref: TargetRef, atk: number, hp: number): void {
+/** Buff adds attack, health/maxHealth, and reflect; negative values shrink
+ *  (0-health death uses the normal death path). value/value2/value3 = the
+ *  Attack/Health/Reflect deltas (Task 1). */
+function buffRef(game: Resolver, ref: TargetRef, atk: number, hp: number, refl: number): void {
   if (ref.type !== 'creature') return;   // heroes have no attack
   const c = findCreature(game, ref.id);
   if (!c) return;
   c.attack += atk;
   c.health += hp;
   c.maxHealth += hp;
+  c.reflect += refl;
   push(game, { type: 'buffApplied', creatureId: c.id, attack: c.attack, health: c.health });
   if (c.health <= 0) {
     push(game, { type: 'creatureDied', player: c.owner, creatureId: c.id, cardId: c.cardId });
@@ -518,6 +522,11 @@ export function makeCreature(game: Resolver, card: Card, owner: PlayerIndex): Cr
     attack: card.attack ?? 0,
     health: card.health ?? 1,
     maxHealth: card.health ?? 1,
+    // Task 1: creation copies the card def's Reflect. validateCard guarantees
+    // the field on every creature, so the non-null assertion mirrors the
+    // existing attack/health contract. A legacy def without it would surface
+    // as undefined here — combat treats undefined as 0 (see submit/attack).
+    reflect: card.reflect!,
     keywords,
     exhausted: !(keywords.includes('rush') || keywords.includes('charge')),
     attacksLeft: keywords.includes('windfury') ? 2 : 1,

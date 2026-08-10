@@ -160,7 +160,7 @@ describe('Turn flow', () => {
   it('beginTurn thaws frozen creatures and emits thawed (audit 01 M1)', () => {
     const game = Game.create(makeTestSetup());
     const p = game.state.players[0];
-    p.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: true, spellPower: 0 });
+    p.board.push({ id: 'c1', cardId: 't-001', owner: 0, attack: 3, health: 3, maxHealth: 3, reflect: 3, keywords: [], exhausted: true, attacksLeft: 1, shields: 0, warded: false, frozen: true, spellPower: 0 });
     game.submit({ kind: 'mulligan', keep: [] });   // player 0's mulligan — startMain not yet
     // player 1's mulligan → startMain → beginTurn(0) thaws the frozen creature
     const evts = game.submit({ kind: 'mulligan', keep: [] });

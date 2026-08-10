@@ -42,9 +42,10 @@ const PLAY_CARD = 'neutral-boar';
 // nothing).
 const SEED_DISCOVER = 79;
 
-/** Simple valid custom card (1-cost 1/1 creature) — passes validateCard. */
+/** Simple valid custom card (1-cost 1/1 creature) — passes validateCard.
+ * Carries the Task 1 bridge shape: a Forge-created card has Reflect = Attack. */
 const CUSTOM_CARD: Card = {
-  id: 'custom-1', name: 'Custom One', type: 'creature', cost: 1, attack: 1, health: 1,
+  id: 'custom-1', name: 'Custom One', type: 'creature', cost: 1, attack: 1, health: 1, reflect: 1,
   keywords: [], effects: [], rarity: 'common', archetype: 'neutral',
   art: { preset: 'ember', palette: ['#2b0d0d', '#ff6b35'], seed: 1 },
   author: 'custom', version: 1,

@@ -1,6 +1,6 @@
 import type { Card } from '@ashen/core';
 import { buildPool, validateCard } from '@ashen/core';
-import { poolRuleIssues } from './forge/formState.js';
+import { poolRuleIssues, normalizeLegacyReflect } from './forge/formState.js';
 
 // localStorage keys (shared with the app's other modules)
 const KEY_CARDS = 'tcg.customCards';
@@ -51,11 +51,16 @@ function write(key: string, value: unknown): boolean {
 
 // ---- custom cards ----
 
-/** Read + shape-check saved custom cards; wrong-shape storage falls back to []. */
+/** Read + shape-check saved custom cards; wrong-shape storage falls back to [].
+ * Task 1 bridge: legacy creatures saved before Reflect existed are normalized
+ * to Reflect = Attack at read time, so stored cards validate and fight with
+ * mirror-stat parity (schemaVersion-2 cards missing Reflect are NOT repaired). */
 export function loadCustomCards(): Card[] {
   const raw = read<unknown>(KEY_CARDS, []);
   if (!Array.isArray(raw)) return [];
-  return raw.filter((c): c is Card => typeof c === 'object' && c !== null);
+  return raw
+    .filter((c): c is Card => typeof c === 'object' && c !== null)
+    .map(normalizeLegacyReflect);
 }
 
 /**
@@ -184,7 +189,15 @@ export function importCardsJson(text: string): Card[] {
   }
   const cards: Card[] = [];
   for (const raw of parsed) {
-    const candidate = raw as Card;
+    // I5 runs BEFORE the bridge: null/primitive elements must reach the
+    // 'malformed card data' path (see the try/catch below), not crash inside
+    // normalization.
+    // Task 1 bridge: legacy exports carry creatures with no `reflect`;
+    // normalize to Reflect = Attack before validation so they import cleanly
+    // (schemaVersion-2 cards missing Reflect stay broken and are rejected).
+    const candidate = (
+      raw !== null && typeof raw === 'object' ? normalizeLegacyReflect(raw as Card) : raw
+    ) as Card;
     // I5: never touch .id on a null/primitive element — optional chaining keeps
     // the documented 'Invalid card <id>: …' contract for '[null]' payloads.
     const id = candidate?.id ?? '?';

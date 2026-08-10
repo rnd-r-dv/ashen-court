@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/engine/game.js';
+import type { GameEvent } from '../src/types.js';
 import { makeTestSetup, addCreature } from './helpers.js';
 
 describe('simultaneous combat', () => {
@@ -73,5 +74,75 @@ describe('simultaneous combat', () => {
 
     expect(defender.health).toBe(2);
     expect(attacker.health).toBe(1);
+  });
+
+  // Task 1: Reflect is the DEFENSIVE counter-damage stat. Attack decides the
+  // initiating damage a creature deals; Reflect decides the damage it deals
+  // back when it is attacked. The two are captured simultaneously before
+  // either lands (see the rationale on submit/attack).
+  it('counter-damage comes from Reflect, not the defender\'s Attack', () => {
+    const game = Game.create(makeTestSetup());
+    game.state.phase = 'main';
+    // 5-Attack/2-Reflect attacker vs 1-Attack/4-Reflect defender (brief).
+    const attacker = addCreature(game, 0, { id: 't-a', attack: 5, health: 8, exhausted: false, reflect: 2 });
+    const defender = addCreature(game, 1, { id: 't-b', attack: 1, health: 4, reflect: 4 });
+
+    game.submit({ kind: 'attack', attackerId: attacker.id, target: { type: 'creature', id: defender.id } });
+
+    // attacker deals its Attack 5 (defender 4 → dies); defender reflects 4.
+    expect(game.state.players[1].board).toHaveLength(0);
+    expect(attacker.health).toBe(8 - 4);
+    // exactly one damage event per side, each carrying the initiating/reflected amount
+    const dmg = game.state.log.filter(
+      (e): e is Extract<GameEvent, { type: 'damageDealt' }> =>
+        e.type === 'damageDealt' && e.target.type === 'creature',
+    );
+    expect(dmg).toHaveLength(2);
+    expect(dmg.some(e => e.target.type === 'creature' && e.target.id === defender.id && e.amount === 5)).toBe(true);
+    expect(dmg.some(e => e.target.type === 'creature' && e.target.id === attacker.id && e.amount === 4)).toBe(true);
+  });
+
+  it('both damage events are emitted even when one creature dies', () => {
+    const game = Game.create(makeTestSetup());
+    game.state.phase = 'main';
+    const attacker = addCreature(game, 0, { id: 't-a', attack: 5, health: 10, exhausted: false, reflect: 2 });
+    const defender = addCreature(game, 1, { id: 't-b', attack: 1, health: 1, reflect: 4 });
+
+    const evts = game.submit({ kind: 'attack', attackerId: attacker.id, target: { type: 'creature', id: defender.id } });
+
+    // the defender dies to 5 but still reflects its 4 before leaving the board
+    expect(game.state.players[1].board).toHaveLength(0);
+    expect(attacker.health).toBe(6);
+    const dmg = evts.filter(
+      (e): e is Extract<GameEvent, { type: 'damageDealt' }> =>
+        e.type === 'damageDealt' && e.target.type === 'creature',
+    );
+    expect(dmg.map(e => e.amount).sort()).toEqual([4, 5]);
+  });
+
+  it('defender lifesteal heals from Reflect damage, not the defender\'s Attack', () => {
+    const game = Game.create(makeTestSetup());
+    game.state.phase = 'main';
+    const attacker = addCreature(game, 0, { id: 't-a', attack: 3, health: 5, exhausted: false, reflect: 1 });
+    const defender = addCreature(game, 1, { id: 't-b', attack: 1, health: 4, reflect: 2, keywords: ['lifesteal'] });
+    game.state.players[1].hero.hp = 25;
+
+    game.submit({ kind: 'attack', attackerId: attacker.id, target: { type: 'creature', id: defender.id } });
+
+    // the defender survived (3 < 4) and reflected its Reflect 2 — the source
+    // stays the defender, so its lifesteal heals its controller for the 2.
+    expect(attacker.health).toBe(3);
+    expect(game.state.players[1].hero.hp).toBe(27);
+  });
+
+  it('hero attacks deal Attack damage — Reflect never reaches the hero', () => {
+    const game = Game.create(makeTestSetup());
+    game.state.phase = 'main';
+    const attacker = addCreature(game, 0, { id: 't-a', attack: 4, health: 3, exhausted: false, reflect: 9 });
+
+    game.submit({ kind: 'attack', attackerId: attacker.id, target: { type: 'hero', player: 1 } });
+
+    expect(game.state.players[1].hero.hp).toBe(26);   // 4, not 9
+    expect(attacker.health).toBe(3);                  // no counter-damage to the attacker
   });
 });

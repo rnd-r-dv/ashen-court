@@ -18,8 +18,11 @@ export type Trigger = 'battlecry' | 'deathrattle' | 'startOfTurn' | 'endOfTurn' 
 export type EffectKind = 'dealDamage' | 'draw' | 'heal' | 'buff' | 'summon' | 'gainMana' | 'refillMana' | 'freeze' | 'destroy' | 'consume' | 'silence' | 'returnToHand' | 'copyCard' | 'giveKeyword' | 'discountMostExpensive' | 'discountNextSpell' | 'spellPower' | 'overload' | 'discover';
 export type EffectTarget = 'any' | 'hero' | 'anyCreature' | 'enemyCreature' | 'friendlyCreature' | 'friendlyDragon' | 'allEnemies' | 'allEnemyCreatures' | 'allFriendlyCreatures' | 'randomEnemy' | 'randomEnemyCreature' | 'self';
 
-export interface EffectSpec { kind: EffectKind; value?: number; value2?: number; target?: EffectTarget; keyword?: Keyword; cardId?: string; }
+export interface EffectSpec { kind: EffectKind; value?: number; value2?: number; value3?: number; target?: EffectTarget; keyword?: Keyword; cardId?: string; }
 // value optional: summon (default 1 token) / giveKeyword / copyCard / discount kinds carry no value.
+// For `buff` the three numeric slots are the independent stat deltas (Task 1): value = Attack,
+// value2 = Health (retained as-is for serialized compatibility), value3 = Reflect. Each defaults
+// to 0 unless noted; value2 historically defaults to value (see cardtext/effects).
 
 export interface ArtRecipe { preset: string; palette: string[]; glyph?: string; seed: number; imageUrl?: string; }
 // imageUrl (custom uploads) overrides the procedural layers; it rides along in Card serialization
@@ -29,10 +32,15 @@ export interface TriggerSpec { when: Trigger; effects: EffectSpec[]; }
 
 export interface Card {
   id: string; name: string; type: CardType; cost: number;
-  attack?: number; health?: number;
+  attack?: number; health?: number; reflect?: number;
   keywords: Keyword[]; triggers?: TriggerSpec[]; effects: EffectSpec[];  // effects = spells-only; triggers = creatures/artifacts
   rarity: Rarity; archetype: string; art: ArtRecipe; flavor?: string;
   author: 'curated' | 'custom'; version: number;
+  /** Reflect-schema stamp (Task 1): 2 = authored with the Reflect contract
+   *  (creature carry `reflect`). Deliberately DISTINCT from `version`, which
+   *  Forge writes as a Date.now() card revision value. Absent/1 = legacy
+   *  schema; custom-card migration lives in Task 3. */
+  schemaVersion?: 1 | 2;
 }
 
 export interface HeroSpec { name: string; power: HeroPower; }
@@ -41,6 +49,12 @@ export interface HeroPower { name: string; cost: number; effects: EffectSpec[]; 
 export interface CreatureState {
   id: string; cardId: string; owner: PlayerIndex;
   attack: number; health: number; maxHealth: number;
+  /** Defensive counter-damage stat (Task 1): the damage this creature deals
+   *  back when attacked, captured simultaneously with the attacker's Attack.
+   *  Mirrors attack/health as a live, buffable number. Legacy states saved
+   *  before this field existed deserialize with it undefined; combat treats
+   *  that as 0 (never undefined counter-damage). */
+  reflect: number;
   keywords: Keyword[]; exhausted: boolean; attacksLeft: number;
   shields: number; warded: boolean; frozen: boolean;
   /** Set by the `silence` effect. Keywords are emptied on application; this

@@ -31,11 +31,24 @@ describe('effectText — one template per EffectKind (Task 43)', () => {
   it('draw — plural', () => {
     expect(effectText({ kind: 'draw', value: 3 })).toBe('Draw 3 cards.');
   });
-  it('buff — value2 defaults to value', () => {
-    expect(effectText({ kind: 'buff', value: 2, target: 'friendlyCreature' })).toBe('Give a friendly creature +2/+2.');
+  it('buff — value2 defaults to value (Attack + Health named)', () => {
+    expect(effectText({ kind: 'buff', value: 2, target: 'friendlyCreature' })).toBe('Give a friendly creature +2 Attack and +2 Health.');
   });
   it('buff — negatives render as U+2212', () => {
-    expect(effectText({ kind: 'buff', value: -1, value2: -1, target: 'enemyCreature' })).toBe('Give an enemy creature \u22121/\u22121.');
+    expect(effectText({ kind: 'buff', value: -1, value2: -1, target: 'enemyCreature' })).toBe('Give an enemy creature \u22121 Attack and \u22121 Health.');
+  });
+  // Task 1: buffs may modify Attack, Reflect, and Health independently; the
+  // text names only the non-zero deltas in the visible order Attack, Reflect,
+  // Health (brief examples). A zero-only buff is invalid authoring → no text.
+  it('buff — non-zero deltas in Attack, Reflect, Health order', () => {
+    // value2 omitted → health defaults to attack (engine behavior), so the
+    // text names it; value2: 0 names no health (brief example 1).
+    expect(effectText({ kind: 'buff', value: 2, value2: 0, value3: 1, target: 'friendlyCreature' })).toBe('Give a friendly creature +2 Attack and +1 Reflect.');
+    expect(effectText({ kind: 'buff', value3: 1, value2: 2, target: 'allFriendlyCreatures' })).toBe('Give all friendly creatures +1 Reflect and +2 Health.');
+    expect(effectText({ kind: 'buff', value2: 3, target: 'friendlyCreature' })).toBe('Give a friendly creature +3 Health.');
+  });
+  it('buff — zero-only deltas produce no text (invalid buffs)', () => {
+    expect(effectText({ kind: 'buff', target: 'friendlyCreature' })).toBe('');
   });
   it('summon — single token, display name from token map', () => {
     expect(effectText({ kind: 'summon', cardId: 'token-skeleton' })).toBe('Summon 1 Skeleton.');

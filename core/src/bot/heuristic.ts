@@ -5,7 +5,10 @@ export function evaluate(game: Game, me: PlayerIndex): number {
   const { players } = game.state;
   const meP = players[me], foeP = players[(1 - me) as PlayerIndex];
   const board = (p: PlayerState) => p.board.reduce((s, c) => s
-    + c.attack * 2 + c.health
+    // Task 1: Attack (1.25/point, initiating) and Reflect (0.75/point,
+    // defensive counter-damage) are complementary halves of one combat axis;
+    // a fixture where reflect === attack scores exactly the old attack*2.
+    + c.attack * 1.25 + c.reflect * 0.75 + c.health
     + (c.keywords.includes('taunt') ? 2 : 0)
     + (c.keywords.includes('lifesteal') ? 2 : 0)
     + (c.keywords.includes('windfury') ? 2 : 0), 0);

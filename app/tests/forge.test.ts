@@ -45,6 +45,16 @@ describe('forge form state', () => {
     expect(errors(validDraft())).toEqual([]);
   });
 
+  // Task 1 compatibility bridge: Forge has no Reflect field yet (Task 3 adds
+  // explicit input), so a created creature mirrors its Attack. The core
+  // contract requires reflect >= 0 on every creature, so this default keeps
+  // Forge-created cards valid.
+  it('gives a Forge-created creature Reflect equal to its Attack (Task 1 bridge)', () => {
+    expect(draftToCard(validDraft()).reflect).toBe(3);
+    expect(draftToCard(validDraft({ attack: '0', health: '2' })).reflect).toBe(0);
+    expect(draftToCard(validDraft({ type: 'spell', attack: '5', health: '5', trigger: '', effects: [{ kind: 'draw', value: 1 }] })).reflect).toBeUndefined();
+  });
+
   it('converts a valid draft into a card that passes validateCard', () => {
     const card = draftToCard(validDraft());
     expect(validateCard(card).filter((i) => i.severity === 'error')).toEqual([]);

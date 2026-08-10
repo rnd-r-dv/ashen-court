@@ -37,8 +37,9 @@ export function validateCard(card: Card): ValidationIssue[] {
   if (card.type === 'creature') {
     if (card.attack === undefined || !Number.isInteger(card.attack) || card.attack < 0) err('attack', 'Creature needs attack >= 0.');
     if (card.health === undefined || !Number.isInteger(card.health) || card.health < 1) err('health', 'Creature needs health >= 1.');
-  } else if (card.attack !== undefined || card.health !== undefined) {
-    err('type', 'Only creatures have attack/health.');
+    if (card.reflect === undefined || !Number.isInteger(card.reflect) || card.reflect < 0) err('reflect', 'Creature needs reflect >= 0.');
+  } else if (card.attack !== undefined || card.health !== undefined || card.reflect !== undefined) {
+    err('type', 'Only creatures have attack/health/reflect.');
   }
   for (const tg of card.triggers ?? []) {
     if (tg.when === 'battlecry' && card.type !== 'creature') err('trigger', 'Battlecry is creature-only.');
@@ -55,9 +56,16 @@ export function validateCard(card: Card): ValidationIssue[] {
   if (card.type === 'creature' && card.attack !== undefined && card.health !== undefined) {
     const budget = statBudget(card.cost);
     const ceiling = budget + STAT_BUDGET_SLACK;
-    const spent = card.attack + card.health + card.keywords.reduce((s, k) => s + KEYWORD_COST[k], 0);
+    // Task 1 curve: Attack and Reflect are complementary halves of ONE combat
+    // axis (initiating vs defensive), so they are averaged together rather than
+    // summed — the old attack + health budget would double-count a creature
+    // carrying both. Health stays at face value. The enforced ceiling and the
+    // slack term are unchanged; see STAT_BUDGET_SLACK above.
+    const spent = card.health
+      + (card.attack + (card.reflect ?? 0)) / 2
+      + card.keywords.reduce((s, k) => s + KEYWORD_COST[k], 0);
     if (spent > ceiling) {
-      err('stats', `Stat+keyword total ${spent} exceeds the max ${ceiling} for cost ${card.cost} `
+      err('stats', `Attack/Reflect/Health weighted total ${spent} exceeds the max ${ceiling} for cost ${card.cost} `
         + `(vanilla budget ${budget} + ${STAT_BUDGET_SLACK} design slack) by ${spent - ceiling}.`);
     }
   }

@@ -28,7 +28,7 @@ const base = (
 ): Card => ({
   id, name, type, cost,
   keywords: [], effects: [], rarity, archetype: 'token',
-  art: arcaneArt(id), author: 'curated', version: 1, flavor,
+  art: arcaneArt(id), author: 'curated', version: 1, schemaVersion: 2, flavor,
 });
 
 /**
@@ -37,18 +37,20 @@ const base = (
  * would trip validateDeck edge cases and confuse the Forge's token picker.
  */
 export const TOKEN_CARDS: Card[] = [
+  // Task 1: token creatures carry explicit Reflect (transitional = Attack
+  // value, matching the curated builders until Task 2 hand-authors them).
   { ...base('token-rat', 'Giant Rat', 'creature', 0, 'common',
-      'A rat grown fat on the leavings of war — and bold with it.'), attack: 1, health: 1 },
+      'A rat grown fat on the leavings of war — and bold with it.'), attack: 1, health: 1, reflect: 1 },
   { ...base('token-skeleton', 'Skeleton', 'creature', 0, 'common',
-      'The Court’s dead do not rest; they rise, reassemble, and march.'), attack: 1, health: 1 },
+      'The Court’s dead do not rest; they rise, reassemble, and march.'), attack: 1, health: 1, reflect: 1 },
   { ...base('token-wisp', 'Choir Spirit', 'creature', 0, 'common',
-      'A voice that lingered after the song ended, singing still.'), attack: 1, health: 1 },
+      'A voice that lingered after the song ended, singing still.'), attack: 1, health: 1, reflect: 1 },
   { ...base('token-dragon-whelp', 'Dragon Whelp', 'creature', 0, 'common',
-      'Small yet, but the fire in its throat is patient.'), attack: 1, health: 1 },
+      'Small yet, but the fire in its throat is patient.'), attack: 1, health: 1, reflect: 1 },
   { ...base('token-treant', 'Root Treant', 'creature', 0, 'common',
-      'The deep roots answer the elder forest’s call.'), attack: 1, health: 1, keywords: ['taunt'] },
+      'The deep roots answer the elder forest’s call.'), attack: 1, health: 1, keywords: ['taunt'], reflect: 1 },
   { ...base('token-phoenixash', 'Phoenix Ash', 'creature', 0, 'common',
-      'From the embers of the fallen, a spark remembers the sky.'), attack: 2, health: 2 },
+      'From the embers of the fallen, a spark remembers the sky.'), attack: 2, health: 2, reflect: 2 },
 ];
 
 /**

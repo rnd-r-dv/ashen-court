@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Game } from '../src/engine/game.js';
-import type { Intent } from '../src/types.js';
-import { makeTestSetup } from './helpers.js';
+import type { GameEvent, Intent } from '../src/types.js';
+import { makeTestSetup, addCreature } from './helpers.js';
 
 describe('serialization', () => {
   it('clone() produces an equal state', () => {
@@ -105,5 +105,37 @@ describe('serialization', () => {
     expect(a.state.phase).toBe('mulligan');
     b.submit({ kind: 'mulligan', keep: [] });   // must be player 1, not player 0 again
     expect(b.state.phase).toBe('main');
+  });
+  // Task 1: Reflect rides live CreatureState like Attack/Health, so it must
+  // survive the lossless state surface (serialize/deserialize AND clone).
+  it('live creature Reflect survives serialize/deserialize and clone', () => {
+    const a = Game.create(makeTestSetup());
+    a.state.phase = 'main';
+    const c = addCreature(a, 0, { id: 't-a', attack: 2, health: 3, reflect: 4, exhausted: false });
+    expect(c.reflect).toBe(4);
+    const b = Game.deserialize(a.serialize(), a.registry);
+    expect(b.state.players[0].board[0]!.reflect).toBe(4);
+    expect(a.clone().state.players[0].board[0]!.reflect).toBe(4);
+  });
+  it('a legacy creature state without reflect reflects nothing, never undefined damage', () => {
+    const a = Game.create(makeTestSetup());
+    a.state.phase = 'main';
+    const attacker = addCreature(a, 0, { id: 't-a', attack: 3, health: 5, exhausted: false, reflect: 3 });
+    addCreature(a, 1, { id: 't-b', attack: 1, health: 6, reflect: 4 });
+    // Simulate a save written before the field existed: strip every creature's
+    // reflect from the JSON, exactly as plain JSON round-trips of old states do.
+    const legacy = a.serialize().replace(/"reflect":\d+,/g, '');
+    const old = Game.deserialize(legacy, a.registry);
+    const atk = old.state.players[0].board[0]!;
+    const def = old.state.players[1].board[0]!;
+    const evts = old.submit({ kind: 'attack', attackerId: atk.id, target: { type: 'creature', id: def.id } });
+    // every emitted damage amount is a defined number — no undefined/NaN
+    // counter-damage may leak from the malformed state
+    const dmg = evts.filter((e): e is Extract<GameEvent, { type: 'damageDealt' }> => e.type === 'damageDealt');
+    expect(dmg.length).toBeGreaterThan(0);
+    expect(dmg.every(e => Number.isFinite(e.amount))).toBe(true);
+    // the legacy defender reflected nothing (its missing field), the attacker took its 3 in
+    expect(atk.health).toBe(5);
+    expect(def.health).toBe(3);
   });
 });

@@ -245,15 +245,21 @@ export class Game implements Resolver {
         // `defender.health > 0`, which made a clean kill free and diverged from
         // every mainstream TCG. Capturing first also makes the second call safe:
         // the defender may already be off the board (dispatch(creatureDied)
-        // removes it during the first drain), so re-reading defender.attack
+        // removes it during the first drain), so re-reading the defender
         // afterwards would read a removed creature.
+        // Task 1: the two sides use DIFFERENT stats — the initiating damage is
+        // the attacker's Attack, the counter-damage is the DEFENDER's Reflect
+        // (its own Attack is irrelevant to being hit). Both are captured from
+        // the pre-combat snapshot. `?? 0` closes the legacy gap: a state saved
+        // before Reflect existed deserializes without the field, and that must
+        // never leak an undefined counter-damage amount into dealDamage.
         // Task 8: one log-only combat cue naming BOTH combatants, emitted after
         // legality/attack-count/reveal updates and before either dealDamage —
         // triggers, deaths, and events resolving between the two damage events
         // cannot split the visual strike. No state mutation, no RNG draw.
         this.emit({ type: 'combatStarted', attackerId: attacker.id, defenderId: defender.id });
         const attackerPower = attacker.attack;
-        const defenderPower = defender.attack;
+        const defenderPower = defender.reflect ?? 0;
         this.dealDamage(attacker, defender, attackerPower);
         // Source stays the DEFENDER so retaliation lifesteal heals the
         // defender's controller (EffectCtx.player = source.owner).

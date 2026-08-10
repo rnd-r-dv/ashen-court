@@ -29,6 +29,7 @@ const validCard = (over: Partial<Card> = {}): Card => ({
   cost: 1,
   attack: 1,
   health: 1,
+  reflect: 1,
   keywords: [],
   effects: [],
   rarity: 'common',
@@ -70,6 +71,27 @@ describe('JSON import/export round-trip', () => {
     ];
     const json = exportCardsJson(cards);
     expect(importCardsJson(json)).toEqual(cards);
+  });
+
+  // Task 1 compatibility bridge: exports/imports written before the Reflect
+  // contract existed carry creatures with no `reflect`. Import normalizes them
+  // deterministically to Reflect = Attack (ids and `version` untouched) so
+  // they pass core validation and fight with mirror-stat parity. Task 3
+  // replaces this bridge with an explicit Forge input + schemaVersion migration.
+  it('normalizes legacy imports missing Reflect to Reflect = Attack (Task 1 bridge)', () => {
+    const legacy = validCard({ id: 'legacy-import-001', name: 'Old Import', version: 5 });
+    delete legacy.reflect;   // shape as exported before the field existed
+    const [imported] = importCardsJson(JSON.stringify([legacy]));
+    expect(imported!.reflect).toBe(1);      // attack of the legacy 1/1
+    expect(imported!.id).toBe('legacy-import-001'); // identity preserved
+    expect(imported!.version).toBe(5);      // revision value preserved
+  });
+
+  it('does NOT silently repair a schemaVersion-2 creature missing Reflect (Task 3 owns the gate)', () => {
+    const schema2 = validCard({ id: 'schema2-import', schemaVersion: 2 });
+    delete schema2.reflect;
+    // a 2-stamped card is authored, not legacy — the import gate must reject it
+    expect(() => importCardsJson(JSON.stringify([schema2]))).toThrow(/reflect >= 0/);
   });
 
   it('import rejects invalid JSON', () => {

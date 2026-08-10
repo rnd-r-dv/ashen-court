@@ -91,8 +91,20 @@ export function effectText(effect: EffectSpec): string {
     case 'draw':
       return `Draw ${v === 1 ? 'a card' : `${v} cards`}.`;
     case 'buff': {
-      const v2 = effect.value2 ?? effect.value ?? 0;
-      return `Give ${target(effect.target)} ${signed(v)}/${signed(v2)}.`;
+      // Task 1: buffs may modify Attack, Reflect, and Health independently
+      // (value/value2/value3 = Attack/Health/Reflect deltas; value2 defaults
+      // to value for serialized compatibility). Only non-zero deltas are
+      // named, in the visible order Attack, Reflect, Health. A buff that
+      // changes nothing produces no text — such a spec is invalid authoring.
+      const atk = effect.value ?? 0;
+      const hp = effect.value2 ?? atk;
+      const refl = effect.value3 ?? 0;
+      const parts: string[] = [];
+      if (atk !== 0) parts.push(`${signed(atk)} Attack`);
+      if (refl !== 0) parts.push(`${signed(refl)} Reflect`);
+      if (hp !== 0) parts.push(`${signed(hp)} Health`);
+      if (parts.length === 0) return '';
+      return `Give ${target(effect.target)} ${parts.join(' and ')}.`;
     }
     case 'summon': {
       const n = effect.value ?? 1;

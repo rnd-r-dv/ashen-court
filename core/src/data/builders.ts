@@ -53,18 +53,21 @@ export function archetypeCards(preset: string, palette: string[], archetype: str
     art,
     creature: (id, name, cost, attack, health, rarity, keywords = [], triggers = [], flavor) => ({
       id, name, type: 'creature', cost, attack, health,
+      // Task 1 transitional: Reflect mirrors Attack until the Identity Gate
+      // stabilizes card roles and Task 2 hand-authors explicit values.
+      reflect: attack,
       keywords, triggers, effects: [], rarity, archetype,
-      art: art(id), author: 'curated', version: 1, flavor,
+      art: art(id), author: 'curated', version: 1, schemaVersion: 2, flavor,
     }),
     spell: (id, name, cost, rarity, effects, flavor) => ({
       id, name, type: 'spell', cost,
       keywords: [], effects, rarity, archetype,
-      art: art(id), author: 'curated', version: 1, flavor,
+      art: art(id), author: 'curated', version: 1, schemaVersion: 2, flavor,
     }),
     artifact: (id, name, cost, rarity, triggers, flavor) => ({
       id, name, type: 'artifact', cost,
       keywords: [], effects: [], triggers, rarity, archetype,
-      art: art(id), author: 'curated', version: 1, flavor,
+      art: art(id), author: 'curated', version: 1, schemaVersion: 2, flavor,
     }),
   };
 }

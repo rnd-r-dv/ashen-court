@@ -15,6 +15,7 @@ const syntheticCard = (id: string, cost: number): Card => ({
   cost,
   attack: 1,
   health: 1,
+  reflect: 1,
   keywords: [],
   effects: [],
   rarity: 'common',

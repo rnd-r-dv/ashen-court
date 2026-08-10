@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { validateCard, validateDeck, RARITY_COPY_LIMIT, statBudget, STAT_BUDGET_SLACK } from '../src/validate.js';
 import type { Card } from '../src/types.js';
 
+// Task 1: creatures also carry an independent Reflect counter-damage stat;
+// base defaults it to match attack (the transitional curated convention).
 const base = (over: Partial<Card> = {}): Card => ({
-  id: 'test-001', name: 'Test', type: 'creature', cost: 3, attack: 3, health: 3,
+  id: 'test-001', name: 'Test', type: 'creature', cost: 3, attack: 3, health: 3, reflect: 3,
   keywords: [], rarity: 'common', archetype: 'neutral', author: 'curated', version: 1,
   art: { preset: 'shadow', palette: ['#111', '#333'], seed: 1 }, effects: [], ...over,
 });
@@ -33,17 +35,17 @@ describe('validateCard', () => {
     expect(validateCard(underCeiling).filter(i => i.field === 'stats')).toEqual([]);
   });
   it('reports the overage against the enforced ceiling, not the baseline (I10)', () => {
-    // spent 13, budget 8, ceiling 12 → real overage is 1, not 5.
-    const issue = validateCard(base({ cost: 3, attack: 7, health: 6 })).find(i => i.field === 'stats');
+    // spent 13 (weighted: 6 + (7+7)/2), budget 8, ceiling 12 → real overage is 1, not 5.
+    const issue = validateCard(base({ cost: 3, attack: 7, health: 6, reflect: 7 })).find(i => i.field === 'stats');
     expect(issue).toBeDefined();
     expect(issue!.message).toContain('13');   // what the card spends
     expect(issue!.message).toContain('12');   // the ceiling actually enforced
     expect(issue!.message).not.toMatch(/exceed\w*\s+by\s+5\b/);
   });
   it('counts keyword cost toward the ceiling (I10)', () => {
-    // cost 3 → baseline 8, ceiling 12. 5/5 + charge(2) = 12 → legal; +taunt(1) = 13 → error.
-    expect(validateCard(base({ cost: 3, attack: 5, health: 5, keywords: ['charge'] })).filter(i => i.field === 'stats')).toEqual([]);
-    expect(validateCard(base({ cost: 3, attack: 5, health: 5, keywords: ['charge', 'taunt'] })).some(i => i.field === 'stats')).toBe(true);
+    // cost 3 → baseline 8, ceiling 12. 5/5/5 + charge(2) = 5+5+2 = 12 → legal; +taunt(1) = 13 → error.
+    expect(validateCard(base({ cost: 3, attack: 5, health: 5, reflect: 5, keywords: ['charge'] })).filter(i => i.field === 'stats')).toEqual([]);
+    expect(validateCard(base({ cost: 3, attack: 5, health: 5, reflect: 5, keywords: ['charge', 'taunt'] })).some(i => i.field === 'stats')).toBe(true);
   });
   it('rejects single-target effects without a target', () => {
     expect(validateCard(base({ type: 'spell', effects: [{ kind: 'dealDamage', value: 1 }] })).some(i => i.severity === 'error')).toBe(true);

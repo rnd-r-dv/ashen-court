@@ -1,15 +1,15 @@
 import type {
-  ArtRecipe,
-  Card,
-  CardType,
-  EffectSpec,
-  Keyword,
-  Rarity,
-  Trigger,
-  ValidationIssue,
-} from '@ashen/core';
-import { buildPool, KEYWORD_COST, validateCard } from '@ashen/core';
-import { loadCustomCards } from '../storage.js';
+	ArtRecipe,
+	Card,
+	CardType,
+	EffectSpec,
+	Keyword,
+	Rarity,
+	Trigger,
+	ValidationIssue,
+} from "@ashen/core";
+import { buildPool, KEYWORD_COST, validateCard } from "@ashen/core";
+import { loadCustomCards } from "../storage.js";
 
 /**
  * Forge form state (Task 24). The draft keeps numeric fields as strings while
@@ -18,75 +18,89 @@ import { loadCustomCards } from '../storage.js';
  * pool-reference rule (summon/copyCard cardIds must exist in the pool).
  */
 export interface ForgeDraft {
-  id: string; name: string; type: CardType; cost: number;
-  attack: string; health: string;                    // strings while editing (empty = invalid)
-  keywords: Keyword[]; trigger: Trigger | ''; effects: EffectSpec[];
-  // single-trigger form: draftToCard maps `trigger` + `effects` → `triggers: [{ when, effects }]`
-  // for creatures/artifacts; spells keep `effects` as cast effects and get no triggers.
-  rarity: Rarity; art: ArtRecipe; flavor: string; uploadImage?: string;
+	id: string;
+	name: string;
+	type: CardType;
+	cost: number;
+	attack: string;
+	health: string; // strings while editing (empty = invalid)
+	keywords: Keyword[];
+	trigger: Trigger | "";
+	effects: EffectSpec[];
+	// single-trigger form: draftToCard maps `trigger` + `effects` → `triggers: [{ when, effects }]`
+	// for creatures/artifacts; spells keep `effects` as cast effects and get no triggers.
+	rarity: Rarity;
+	art: ArtRecipe;
+	flavor: string;
+	uploadImage?: string;
 }
 
 export function createDraft(): ForgeDraft {
-  return {
-    id: '',                                        // derived at save time (slug of name)
-    name: '',
-    type: 'creature',
-    cost: 2,
-    attack: '',
-    health: '',
-    keywords: [],
-    trigger: '',
-    effects: [],
-    rarity: 'common',
-    art: { preset: 'arcane', palette: ['#241b4f', '#7b5cff'], glyph: '', seed: Math.floor(Math.random() * 2 ** 32) },
-    flavor: '',
-  };
+	return {
+		id: "", // derived at save time (slug of name)
+		name: "",
+		type: "creature",
+		cost: 2,
+		attack: "",
+		health: "",
+		keywords: [],
+		trigger: "",
+		effects: [],
+		rarity: "common",
+		art: {
+			preset: "arcane",
+			palette: ["#241b4f", "#7b5cff"],
+			glyph: "",
+			seed: Math.floor(Math.random() * 2 ** 32),
+		},
+		flavor: "",
+	};
 }
 
 /** Lowercase; runs of non-alphanumerics → '-'; dashes trimmed at both ends. Empty → 'untitled'. */
 function slugify(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug || 'untitled';
+	const slug = name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	return slug || "untitled";
 }
 
 /** NaN/invalid → 0 (validateCard then flags empty health; attack 0 is legal). */
 function toStat(raw: string): number {
-  const n = Number(raw);
-  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+	const n = Number(raw);
+	return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
 }
 
 export function draftToCard(d: ForgeDraft): Card {
-  const isSpell = d.type === 'spell';
-  const card: Card = {
-    id: slugify(d.name),
-    name: d.name.trim(),
-    type: d.type,
-    cost: d.cost,
-    keywords: d.keywords,
-    effects: isSpell ? d.effects : [],              // creatures/artifacts use triggers only
-    rarity: d.rarity,
-    archetype: 'neutral',                           // custom cards are unaffiliated
-    art: { ...d.art, ...(d.uploadImage ? { imageUrl: d.uploadImage } : {}) },
-    flavor: d.flavor.trim() || undefined,
-    author: 'custom',
-    version: Date.now(),
-  };
-  if (d.type === 'creature') {
-    card.attack = toStat(d.attack);
-    card.health = toStat(d.health);
-    // Task 1 compatibility bridge (temporary): Forge has no Reflect field
-    // yet, so a created creature mirrors its Attack (the core contract
-    // requires reflect >= 0 on every creature). Task 3 adds the explicit
-    // Forge Reflect input and replaces this default.
-    card.reflect = toStat(d.attack);
-  }
-  if (!isSpell && d.trigger) {
-    card.triggers = [{ when: d.trigger, effects: d.effects }];
-  }
-  return card;
+	const isSpell = d.type === "spell";
+	const card: Card = {
+		id: slugify(d.name),
+		name: d.name.trim(),
+		type: d.type,
+		cost: d.cost,
+		keywords: d.keywords,
+		effects: isSpell ? d.effects : [], // creatures/artifacts use triggers only
+		rarity: d.rarity,
+		archetype: "neutral", // custom cards are unaffiliated
+		art: { ...d.art, ...(d.uploadImage ? { imageUrl: d.uploadImage } : {}) },
+		flavor: d.flavor.trim() || undefined,
+		author: "custom",
+		version: Date.now(),
+	};
+	if (d.type === "creature") {
+		card.attack = toStat(d.attack);
+		card.health = toStat(d.health);
+		// Task 1 compatibility bridge (temporary): Forge has no Reflect field
+		// yet, so a created creature mirrors its Attack (the core contract
+		// requires reflect >= 0 on every creature). Task 3 adds the explicit
+		// Forge Reflect input and replaces this default.
+		card.reflect = toStat(d.attack);
+	}
+	if (!isSpell && d.trigger) {
+		card.triggers = [{ when: d.trigger, effects: d.effects }];
+	}
+	return card;
 }
 
 /**
@@ -101,10 +115,14 @@ export function draftToCard(d: ForgeDraft): Card {
  * existing `version` values are preserved untouched.
  */
 export function normalizeLegacyReflect(card: Card): Card {
-  if (card.type === 'creature' && card.reflect === undefined && card.schemaVersion !== 2) {
-    return { ...card, reflect: card.attack ?? 0 };
-  }
-  return card;
+	if (
+		card.type === "creature" &&
+		card.reflect === undefined &&
+		card.schemaVersion !== 2
+	) {
+		return { ...card, reflect: card.attack ?? 0 };
+	}
+	return card;
 }
 
 /**
@@ -116,15 +134,29 @@ export function normalizeLegacyReflect(card: Card): Card {
  * fine but crash the engine at resolution (core/src/engine/effects.ts throws
  * 'Unknown card id'), so both entry points must enforce it.
  */
-export function poolRuleIssues(card: Card, pool: ReadonlyMap<string, Card>): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  const allEffects = [...card.effects, ...(card.triggers ?? []).flatMap((t) => t.effects)];
-  for (const e of allEffects) {
-    if ((e.kind === 'summon' || e.kind === 'copyCard') && e.cardId && !pool.has(e.cardId)) {
-      issues.push({ field: 'effect', message: `Unknown card reference: ${e.cardId}`, severity: 'error' });
-    }
-  }
-  return issues;
+export function poolRuleIssues(
+	card: Card,
+	pool: ReadonlyMap<string, Card>,
+): ValidationIssue[] {
+	const issues: ValidationIssue[] = [];
+	const allEffects = [
+		...card.effects,
+		...(card.triggers ?? []).flatMap((t) => t.effects),
+	];
+	for (const e of allEffects) {
+		if (
+			(e.kind === "summon" || e.kind === "copyCard") &&
+			e.cardId &&
+			!pool.has(e.cardId)
+		) {
+			issues.push({
+				field: "effect",
+				message: `Unknown card reference: ${e.cardId}`,
+				severity: "error",
+			});
+		}
+	}
+	return issues;
 }
 
 /**
@@ -133,51 +165,104 @@ export function poolRuleIssues(card: Card, pool: ReadonlyMap<string, Card>): Val
  * draftToCard drops those effects on save, a silent data-loss trap).
  */
 export function draftIssues(d: ForgeDraft): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  if (d.type === 'creature') {
-    if (!d.attack.trim()) issues.push({ field: 'attack', message: 'Attack is required.', severity: 'error' });
-    if (!d.health.trim()) issues.push({ field: 'health', message: 'Health is required.', severity: 'error' });
-  }
-  if (d.type !== 'spell' && d.trigger === '' && d.effects.length > 0) {
-    issues.push({
-      field: 'effect',
-      message: 'Effects will be dropped: add a trigger or make it a spell.',
-      severity: 'warning',
-    });
-  }
-  const card = draftToCard(d);
-  issues.push(...validateCard(card));
+	const issues: ValidationIssue[] = [];
+	if (d.type === "creature") {
+		if (!d.attack.trim())
+			issues.push({
+				field: "attack",
+				message: "Attack is required.",
+				severity: "error",
+			});
+		if (!d.health.trim())
+			issues.push({
+				field: "health",
+				message: "Health is required.",
+				severity: "error",
+			});
+	}
+	if (d.type !== "spell" && d.trigger === "" && d.effects.length > 0) {
+		issues.push({
+			field: "effect",
+			message: "Effects will be dropped: add a trigger or make it a spell.",
+			severity: "warning",
+		});
+	}
+	const card = draftToCard(d);
+	issues.push(...validateCard(card));
 
-  const pool = new Map<string, Card>();
-  for (const c of [...buildPool(), ...loadCustomCards()]) {
-    if (!pool.has(c.id)) pool.set(c.id, c);
-  }
-  issues.push(...poolRuleIssues(card, pool));
-  return issues;
+	const pool = new Map<string, Card>();
+	for (const c of [...buildPool(), ...loadCustomCards()]) {
+		if (!pool.has(c.id)) pool.set(c.id, c);
+	}
+	issues.push(...poolRuleIssues(card, pool));
+	return issues;
 }
 
 /** Curated effect presets for the Forge's effect builder (Task 25). */
 export const EFFECT_PRESETS: { label: string; spec: EffectSpec }[] = [
-  { label: 'Deal 2 to any creature', spec: { kind: 'dealDamage', value: 2, target: 'anyCreature' } },
-  { label: 'Deal 3 to an enemy creature', spec: { kind: 'dealDamage', value: 3, target: 'enemyCreature' } },
-  { label: 'Heal 4 to your hero', spec: { kind: 'heal', value: 4, target: 'hero' } },
-  { label: 'Draw 2 cards', spec: { kind: 'draw', value: 2 } },
-  { label: '+2/+2 to a friendly creature', spec: { kind: 'buff', value: 2, value2: 2, target: 'friendlyCreature' } },
-  { label: 'Summon 1 Giant Rat', spec: { kind: 'summon', value: 1, cardId: 'token-rat' } },
-  { label: 'Destroy an enemy creature', spec: { kind: 'destroy', target: 'enemyCreature' } },
-  { label: 'Consume 1 friendly token', spec: { kind: 'consume', value: 1 } },
-  { label: 'Silence a creature', spec: { kind: 'silence', target: 'anyCreature' } },
-  { label: "Return a creature to its owner's hand", spec: { kind: 'returnToHand', target: 'anyCreature' } },
-  { label: 'Freeze a creature', spec: { kind: 'freeze', target: 'anyCreature' } },
-  { label: 'Give a friendly creature Shield', spec: { kind: 'giveKeyword', keyword: 'shield', target: 'friendlyCreature' } },
-  { label: 'Give a friendly creature Spell Power +1', spec: { kind: 'spellPower', value: 1, target: 'friendlyCreature' } },
-  { label: 'Overload 1', spec: { kind: 'overload', value: 1 } },
-  { label: 'Next spell costs 1 less', spec: { kind: 'discountNextSpell', value: 1 } },
-  { label: 'Gain 2 empty mana crystals', spec: { kind: 'gainMana', value: 2 } },
-  { label: 'Refill 2 Mana', spec: { kind: 'refillMana', value: 2 } },
-  { label: 'Copy a random enemy creature card', spec: { kind: 'copyCard' } },
-  { label: 'Your most expensive creature costs 2 less', spec: { kind: 'discountMostExpensive', value: 2 } },
-  { label: 'Discover a card', spec: { kind: 'discover' } },
+	{
+		label: "Deal 2 to any creature",
+		spec: { kind: "dealDamage", value: 2, target: "anyCreature" },
+	},
+	{
+		label: "Deal 3 to an enemy creature",
+		spec: { kind: "dealDamage", value: 3, target: "enemyCreature" },
+	},
+	{
+		label: "Heal 4 to your hero",
+		spec: { kind: "heal", value: 4, target: "hero" },
+	},
+	{ label: "Draw 2 cards", spec: { kind: "draw", value: 2 } },
+	{
+		label: "+2/+2 to a friendly creature",
+		spec: { kind: "buff", value: 2, value2: 2, target: "friendlyCreature" },
+	},
+	{
+		label: "Summon 1 Giant Rat",
+		spec: { kind: "summon", value: 1, cardId: "token-rat" },
+	},
+	{
+		label: "Destroy an enemy creature",
+		spec: { kind: "destroy", target: "enemyCreature" },
+	},
+	{ label: "Consume 1 friendly token", spec: { kind: "consume", value: 1 } },
+	{
+		label: "Silence a creature",
+		spec: { kind: "silence", target: "anyCreature" },
+	},
+	{
+		label: "Return a creature to its owner's hand",
+		spec: { kind: "returnToHand", target: "anyCreature" },
+	},
+	{
+		label: "Freeze a creature",
+		spec: { kind: "freeze", target: "anyCreature" },
+	},
+	{
+		label: "Give a friendly creature Shield",
+		spec: {
+			kind: "giveKeyword",
+			keyword: "shield",
+			target: "friendlyCreature",
+		},
+	},
+	{
+		label: "Give a friendly creature Spell Power +1",
+		spec: { kind: "spellPower", value: 1, target: "friendlyCreature" },
+	},
+	{ label: "Overload 1", spec: { kind: "overload", value: 1 } },
+	{
+		label: "Next spell costs 1 less",
+		spec: { kind: "discountNextSpell", value: 1 },
+	},
+	{ label: "Gain 2 empty mana crystals", spec: { kind: "gainMana", value: 2 } },
+	{ label: "Refill 2 Mana", spec: { kind: "refillMana", value: 2 } },
+	{ label: "Copy a random enemy creature card", spec: { kind: "copyCard" } },
+	{
+		label: "Your most expensive creature costs 2 less",
+		spec: { kind: "discountMostExpensive", value: 2 },
+	},
+	{ label: "Discover a card", spec: { kind: "discover" } },
 ];
 
 /**

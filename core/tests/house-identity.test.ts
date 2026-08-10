@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
-import { buildPool, DECK_DEFS, expandDeck, EMBER_COURT_HERO } from '../src/data/index.js';
+import { buildPool, DECK_DEFS, expandDeck, EMBER_COURT_HERO, BONE_HORDE_HERO, VERMIN_SWARM_HERO } from '../src/data/index.js';
 import type { ArchetypeId } from '../src/data/index.js';
+import { requiredConsumeTokens } from '../src/engine/intents.js';
 import type { Card } from '../src/types.js';
 import { validateCard, statBudget, KEYWORD_COST } from '../src/validate.js';
 
@@ -167,5 +168,51 @@ describe('bone horde identity', () => {
     ]);
     // no Consume, no overload: Bone charges no toll
     expect(legion.effects.some(s => s.kind === 'consume' || s.kind === 'overload')).toBe(false);
+  });
+});
+
+describe('vermin swarm identity', () => {
+  const house = byHouse('vermin');
+  it('charges Fodder (consume) on at least 4 cards across at least 2 rarities (spec test 2)', () => {
+    const tolls = house.filter(c => requiredConsumeTokens(c) > 0);
+    expect(tolls.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(tolls.map(c => c.rarity)).size).toBeGreaterThanOrEqual(2);
+  });
+  it('places every immediate Consume before its payoff (spec test 8)', () => {
+    for (const c of house) {
+      if (requiredConsumeTokens(c) === 0) continue;   // trigger-only Consume is exempt
+      const immediate = [...c.effects, ...(c.triggers ?? []).flatMap(t => (t.when === 'battlecry' ? t.effects : []))];
+      let seenPayoff = false;
+      for (const s of immediate) {
+        if (s.kind !== 'consume') seenPayoff = true;
+        else expect(seenPayoff, `${c.id}: Consume after payoff`).toBe(false);
+      }
+    }
+  });
+  it('keeps the hero power free of Consume (spec test 9)', () => {
+    for (const hero of [EMBER_COURT_HERO, BONE_HORDE_HERO, VERMIN_SWARM_HERO]) {
+      expect(hero.power.effects.some(s => s.kind === 'consume'), hero.name).toBe(false);
+    }
+  });
+  it('keeps individual bodies weak: no creature exceeds its vanilla budget (weakness)', () => {
+    const over: string[] = [];
+    for (const c of house) {
+      if (c.type !== 'creature') continue;
+      if (weightedSpend(c) > statBudget(c.cost)) over.push(`${c.id} (${weightedSpend(c)} vs ${statBudget(c.cost)})`);
+    }
+    expect(over, over.join(', ')).toEqual([]);
+  });
+});
+
+describe('cross-house separation', () => {
+  it('keeps the curve ordering: cheap-aggressive < cheap < midrange', () => {
+    const ember = meanCost('ember');
+    const vermin = meanCost('vermin');
+    const bone = meanCost('bone');
+    expect(ember).toBeLessThanOrEqual(4.5);
+    expect(vermin).toBeLessThanOrEqual(4.5);
+    expect(bone).toBeGreaterThanOrEqual(4.5);
+    expect(ember).toBeLessThan(vermin);
+    expect(vermin).toBeLessThan(bone);
   });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Game } from '../src/engine/game.js';
 import { makeTestSetup, addCreature } from './helpers.js';
 import { applyEffect } from '../src/engine/effects.js';
+import { buildPool } from '../src/data/index.js';
 import { immediateConsumeAffordability, requiredConsumeTokens, validatePlayCard } from '../src/engine/intents.js';
 import type { Card, EffectSpec, Intent, PlayerIndex } from '../src/types.js';
 
@@ -166,6 +167,30 @@ describe('determinism', () => {
     expect(() => a.submit(play)).not.toThrow();
     b.submit(play);
     // identical seeds + identical accepted intents -> byte-identical state
+    expect(a.serialize()).toBe(b.serialize());
+  });
+});
+
+describe('curated Vermin Toll determinism', () => {
+  it('rejects unfunded Nibble, then replays the same accepted intent byte-identically when funded', () => {
+    const nibble = buildPool().find(c => c.id === 'vermin-nibble')!;
+
+    const rejected = setup(['vermin-nibble'], 0);
+    rejected.registry.register(nibble);
+    addCreature(rejected, 1, { id: 'nibble-target', attack: 2, health: 2 });
+    expect(rejected.legalIntents(0).some(i => i.kind === 'playCard' && i.handIndex === 0)).toBe(false);
+
+    const a = setup(['vermin-nibble'], 1);
+    a.registry.register(nibble);
+    const victim = addCreature(a, 1, { id: 'nibble-target', attack: 2, health: 2 });
+    const b = Game.deserialize(a.serialize(), a.registry);
+    const intent = a.legalIntents(0).find(i =>
+      i.kind === 'playCard' && i.handIndex === 0
+      && i.target?.type === 'creature' && i.target.id === victim.id
+    );
+    expect(intent).toBeDefined();
+    expect(b.legalIntents(0)).toContainEqual(intent);
+    expect(a.submit(intent!)).toEqual(b.submit(intent!));
     expect(a.serialize()).toBe(b.serialize());
   });
 });

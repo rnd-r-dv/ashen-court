@@ -1,11 +1,7 @@
-import type { Card, EffectSpec, HeroSpec } from '../types.js';
+import type { Card, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
-import { archetypeCards, buff, dmg, summon } from './builders.js';
+import { archetypeCards, buff, consume, dmg, summon } from './builders.js';
 
-/** Token-eater (vermin identity): the oldest friendly tokens die (deathrattles
- *  fire) — the payoff on a consume card is board space plus whatever the
- *  companion effect grants. */
-const consume = (value: number): EffectSpec => ({ kind: 'consume', value });
 
 /**
  * Vermin Swarm (Task 14): Rat King Moulder's token flood deck. Signature
@@ -25,18 +21,18 @@ export const HERO: HeroSpec = {
 export const CARDS: Card[] = [
   // Commons (11)
   creature('vermin-squeaker', 'Squeaker', 1, 1, 1, 'common', ['venom'], [], 'The first rat through the wall is always the smallest. It is also the only one you ever see.'),
-  spell('vermin-nibble', 'Nibble', 1, 'common', [dmg(1, 'anyCreature')], 'One nibble means nothing. That is precisely what the swarm is counting on.'),
+  spell('vermin-nibble', 'Nibble', 1, 'common', [consume(1), dmg(2, 'anyCreature')], 'One nibble means nothing. That is precisely what the swarm is counting on.'),
   creature('vermin-scavenger', 'Scavenger', 1, 2, 1, 'common', [], [{ when: 'deathrattle', effects: [summon('token-rat')] }], 'The battlefield belongs to the dead — and the dead belong to the scavengers.'),
   spell('vermin-packcall', 'Pack Call', 2, 'common', [summon('token-rat', 2)], 'One cry in the dark, and the shadows answer two at a time.'),
   creature('vermin-brute', 'Mangy Brute', 2, 3, 2, 'common', [], [{ when: 'battlecry', effects: [summon('token-rat')] }], 'Rats the size of hounds, with the patience of graves and the appetite of famine.'),
   creature('vermin-swarmlord', 'Swarmlord', 3, 2, 4, 'common', [], [{ when: 'battlecry', effects: [consume(2), buff(1, 1, 'allFriendlyCreatures')] }], 'It does not lead from the front. It leads by being everywhere at once.'),
-  spell('vermin-frenzy', 'Frenzy', 3, 'common', [{ kind: 'buff', value: 2, value2: 0, target: 'allFriendlyCreatures' }], 'Hunger is the only war horn the swarm has ever needed.'),
+  spell('vermin-frenzy', 'Frenzy', 3, 'common', [consume(2), { kind: 'buff', value: 2, value2: 0, target: 'allFriendlyCreatures' }], 'Hunger is the only war horn the swarm has ever needed.'),
   creature('vermin-gnawer', 'Gnawer', 3, 3, 3, 'common', ['venom'], [], 'Bone, timber, iron, faith — given time, the gnawers wear through all of it.'),
   spell('vermin-army', 'Vermin Army', 4, 'common', [summon('token-rat', 3)], 'They do not march in columns. They march in everything.'),
   creature('vermin-warband', 'Warband', 4, 5, 4, 'common', ['rush'], [], 'A hundred throats share one hunger, and the hunger decides where they go.'),
   spell('vermin-pestilence', 'Pestilence', 5, 'common', [dmg(2, 'allEnemyCreatures')], 'The plague does not announce itself. It arrives, and the city begins counting its dead.'),
   // Rares (5)
-  creature('vermin-alpha', 'Alpha Rat', 4, 3, 3, 'rare', [], [{ when: 'battlecry', effects: [{ kind: 'buff', value: 1, value2: 1, target: 'allFriendlyCreatures' }] }], 'Where the alpha walks, the pack grows bolder — and larger.'),
+  creature('vermin-alpha', 'Alpha Rat', 4, 3, 3, 'rare', [], [{ when: 'battlecry', effects: [consume(1), { kind: 'buff', value: 1, value2: 2, target: 'allFriendlyCreatures' }] }], 'Where the alpha walks, the pack grows bolder — and larger.'),
   creature('vermin-breeder', 'Breeder', 5, 3, 4, 'rare', [], [{ when: 'endOfTurn', effects: [summon('token-rat')] }], 'Moulder does not raise an army. He keeps one mother, and she does the rest.'),
   creature('vermin-plaguemaster', 'Plaguemaster', 5, 3, 5, 'rare', [], [{ when: 'deathrattle', effects: [summon('token-rat', 2)] }], 'Even in death the master of plagues pays his debts to the swarm — in kind.'),
   spell('vermin-tide', 'The Tide of Teeth', 6, 'rare', [summon('token-rat', 4)], 'First the tide rises. Then the screaming begins.'),

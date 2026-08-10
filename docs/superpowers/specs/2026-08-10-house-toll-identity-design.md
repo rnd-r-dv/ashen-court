@@ -1,16 +1,16 @@
-# House Toll — Archetype Identity Design
+# House Identity Contract and Toll Technique — Design Draft
 
 **Date:** 2026-08-10
-**Status:** **ROUGH DRAFT / CONCEPT. Not approved. Do not plan or implement from this.**
-**Revised 2026-08-10 after review — see "Review outcome" below. The Toll is no longer the spine.**
+**Status:** **ROUGH DRAFT / CONCEPT. Not approved. Do not implement from this document.**
+**Revised 2026-08-10 after two reviews.** The Toll is one technique inside the broader identity contract, option (a1) is the narrow legality mechanism, and `consume` stays with `vermin-swarm`.
 
-Captured to preserve the reasoning and the measurements, not to authorise work. **The Problem section is the durable part** — it is counted from the tree and holds regardless of which solution wins. Everything after it is a candidate answer that has not been play-tested or costed.
+Captured to preserve the reasoning and measurements, not to authorise work. **The Problem section is durable**: it is counted from the tree and holds regardless of which solution wins. Everything after it remains a candidate answer until the three-house contract is explicitly approved and play-tested.
 
-Review found two breaking defects, both verified and both now folded in: `consume` cannot serve as a price (so Bone Toll does not exist), and five houses paying no toll is an absence rather than a design. The Toll survives as *one technique* inside a five-element identity contract.
+The reviews found three defects and this revision folds all three in: shipped `consume` silently underpays, five no-toll houses do not form an identity system, and assigning Consume to `bone-horde` contradicted the existing `vermin-swarmlord`. The chosen response is a pre-play affordability gate for immediate Consume costs, a five-element identity contract, and preservation of Consume as Vermin's resource relationship.
 
-**Blocking before this can become a plan:** ~~the (a)/(b) decision~~ **decided 2026-08-10 — option (a1), the legality gate; narrow engine changes permitted.** One item remains open: **which house owns `consume`.** The only shipped consume card is `vermin-swarm`'s, while this draft assigns the Bone toll to `bone-horde` and says vermin-swarm pays nothing. That is backwards relative to the code, and it concerns the exact pair the pilot exists to separate.
+**Blocking before this becomes executable:** approve the three-house contract and convert it into its own test-first implementation plan. The engine semantics below are decided; the card packages, costs, and play-test protocol are not.
 
-**Origin:** Extracted from Task 10 of `docs/superpowers/plans/2026-08-09-reflect-dynamic-combat.md`, which was too large and too under-specified to execute in place. **Task 10 stays where it is for now** — do not delete it on the strength of this draft.
+**Origin:** Extracted from the former Task 10 of `docs/superpowers/plans/2026-08-09-reflect-dynamic-combat.md`. That plan now carries only an ordering/dependency gate for this separate identity work; it must not duplicate or improvise the card redesign.
 
 ## Problem
 
@@ -34,17 +34,19 @@ The 12 archetypes do not feel distinct in play. This is measurable, not a matter
 
 ## Review outcome, 2026-08-10 — the Toll is demoted
 
-A review of this draft found two things that break it as written. Both verified against the tree.
+Review verified three defects against the tree.
 
-**1. Bone Toll is not a payable cost.** `consume` (`core/src/engine/effects.ts:188-196`) filters `p.board.filter(c => c.token)` — **tokens only**, oldest first, no player choice — and if the player has no tokens the loop simply does nothing. The payoff is a sibling effect in the same array, so it resolves regardless. A `[consume, payoff]` card **hands out the payoff without charging the price**. That contradicts both the "price-and-payoff" premise and the "no engine change" premise, since making it a real toll requires either a legality gate or a conditional effect — an engine change.
+**1. Consume is not currently a payable cost.** `consume` (`core/src/engine/effects.ts:188-196`) filters `p.board.filter(c => c.token)` — **tokens only**, oldest first, no player choice — and silently consumes fewer than requested when insufficient tokens exist. A sibling payoff still resolves. A `[consume, payoff]` card therefore needs the chosen pre-play affordability gate before Consume can function as a Toll.
 
-**2. Five houses paying no toll is not an identity system.** "Pays nothing" can distinguish *one* deliberately fair house. It cannot distinguish five. The draft asserted those houses would be defined by what they are denied, then never defined the denials.
+**2. Five houses paying no toll is not an identity system.** "Pays nothing" can distinguish one deliberately fair house, not five. A Toll can support identity but cannot replace a complete strategic contract.
 
-**Consequence: the Toll is demoted from spine to technique.** It is a good technique — it produces two-clause cards in tension, which is the property the pool lacks — but "every house has a Toll" was a forced universal law derived from a sample of one card.
+**3. Consume belongs to Vermin, not Bone.** The only shipped Consume card is `vermin-swarmlord`; moving the mechanic to `bone-horde` would discard the one existing identity signal while trying to make the two summon houses less alike.
+
+**Consequence: the Toll is demoted from spine to technique.** It produces useful two-clause cards in tension, but it is one possible resource relationship rather than a universal law.
 
 ### The replacement spine: a house identity contract
 
-Each house declares five things. A house is complete when all five are filled and no two houses match on more than two.
+Each house declares five things. Compare houses in a side-by-side matrix: no pair may share the same **signature verbs + resource relationship + payoff** combination, and each house must state a weakness that materially changes deck construction or play. This is a reviewable contract, not a numeric similarity score.
 
 | # | Element | Notes |
 |---|---|---|
@@ -66,42 +68,51 @@ A card that charges a toll is a **two-clause card in tension**: the player choos
 
 ### The four tolls
 
-All four use existing `EffectKind`s — **no new effect kind, no new `GameState` field, no serialization change.** Two of them additionally need the (a1) legality gate below to be real prices rather than optional ones.
+All four use existing `EffectKind`s — **no new effect kind, no new `GameState` field, no serialization change.** Only Consume needs the chosen (a1) affordability gate. Breath already uses the engine's ordinary choice-target legality.
 
 | Toll | Mechanic | Pays with | Status |
 |---|---|---|---|
-| **Ash** | `overload(n)` | Next turn's mana | **Usable.** `effects.ts:269`, zero cards today. Charged unconditionally at resolution — a real price. |
-| **Blood** | `dmg(n, 'self')` | Life | **Usable.** `effects.ts:322`, live on Blood Toll. Charged unconditionally — a real price. |
-| **Breath** | `returnToHand` on a friendly | Board position and tempo | **Usable once gated.** Fizzles with no friendly creature — same hole as Bone, smaller. Covered by the same (a1) gate. |
-| **Bone** | `consume` | Your own tokens | **Usable once gated.** Unusable as written — tokens only, oldest first, no player choice, silently pays nothing with no tokens, does not gate the payoff. **The (a1) legality gate fixes exactly this.** |
+| **Ash** | `overload(n)` | Next turn's mana | **Usable.** `effects.ts:269`, zero cards today. Charged unconditionally at resolution. |
+| **Blood** | `dmg(n, 'self')` | Life | **Usable.** `effects.ts:323`, live on Blood Toll. Charged unconditionally. |
+| **Breath** | choice-target `returnToHand` on a friendly | Board position and tempo | **Already gated.** `validateEffectTargets` rejects an absent/invalid friendly target and `targetVariants` omits the play when none exists. Do not add a second Toll-specific gate. |
+| **Fodder** | `consume` | Friendly tokens | **Needs (a1).** Resolution remains tokens-only, oldest-first, but the card is illegal unless the full immediate cost exists before play. This Toll belongs to `vermin-swarm`. |
 
-Before the gate: **two** dependable tolls. After it: **four**. The gate is what makes the toll vocabulary wide enough to be worth having — which is a second reason to prefer (a1) over dropping `consume`.
+Before the gate: three dependable tolls. After it: four. The gate repairs Consume specifically; it must not become a generalized conditional-effects system.
 
 ### DECIDED 2026-08-10: option (a1), the legality gate
 
-The user permitted narrow engine changes. Two sub-options were hiding inside (a):
+The user permitted a narrow engine change:
 
-- **(a1) Legality gate** — a card charging a toll is **unplayable** unless the toll can be paid. **CHOSEN.**
-- **(a2) Conditional effect** — the card is playable, the payoff withheld if unpaid. **Rejected**: it produces a card that is legal but does nothing, which reads as a bug to the player, and it needs new conditionality machinery in `effects.ts` plus almost certainly a new `EffectSpec` field.
-- **(b) Drop `consume` as a toll.** Rejected — see below.
+- **(a1) Legality gate — CHOSEN.** A card charging immediate Consume is unplayable unless the entire token cost can be paid from pre-play state.
+- **(a2) Conditional effect — rejected.** A legal card whose payoff disappears reads as a bug and requires new conditional resolution semantics.
+- **Drop Consume as a Toll — rejected.** It would remove Vermin's one shipped price-and-payoff signal rather than repair it.
 
-**Why the gate is the right design, not just the cheap one.** "Sacrifice a creature:" being unplayable without a creature is how sacrifice costs work across the genre. The gate *is* the mechanic: it forces the archetype's engine loop — generate fodder, then spend it — which is real deckbuilding tension. Choosing (b) would cost the house the single most apt mechanic available to it in order to dodge a two-site change.
+**Why the gate is the mechanic.** Requiring fodder before a Consume card can be played forces the loop: generate tokens, then convert them. The gate creates deckbuilding and sequencing tension without adding state or changing resolution order.
 
-**Implementation surface — narrow, and the risk is not where it was feared.**
+#### Exact affordability contract
 
-- `validatePlayCard` (`core/src/engine/intents.ts:49-74`) is a pure function over existing state — phase, hand index, mana, board cap, targets. The affordability check is one more `if`, the same shape as the existing `'Board is full'` gate.
-- **No `GameState` field, no serialization change, no `dispatch` case.** Determinism, replay and LAN mirroring are therefore untouched, which was the whole reason an engine change was feared.
-- **The real risk is duplication, not determinism.** `legalIntents` (`intents.ts:143-175`) enumerates legal plays on a *separate* path and mirrors `validatePlayCard`'s gates by hand; its own comments admit the mirror, and `:228` records that the two have drifted before. The gate must land in **both**, with a test asserting they agree — every card `legalIntents` offers must survive `validatePlayCard`.
+1. Toll scanning covers only effects that resolve immediately on play: `card.effects` plus effects from `when === 'battlecry'` trigger groups. Consume inside deathrattle, start/end-of-turn, or on-damage triggers is **not** a play cost and never gates the card.
+2. `requiredConsumeTokens(card: Card): number` returns the sum of every immediate `consume` clause's `value ?? 1`.
+3. `immediateConsumeAffordability(state: GameState, player: PlayerIndex, card: Card)` is the one shared pure helper. It returns `{ required, available, payable }`, where `available` is the pre-play count of `CreatureState.token === true` and `payable` is `available >= required`.
+4. Tokens summoned earlier in the same effect list do not make an otherwise unaffordable play legal: affordability always reads state before the play intent resolves.
+5. Toll content places all immediate Consume clauses before payoff clauses. Add a structural data test for this ordering; do not infer payment from post-resolution state.
+6. Both `validatePlayCard` and the `playCard` branch of `legalIntents` call `immediateConsumeAffordability`. Validation reports `Need {required} friendly tokens to consume (have {available})`; enumeration uses the same `payable` value. Do not copy the predicate into two branches.
+7. The initial identity work may not put Consume on hero powers. Hero powers have a separate validation/enumeration path; supporting that later requires an explicit extension and tests rather than silently bypassing the gate.
 
-**Keep `consume` tokens-only** (`effects.ts:190`). "Eats its own dead" tempts toward consuming any creature, but that needs player choice, which needs target selection — a far larger change than the gate. Tokens-only also tightens the loop: fodder must be generated before it can be spent.
+**No `GameState` field, serialization change, dispatch case, RNG call, or new `EffectKind` is permitted.** Replay and LAN determinism remain unchanged because the helper reads existing state only.
 
-`consume` also remains fine as a *payoff* or *trigger*; the finding was only that it could not serve as a price.
+**Keep Consume tokens-only** (`effects.ts:190`). Consuming arbitrary creatures would require player choice and a much larger targeting design. Oldest-first token removal remains resolution behavior.
 
-### OPEN — the consume house may be the wrong one
+Consume remains valid as a later trigger or payoff. Only immediate play-time Consume clauses are treated as costs.
 
-**The only `consume` card in the game belongs to `vermin-swarm`, not `bone-horde`:** `vermin-swarmlord`, `[consume(2), buff(1, 1, 'allFriendlyCreatures')]` (`core/src/data/vermin-swarm.ts:32`). That file's header already frames it as a cost — *"the payoff on a consume card is board space plus whatever the [effect gives]"* (`vermin-swarm.ts:6`).
+### DECIDED — Consume stays with Vermin
 
-The pilot table below assigns Bone to **bone-horde** and says **vermin-swarm pays nothing**. That is backwards relative to what is shipped. Settle before the pilot starts — this is exactly the pair the pilot exists to separate, so getting it the wrong way round would invalidate the result. Either vermin-swarm is the consume house and bone-horde needs a different resource relationship, or `vermin-swarmlord` moves.
+`vermin-swarmlord` already uses `[consume(2), buff(1, 1, 'allFriendlyCreatures')]` (`core/src/data/vermin-swarm.ts:32`), and that file already describes Consume as a price. Preserve that identity:
+
+- `vermin-swarm` generates expendable token width, then spends tokens through the **Fodder Toll** for collective payoff.
+- `bone-horde` profits from creatures dying and rebuilds through deathrattle/recursion. It does **not** receive Consume merely because both houses currently summon often.
+
+This separates conversion from recurrence without moving an existing card between houses or renaming its permanent ID.
 
 ### Houses without a Toll
 
@@ -117,27 +128,23 @@ Two houses may both pay Blood if one buys draw with it and the other buys buffs.
 
 ## Scope
 
-### Pilot — three houses, definitive
+### Pilot — three-house proposal
 
-The three worst offenders, chosen because the toll separates them cleanly:
+The three worst offenders are retained because they test three different resource relationships. The pilot is not definitive until its contract is approved and played.
 
-Each pilot house must fill **all five contract elements**, not just a toll. Weakness is mandatory.
+Each pilot house must fill **all five contract elements**, not just a Toll. Weakness is mandatory.
 
 | House | Signature verbs | Resource relationship | Payoff | **Weakness (mandatory)** | Curve / power |
 |---|---|---|---|---|---|
-| **ember-court** | direct damage, reach | **Ash toll** — `overload` | Burst the hero down | No heal, no card draw — runs out of gas if the game goes long | Cheap curve, cheap power |
-| **bone-horde** | summon from *deaths*, deathrattle | **Bone toll — `consume`, gated per (a1).** ⚠ **See the OPEN note: the shipped consume card is vermin-swarm's, so this may belong to the other house.** | Recursion; the board rebuilds itself | No reach to the enemy hero; must win on board | Midrange |
-| **vermin-swarm** | summon from *cards*, wide boards | No toll ⚠ **contradicted by `vermin-swarmlord`, which already charges `consume(2)`** | Overwhelm by count | Each unit is worthless alone — collapses to a single sweeper | Cheap curve |
+| **ember-court** | Direct damage, reach | **Ash Toll** — `overload` | Burst the enemy hero | No healing or sustained draw; runs out of gas | Cheap curve, aggressive power |
+| **bone-horde** | Deathrattle, rebuilding after deaths | Death as an engine signal; no Toll in the pilot | Recursion; the board rebuilds itself | No reach to the enemy hero; must win on board | Midrange |
+| **vermin-swarm** | Token generation, wide-board conversion | **Fodder Toll** — immediate `consume`, gated by (a1) | Convert expendable tokens into swarm-wide pressure | Individual units are weak; vulnerable to sweepers | Cheap curve |
 
-`bone-horde` and `vermin-swarm` are both summon:13 today. The distinction is **fuel**, not price: one summons from creatures that died, the other from cards in hand. That separation survives the Bone toll's removal, which is why the pilot pair is still the right choice.
-
-**Open:** bone-horde's resource relationship is unresolved pending the (a)/(b) decision above. Do not start the pilot until it is settled — it is half of that house's identity.
+`bone-horde` and `vermin-swarm` are both summon:13 today. The pilot separates them by loop: Bone benefits when ordinary creatures die and recurs board presence; Vermin deliberately creates token fodder and spends it. The card redesign must make those loops mechanically true rather than relying on prose.
 
 ### Provisional — the other nine
 
-**Superseded in shape by the review.** The table below assigns tolls only, which is now one of five contract elements — and it lists Bone, which does not work. It is kept as a record of the first sketch, not as a target. When these nine are reached, each needs all five elements filled, weakness included.
-
-Assignments below are **provisional and deliberately not fixed**. They are recorded so the pilot can be judged against a full picture, not so a worker can author against them.
+The table below remains a sketch of one contract element only. It is **not** an implementation target. After the three-house pilot is accepted, each remaining house needs all five elements, a distinct weakness, and its own approval before card authoring.
 
 | House | Provisional toll | Provisional payoff |
 |---|---|---|
@@ -146,19 +153,19 @@ Assignments below are **provisional and deliberately not fixed**. They are recor
 | shadow-dancers | Breath | Re-trigger battlecries, evasion |
 | stormwrought | Breath | Spell chaining, disruption |
 | dragonflight | Ash | Large bodies |
-| starforged | None | Spell payoff, discover, discounts |
+| starforged | None | Spell payoff, Discover, discounts |
 | hollow-choir | None | Removal — destroy, freeze, silence |
 | eternal-vigil | None | Defence — heal, taunt, ward |
 | elder-roots | None | Ramp; pays in time, not resources |
 
-Five houses provisionally pay no toll. If the pilot shows that reads as "five bland houses," the remedy is a fifth toll or a denial list — decided then, not now.
+A house without a Toll is acceptable only when the other four contract elements make its decisions and weakness distinct. Do not invent a fifth Toll merely to fill the table.
 
 ### Out of scope
 
 - **Tribes.** Deferred until after the pilot by explicit decision.
-- **Conditional gates** (Shadowverse-style state thresholds). Rejected: each would need new `GameState`, serialize/deserialize support and dispatch cases, which is direct risk to determinism and LAN replay.
+- **Broad conditional-threshold mechanics.** Rejected for this phase because they expand content and legality semantics beyond the one approved affordability repair.
 - **Any new `EffectKind`.** The vocabulary is already 19 wide and used five deep.
-- ~~**Any engine change at all. This is a data-only spec.**~~ **Superseded 2026-08-10.** One narrow engine change is now in scope and approved: the (a1) legality gate in `intents.ts`, landed in both `validatePlayCard` and `legalIntents`. Nothing beyond it — no new `GameState` field, no serialization change, no `dispatch` case, no new `EffectKind`. The determinism and LAN-replay guarantees hold because the gate is a pure function of state that already exists.
+- **Any engine change beyond (a1).** The shared immediate-Consume affordability helper may touch `validatePlayCard` and `legalIntents`; it may not add tracked state, serialization, dispatch, RNG, targeting, or conditional-resolution machinery.
 
 ## Changes permitted
 
@@ -171,23 +178,20 @@ Approved: **rewrite effects, and adjust stats and costs where the ability demand
 
 ## Testing
 
-`app/` is not type-checked in CI and card design is not provable by unit test. The tests below prove the *structural* claims only; the identity claim is proven by play.
+`app/` is not type-checked in CI and card design is not provable by unit test. Tests establish structural and engine claims; play establishes identity and balance.
 
-1. **No duplicate-verb commons within a house.** No two commons in one archetype reduce to the same `(kind, value, target)` triple under different triggers. This fails today on `ember-cinderling` / `ember-sparkmage` / `ember-igniter`.
-
-   **Caveat raised on review, and it is fair.** Trigger context is sometimes strategically meaningful — a battlecry that deals 1 and a deathrattle that deals 1 are genuinely different cards to play around. A blanket ban risks outlawing useful repetition. Treat this as a **review prompt, not a hard gate**: it should fail loudly and be waived per-case with a recorded reason, rather than forcing a redesign every time it trips. The three Ember commons it catches today are a real defect; the mechanism that catches them is blunter than the defect.
-2. **Toll coverage.** Each piloted house that has a toll charges it on **at least 4 cards**, spread across at least two rarities so the toll is not a legendary-only curiosity. Four is the floor at which a toll is a deck's habit rather than a single card; it is deliberately low for a pilot and should be re-judged from play, not raised speculatively.
-3. **Toll exclusivity is per-house, not per-toll.** A house charges its own assigned toll and no *other* toll. Two houses sharing a toll is permitted by design — the uniqueness rule binds the (toll, payoff) pair. `vermin-swarm` charges no toll at all, and that assertion must be written as "charges none", not skipped.
-4. **`overload` is used.** Currently zero; a pilot that leaves it at zero has not done the work.
-5. **Budget integrity — necessary, not sufficient.** Every redesigned card passes `validate.ts`, and the ceiling is `statBudget(cost) + STAT_BUDGET_SLACK` where slack is 4 (`validate.ts:20,57`); the slack term must not be dropped.
-
-   **But passing validation does not mean a two-clause card is balanced.** `validate.ts` prices *stats and keywords*. It does not price effect clauses at all, so a card with two strong clauses and modest stats passes cleanly while being far above rate. Do not cite a green `validate.ts` as evidence that this redesign is balanced — it is evidence only that the stat lines are legal. Clause balance is a play-test question and, for now, has no automated proxy.
-6. **The two legality paths agree.** Required by the (a1) gate: every play `legalIntents` (`intents.ts:143-175`) offers must survive `validatePlayCard` (`:49-74`). The two mirror each other by hand and `intents.ts:228` records that they have drifted before, so assert the agreement rather than trusting it. A toll card with the toll unpayable must appear in neither.
-
-7. **Determinism is unaffected by the gate.** `replay.test.ts` stays green, and a seed + intent-log replay of a match containing gated toll cards reproduces byte-identical state. The gate reads existing state only; if this test ever fails, the gate has grown a memory it should not have.
-
-8. **Decks still work.** All 12 deck suites and the bot heuristic suites stay green. The bot gets the gate for free via `legalIntents` — confirm it does not now offer plays it cannot make.
-9. **Play-test gate.** The pilot is not done until the three houses have been played. No assertion can close this.
+1. **Duplicate-verb review report.** Detect duplicate `(kind, value, target)` commons within a house, but treat trigger context as meaningful. The report fails until every duplicate is either redesigned or explicitly waived with a recorded strategic reason.
+2. **Toll coverage.** Each pilot house with a Toll charges it on at least four cards across at least two rarities. For this pilot that means Ash in Ember and Fodder/Consume in Vermin; Bone is not required to invent a Toll.
+3. **Toll exclusivity is per house, not per mechanic.** Ember charges Ash and Vermin charges Fodder; Bone's pilot identity is death/recurrence without a Toll. Future houses may share a Toll only when their payoff differs.
+4. **`overload` is used.** It appears on zero curated cards today; an Ember pilot that leaves it at zero has not implemented Ash.
+5. **Budget integrity is necessary, not sufficient.** Every redesigned card passes `validate.ts` using `statBudget(cost) + STAT_BUDGET_SLACK`, where slack remains 4. Validation prices stats and keywords, not effect packages; play-test two-clause cards rather than claiming a green budget proves balance.
+6. **Immediate Consume affordability.** Cover 0, 1, and 2 available tokens for `consume(2)`; multiple immediate Consume clauses sum; `value` omission costs one; a Consume in a later trigger does not gate play; and same-card token generation does not satisfy the pre-play cost.
+7. **Legality paths agree.** For every generated `playCard` intent, `validatePlayCard` accepts the same hand/target selection. An unaffordable Consume card appears in neither path. Scope this agreement test to `playCard` intents; hero powers use another validator.
+8. **Toll ordering.** Curated Toll cards place immediate Consume clauses before payoff clauses. Trigger-only Consume is exempt.
+9. **Hero-power exclusion.** The pilot contains no hero power with Consume. This prevents an un-gated third path from entering accidentally.
+10. **Determinism remains unchanged.** Replay a match containing both rejected and affordable Toll opportunities and confirm seed + accepted intent log reproduces byte-identical state.
+11. **Decks and bots still work.** All 12 deck suites and bot policy/heuristic suites stay green; bots receive affordability through `legalIntents`.
+12. **Play-test gate.** The pilot is not done until all three houses have been played and separately approved. No assertion closes this gate.
 
 ## Sequencing
 
@@ -207,17 +211,18 @@ Efficiency can still come from batching per house. The ability review and the Re
 
 ## Direction leanings from the brainstorm
 
-Not commitments — where the conversation landed, recorded so a revisit does not restart from zero.
+Not commitments — these record the current direction so a revisit does not restart from zero.
 
 | Question | Leaning |
 |---|---|
-| Change scope | Rewrite effects and stats/costs where necessary |
+| Change scope | Rewrite effects and adjust stats/costs where necessary |
 | Tribes | Deferred until after the pilot |
-| Identity basis | Strategic role first, verbs follow |
+| Identity basis | Five-element house contract: verbs, resource, payoff, weakness, curve/power |
 | Role reach | Verbs + hero power + curve |
-| Mechanism complexity | Keep it simple — no conditional gates, no engine change |
+| Mechanism complexity | One shared immediate-Consume legality helper; no conditional resolution or tracked state |
 | Uniqueness | Native, not novel — built from Ashen Court's own parts |
-| Spine | The Toll, generalised from the existing Blood Toll card |
+| Toll role | Optional resource technique, not the identity spine |
+| Consume owner | Vermin Swarm; Bone Horde uses deathrattle/recurrence |
 
 ## Rejected, and why
 

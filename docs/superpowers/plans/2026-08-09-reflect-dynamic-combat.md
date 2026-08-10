@@ -868,7 +868,21 @@ git commit -m "docs: define Reflect and dynamic combat language"
 
 Added 2026-08-10 from user finding 11 — the difference the user named **first**, and the only one of the four that no existing task touches.
 
-> **Scope warning, read before starting.** This task edits all 12 archetype files, `cardtext.ts`, `validate.ts`, and the balance of ~285 cards. It is large enough to deserve its own plan and its own spec, and it is *content design*, which is a different activity from the engine and layout work in Tasks 0–9. It lives here because the comparison assignment required routing all findings into this plan. **Recommend splitting it out before execution.** If it does stay here, its natural slot is immediately after Task 2 — both hand-author values across the same 12 files, and doing them in one pass over each archetype is far cheaper than two, though it makes each review larger. Decide that with the user; do not silently reorder.
+> ## ⚠ SUPERSEDED IN DRAFT — read this before doing anything with Task 10
+>
+> **A dedicated draft now exists: [`docs/superpowers/specs/2026-08-10-house-toll-identity-design.md`](../specs/2026-08-10-house-toll-identity-design.md).** Read it before touching this task. It carries a brainstorm's worth of measurement and rejected alternatives that are not repeated here.
+>
+> **Do not execute Task 10 as written below**, and do not delete it either. The draft is explicitly **not approved** — it is one candidate answer, unplayed and uncosted — so this task remains the only *scheduled* home for the work until the draft is either accepted or dropped.
+>
+> **What the draft settles.** The diagnosis is now measured, not asserted: 12 houses collapse into ~5 identities, `vermin-swarm` and `bone-horde` are both summon:13, the pool leans on 5 of 19 `EffectKind`s, `overload` is implemented and used on **zero** cards, and all 12 hero powers cost exactly 2. That diagnosis holds regardless of which solution wins, so **Step 1 below is largely already done** — do not re-derive it.
+>
+> **What the draft proposes.** The Toll: each house pays one recurring price for its power, generalised from `grave-pact`'s existing Blood Toll hero power (`core/data/grave-pact.ts:17`), the only price-and-payoff card in the pool. Data-only by construction — no new `EffectKind`, no new `GameState`, no engine change. Piloted on three houses before the other nine.
+>
+> **What the draft rejects, with reasons** — so they are not re-proposed: conditional gates for all 12 houses (twelve pieces of new tracked state against a deterministic engine whose LAN replay depends on exact serialization), a Hearthstone-style role grid with MTG-style denial lists (re-derives roles the houses already have, in borrowed vocabulary), and Reflect as the identity axis (rests on a false premise — counter-damage is standard across Hearthstone, MTG and Yu-Gi-Oh).
+>
+> **Open questions the draft does not answer**, and which block promoting it to a plan: whether the Toll is the right spine at all; that five of twelve houses provisionally pay no toll, which may read as five bland houses; and the sequencing collision below.
+>
+> **Scope warning, unchanged.** This task edits all 12 archetype files, `cardtext.ts`, `validate.ts`, and the balance of ~285 cards. It is *content design* — a different activity from the engine and layout work in Tasks 0–9 — and it belongs in its own plan. Its natural slot is immediately after Task 2: both hand-author values across the same 12 files, and one pass per archetype is far cheaper than two, at the cost of a larger review each. Decide that with the user; do not silently reorder.
 
 **Files:**
 - Create: `docs/superpowers/specs/2026-08-10-archetype-identity.md`

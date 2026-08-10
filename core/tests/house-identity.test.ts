@@ -82,7 +82,12 @@ const duplicateCommons = (house: ArchetypeId): string[] => {
 const WAIVERS: Record<string, string> = {};
 
 it('duplicate-common report is empty or fully waived (spec test 1)', () => {
-  for (const house of ['ember', 'bone', 'vermin'] as const) {
+  // Per-house staging (green-per-task ruling): this task changes Ember only,
+  // so the enforcement loop is scoped to Ember here. Task 3's Step 1
+  // broadens it to ['ember', 'bone', 'vermin'] so Bone's pre-existing
+  // duplicate is RED exactly when Task 3 starts, then Task 3's data
+  // implementation turns it green. The helper/report stays house-capable.
+  for (const house of ['ember'] as const) {
     const report = duplicateCommons(house).filter(line => {
       const ids = line.split(': ')[1]!.split(', ');
       return ids.some(id => !(id in WAIVERS));

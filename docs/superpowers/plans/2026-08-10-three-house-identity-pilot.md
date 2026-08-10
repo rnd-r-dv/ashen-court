@@ -456,7 +456,12 @@ const duplicateCommons = (house: ArchetypeId): string[] => {
 const WAIVERS: Record<string, string> = {};
 
 it('duplicate-common report is empty or fully waived (spec test 1)', () => {
-  for (const house of ['ember', 'bone', 'vermin'] as const) {
+  // Per-house staging (green-per-task ruling): this task changes Ember only,
+  // so the enforcement loop is scoped to Ember here. Task 3's Step 1
+  // broadens it to ['ember', 'bone', 'vermin'] so Bone's pre-existing
+  // duplicate is RED exactly when Task 3 starts, then Task 3's data
+  // implementation turns it green. The helper/report stays house-capable.
+  for (const house of ['ember'] as const) {
     const report = duplicateCommons(house).filter(line => {
       const ids = line.split(': ')[1]!.split(', ');
       return ids.some(id => !(id in WAIVERS));
@@ -546,7 +551,7 @@ npx vitest run core/tests/house-identity.test.ts core/tests/cardtext.test.ts cor
 
 Expected: FAIL —
 
-- house-identity: ember toll coverage is 0 ≥ 4 fails; `ember-cauterize` carries `heal` so the no-heal test fails; the duplicate report flags Ember's `dealDamage|1|any|battlecry: ember-sparkmage, ember-igniter` and Bone's pre-existing `summon|||deathrattle: bone-gravedigger, bone-cairn` (Task 3 resolves the latter).
+- house-identity: ember toll coverage is 0 ≥ 4 fails; `ember-cauterize` carries `heal` so the no-heal test fails; the duplicate report flags Ember's `dealDamage|1|any|battlecry: ember-sparkmage, ember-igniter`. (The enforcement loop is Ember-scoped in this task per the green-per-task ruling; Bone's pre-existing `summon|||deathrattle: bone-gravedigger, bone-cairn` duplicate is not checked yet — Task 3's Step 1 broadens the loop so it fails there.)
 - cardtext: exact-string mismatch (`Deal 3 damage... Restore 3 health...` vs the new string).
 - decks-1-3: the replaced cauterize test asserts the new behavior (overload 1, no heal) which does not exist yet.
 
@@ -643,7 +648,9 @@ Deathrattle house count after these edits: gravedigger, cairn, raider, warlord, 
 
 - [ ] **Step 1: Write the failing tests**
 
-(1a) Append to `core/tests/house-identity.test.ts` (after the `ember court identity` describe, before the final closing of the file's describe list — i.e. add a new top-level describe):
+(1a) Broaden the Task 2 `duplicate-common report` enforcement loop from `['ember']` to `['ember', 'bone', 'vermin']` in `core/tests/house-identity.test.ts`. Task 2 scoped the loop to Ember (green-per-task ruling: each task verifies the house it changes and ends green); this test-first substep restores the three-house enforcement so Bone's pre-existing `summon|||deathrattle: bone-gravedigger, bone-cairn` duplicate fails exactly during Task 3's RED run. Task 3's Step 3 data implementation (`bone-cairn` deathrattle → `summon('token-skeleton', 3)`) then turns it green.
+
+(1b) Append to `core/tests/house-identity.test.ts` (after the `ember court identity` describe, before the final closing of the file's describe list — i.e. add a new top-level describe):
 
 ```ts
 describe('bone horde identity', () => {
@@ -677,7 +684,7 @@ describe('bone horde identity', () => {
 });
 ```
 
-(1b) Append a real legality/resolution regression inside the existing top-level `describe('decks 7-9 ...')` in `core/tests/decks-7-9.test.ts`:
+(1c) Append a real legality/resolution regression inside the existing top-level `describe('decks 7-9 ...')` in `core/tests/decks-7-9.test.ts`:
 
 ```ts
   describe('bone-legion death-engine activation', () => {
@@ -715,7 +722,7 @@ Expected: FAIL —
 
 - no-reach: `bone-rattle` and `bone-cataclysm` still target `allEnemies`.
 - deathrattle count is 5 today (gravedigger, cairn, warlord, overlord, king) → ≥ 6 fails.
-- the duplicate-common report flags `summon|||deathrattle: bone-gravedigger, bone-cairn` (and the base assertion in Task 2's `duplicate-common report` test now fails for bone too — this is the intended per-house RED).
+- the duplicate-common report flags `summon|||deathrattle: bone-gravedigger, bone-cairn` (the base `duplicate-common report` assertion fails for bone because Step 1's (1a) substep broadened the enforcement loop back to all three houses — this is the intended per-house RED, and Step 3's cairn redesign turns it green).
 - bone-legion structural effects assertion fails (still pure summon); the decks-7-9 legality test incorrectly finds it playable without a friendly target; the runtime payoff test cannot produce four skeletons.
 
 - [ ] **Step 3: Write the minimal implementation**

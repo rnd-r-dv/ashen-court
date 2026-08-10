@@ -109,7 +109,18 @@ The user played both builds and reported the four differences that actually made
 
 11. **Card ability design — archetypes feel more defined, abilities more fun.** This is the largest finding in the entire comparison and **no task in this plan addresses it.** The mechanical difference is legible in the data. Zero-shot cards routinely carry *two clauses in tension*: `em_brand` is `[buff(2,0,'friendlyCreature'), grant('charge','friendlyCreature')]`; `em_scorch` is `[dmg(3,'any'), overload(1)]`; `em_sacrifice` is `[dmg(2,'friendlyCreature'), draw(1)]` — damage your *own* creature to draw; `ch_silence` is `[silence('enemyCreature'), draw(1)]`; `ch_frostbind` is `[dmg(1,'enemyCreature'), freeze('enemyCreature')]`; `em_meteor` is `[dmg(5,'allEnemyCreatures'), dmg(3,'enemyHero')]` (all `src/engine/cards/setA.ts`, `setB.ts`). Ours are overwhelmingly single-clause: `core/src/data/ember-court.ts` has 10 multi-effect cards, and three separate commons — `Cinderling` (deathrattle), `Sparkmage` (battlecry), `Igniter` (battlecry) — all resolve to *deal 1 damage*, differing only in the trigger that wraps them. An archetype built from one verb at different numbers reads as one card printed eleven times. Additionally the zero-shot has a **tribe axis** (`elemental`, `demon`, `beast`, `spirit`, `dragon`) that ours lacks entirely — `grep -rn "tribe" core/src/` returns nothing, and our only gesture at it is the orphan `friendlyDragon` target. Routed into new Task 10.
 
-12. **Layout shift at end of turn.** The user reports the screen shifting and scrolling each turn as new objects spawn. Cause is a missing guard, not a mystery: `app/src/index.css:13-19` sets `html, body, #root { min-height: 100% }` with **no `overflow` rule and no fixed height**. `app/src/screens/match.css:7-11` sets `height: 100vh; overflow: hidden` on `.match` alone, which clips inside that element but does nothing to stop the *document* from growing. The zero-shot closes this with one line — `body { overflow: hidden }` at `src/index.css:29`. Compounding it, the board bands are `min-height: clamp(...)` (`board.css:152,158,173`), so a spawning creature grows its band; once the summed bands, hand row (`match.css:54`, `min-height: clamp(190px, 27vh, 300px)`) and HUD exceed the viewport, a scrollbar appears and its width shifts every centered element horizontally. Appearing and disappearing per turn is exactly the reported symptom, and `2ad7df3 fix(app): release board transform after page shift` shows this has bitten once already. Routed into Task 5.
+12. **Layout shift at end of turn. — MISDIAGNOSED; CORRECTED ON REVIEW 2026-08-10.**
+
+    **The actual cause: the app moves the board on purpose, every single turn.** `app/src/screens/Match.tsx:651-656` handles `turnStart` by removing `match-shift`, forcing a reflow, and re-adding it. `app/src/screens/animations.css:28-41` defines `match-page-shift`, which translates the whole `.match-boardwrap` to `translateY(7px)` at 45% and back. The comment calls it "the board registers shift like a page being laid." That is the reported symptom, exactly, on the reported cadence.
+
+    **What was wrong with the original diagnosis, recorded so the mistake is not repeated.** The user reported the movement accurately but attributed it to *"new objects spawning which causes it to scroll"* — a guess. That guess was accepted and a plausible CSS argument was built on top of it (`html, body, #root` carry `min-height: 100%` with no `overflow` rule at `app/src/index.css:13-19`). Nobody grepped for an existing turn-start animation. `.match` already has `height: 100vh; overflow: hidden` (`match.css:3-11`), so document growth was never demonstrated — only asserted. The proposed one-line `body { overflow: hidden }` fix would have shipped, changed nothing the user could see, and left the real cause running.
+
+    **There are up to three independent sources of movement here and they must be measured separately, not merged:**
+    1. **The deliberate turn-start shift** — `match-page-shift`. Confirmed, and almost certainly the whole of what the user is reporting.
+    2. **Document scrollbar toggling** — plausible but **unproven**. Do not fix it until it is observed.
+    3. **Token-band reflow on spawn** — genuinely independent and confirmed (`Board.tsx:407` conditional, `board.css:167-173`). This is finding 16 and it stands.
+
+    Routed into Task 5 Step 7a, rewritten accordingly.
 
 13. **Hover shows card stats.** Zero-shot `.hand-card:hover` is `translateY(-26px) scale(1.09)` (`src/index.css:152-155`) — hovering makes the card bigger, so it is simply readable. Ours lifts `translateY(-12px)` with **no scale** (`card.css:410-412`), and board cards lift only 5px (`card.css:415-417`) while `.card--board .card__body { display: none }` hides their rules text entirely at `zoom: 0.5`. Reading a board creature therefore costs an explicit action to open the `InspectPanel` modal (`Match.tsx:116`). The zero-shot asks for a hover; we ask for a click and a modal. Routed into Task 8.
 
@@ -391,7 +402,9 @@ Remove the transitional `reflect = attack` assignment. TypeScript must fail if a
 
 - [ ] **Step 5: Apply all approved creature values and buff deltas.** Keep every card ID unchanged. Preserve costs, Attack, and Health unless the approved ledger explicitly records a compensating adjustment needed to maintain role or budget.
 
-- [ ] **Step 6: Add pool invariants.** Assert **140 curated creatures and 6 token creatures** are present (see the Interfaces note — do not write `146` against a `!card.token` filter), every creature has an integer Reflect, no non-creature has Reflect, every card is within the weighted validation ceiling, every archetype has at least one `Attack > Reflect` and one `Reflect > Attack` creature where its creature count permits, and the pool mean constraint from Step 3 holds.
+- [ ] **Step 6: Add pool invariants.** Assert **140 curated creatures and 6 token creatures** are present (see the Interfaces note — do not write `146` against a `!card.token` filter), every creature has an integer Reflect, no non-creature has Reflect, every card is within the weighted validation ceiling, and the pool mean constraint from Step 3 holds.
+
+  **The per-archetype both-directions invariant is removed (review, 2026-08-10).** It previously read "every archetype has at least one `Attack > Reflect` and one `Reflect > Attack` creature where its creature count permits." That **forces every house to contain both an offensive and a defensive role**, which is precisely the homogenising pressure the identity work exists to undo — a house whose whole point is that it never wants to be attacked should be allowed to lean entirely one way. Replace it with either a **pool-wide** diversity check, or per-house expectations **derived from that house's approved identity**, once identities exist. Until then, assert pool-wide only.
 
 - [ ] **Step 7: Run all deck, pool, bot, and determinism suites.**
 
@@ -534,14 +547,44 @@ git commit -m "style(app): add compact Reflect stat marks"
 
 ---
 
-### Task 5: Replace fixed slots with centered dynamic formations
+### Task 5: Match and board geometry
+
+> **SPLIT REQUIRED BEFORE EXECUTION (review, 2026-08-10).** This task accumulated eight deliverables across three different kinds of work and its declared file list was missing most of what its own steps touch. It must be executed as three separately reviewable tasks. The steps below are already grouped and labelled; a worker should take **one group at a time** and commit at the end of each, not run 4→10 as a single pass.
+>
+> | Split | Steps | Deliverable |
+> |---|---|---|
+> | **5A — Match geometry correctness** | 7a, 7a-2, 7b | Remove the deliberate turn shift, establish one card scale, contain the hand row. All testable geometry. |
+> | **5B — Board formations** | 4, 5, 6, 7 | Remove empty slots, center occupants, settle token-band geometry, reserve the combat lane. |
+> | **5C — Visual treatment** | 7c, 7d | Hand-region boundary, and the post-geometry re-evaluation of the "clunky board" complaint. Subjective; do last, after the user has seen 5A and 5B. |
+>
+> 5A must precede 5B — the reclaimed slot height from 5B is measured *against* a match that has stopped moving, and doing it in the other order means measuring a moving target.
 
 **Files:**
+
+*Task 5A — match geometry:*
+- Modify: `app/src/screens/Match.tsx` (turn-shift class toggle, `turnStart` handler)
+- Modify: `app/src/screens/animations.css` (`match-page-shift` keyframe)
+- Modify: `app/src/screens/match.css` (hand row geometry, the `pointer-events` workaround)
+- Modify: `app/src/components/card.css` (card box, ratio, scale tiers)
+- Modify: `app/src/components/Hand.tsx` (**`handStep` duplicates the card.css zoom tiers — see Step 7b**)
+- Modify: `app/src/index.css` **only if** Step 7a-2's measurement proves document overflow
+- Test: `app/tests/cardTextWell.test.ts` (the sanctioned box-assertion rewrite)
+- Test: `app/tests/handLayout.test.ts` (hardcodes `CARD_W = 240`)
+- Create: `app/tests/matchGeometry.test.ts`
+
+*Task 5B — board formations:*
 - Modify: `app/src/components/Board.tsx`
 - Modify: `app/src/components/board.css`
 - Modify: `app/src/screens/Match.tsx` only if the combat-layer mount belongs above `Board`
 - Test: `app/tests/boardSurface.test.ts`
 - Test: `app/tests/board.test.ts`
+
+*Task 5C — treatment:*
+- Modify: `app/src/screens/match.css`
+- Modify: `app/src/theme.css` (a hand-region token, if one is needed rather than borrowing `--ground-rise`)
+- Test: `app/tests/armorialContract.test.ts`
+
+*Consumers of the card box that go stale when it scales (Step 7b Sub-step 4):* `app/src/screens/deckbuilder.css`, `app/src/screens/animations.css`, `app/src/components/keywordchip.css`.
 
 **Interfaces:**
 - Produces: `BoardFormation({ creatures, kind })` or an equivalent focused internal component; stable `data-creature-id` anchors for combat measurement; one reserved `.board-combat-lane` effects mount.
@@ -564,15 +607,22 @@ npx vitest run app/tests/boardSurface.test.ts app/tests/board.test.ts
 
   **The "renders only when non-empty" half of this step is now contested.** Approved Decision 11 requires the empty token band to collapse; the user reports that the whole board shifts when a token spawns, which is exactly what a collapsing band guarantees — roughly 90–116px appearing at once (`board.css:167-173`). Both cannot hold. Note that this is a *different* cause from finding 12's scrollbar and is not fixed by Step 7a.
 
-  Get the user's decision before implementing, and record it in the decision document alongside the renderer choice. The three options and their costs are written out in finding 16. Do not implement the collapsing band as currently specified on the assumption that Decision 11 still stands — it was approved before this symptom was observed.
+  **Reviewer's position, 2026-08-10 — take option three: absorb the growth.** Reserve token capacity *inside* a fixed-height player register, and hide the empty token content visually rather than removing it from layout. **A token spawning must never add external track height.** This keeps the band visually collapsed when empty — which is what Decision 11 was actually after — while making the spawn cost zero layout movement.
+
+  That reading reconciles Decision 11 with finding 16 rather than choosing between them, so no user decision is needed unless they disagree with it. Confirm, then implement; do not implement the naive `{tokens.length > 0 && …}` conditional that exists today (`Board.tsx:407`).
 
 - [ ] **Step 7: Reserve the combat lane.** Keep an intentionally empty axis between opposing formations and expose one pointer-transparent effects layer above it. Do not place decorative ornaments in the lane. Continue exposing each card's `data-creature-id` for bounding-box snapshots.
 
-- [ ] **Step 7a: Fix the end-of-turn layout shift (user finding 12).** This is a reported bug, not a refinement, and it is the second thing the user named as making the zero-shot feel better. Write the failing test first: mount a match, drive a full turn cycle that summons creatures into both bands, and assert `document.body.scrollHeight <= window.innerHeight` and that `.match`'s bounding rect does not move between the start and end of the cycle. jsdom does not lay out, so this assertion belongs in the browser-verification step below *and* as a stylesheet assertion that the guard rule exists — mirror the idiom in `app/tests/cardTextWell.test.ts`, which asserts on stylesheet text for exactly this reason.
+- [ ] **Step 7a: Remove the deliberate turn-start board shift (user finding 12, corrected).** **This is the first thing to do in this task and the only confirmed cause.**
 
-  Then add the guard: `html, body, #root` need a fixed height and an explicit `overflow: hidden`, not the current bare `min-height: 100%` (`app/src/index.css:13-19`). The match is already `height: 100vh; overflow: hidden` (`match.css:7-11`), so nothing legitimately needs the document to scroll. One line closes the guaranteed cause, the same way the zero-shot does at its `src/index.css:29`.
+  `Match.tsx:651-656` re-triggers the `match-shift` class on every `turnStart`; `animations.css:28-41` translates `.match-boardwrap` 7px down and back. Write the failing regression first: drive a `turnStart` and assert the board wrapper does **not** receive a class that animates `transform` — a runtime DOM assertion, plus a stylesheet assertion that no `@keyframes` in `animations.css` translates the board wrapper. Then remove the animation and the class toggle that drives it.
 
-  **Do not stop at the guard.** Hiding the overflow stops the scrollbar from appearing but leaves the content overflowing and silently clipped, which is the same failure mode this project already rejected for card text. Also verify the band sizing: with `min-height: clamp(...)` on both creature bands (`board.css:152,158,173`) plus the hand row's `clamp(190px, 27vh, 300px)` (`match.css:54`), confirm that a full board at the 1280×900 floor still sums under the viewport. If it does not, contract spacing — never card scale — exactly as Step 5 requires for formations. Removing the empty slots in Step 4 reclaims height, so measure *after* that lands.
+  **This is deleting a deliberate feature, not fixing a bug**, so confirm with the user before removing rather than after. It was authored on purpose (Task 8, "the board registers shift like a page being laid") and someone liked it. The user's report is that it reads as the screen shifting every turn — which is what it is. If they want the beat kept, the alternative is to make it not move layout: animate something that is not the board's transform, or gate it behind `--anim-scale` at a value low enough to be subliminal.
+
+- [ ] **Step 7a-2: Measure the other two candidate causes separately — do not fix on suspicion.** After 7a lands, re-observe. Two other movement sources were hypothesised and only one is confirmed:
+
+  - **Document scrollbar toggling — UNPROVEN. Do not fix speculatively.** The theory was that `html, body, #root { min-height: 100% }` with no `overflow` rule (`index.css:13-19`) lets the document grow. But `.match` is `height: 100vh; overflow: hidden` (`match.css:3-11`), so nothing has been shown to overflow. Instrument first: log `document.body.scrollHeight` against `window.innerHeight` across a full match at 1280×900. **Only if it exceeds** should the guard be added — and then it is `overflow: hidden` plus a fix for whatever actually overflowed, never the guard alone, because hiding overflow silently clips content, the failure mode this project already rejected for card text.
+  - **Token-band reflow on spawn — CONFIRMED and independent.** `Board.tsx:407` renders the band only when non-empty; `board.css:167-173` gives it ~90–116px. This is finding 16 and Step 6 owns it. `body { overflow: hidden }` would not have touched it.
 
 - [ ] **Step 7b: Make the card box scalable at a fixed ratio (user decision, 2026-08-10).** This is the resolution of finding 15 and it replaces the either/or that stood here before. The user's decision: **the 5:7 ratio is invariant; the absolute dimensions are not.** The card stops being 240×336 and becomes "5:7 at whatever size this viewport affords," so the hand row can contain its cards at 1280×900 without the type collapsing at a floor.
 
@@ -586,11 +636,19 @@ npx vitest run app/tests/boardSurface.test.ts app/tests/board.test.ts
 
   After this the ratio cannot drift, because there is no second number to disagree with.
 
-  **Sub-step 2 — make the scale continuous, and prefer `zoom` over an `em` refactor.** Today the scale is four discrete `@media` tiers of `zoom` (1 → 0.88 → 0.76 → 0.66 by width, plus height tiers, `card.css:79-100`). Replace the discrete tiers with one continuous scale factor. **Recommended: keep `zoom` as the mechanism and drive it from a single `--card-scale`**, set on the match container from a `ResizeObserver` and clamped to a readable floor. Rationale, in order:
+  **Sub-step 2 — centralise the scale into one `--card-scale`. Do NOT add a `ResizeObserver` by default.** Corrected on review, 2026-08-10; the earlier text here recommended driving `--card-scale` from JS, which would have made things worse.
+
+  **The tiers are already duplicated in two places.** `card.css:79-100` declares four `zoom` tiers (1 / 0.88 / 0.76 / 0.66 at 1200 / 900 / 700px), and `app/src/components/Hand.tsx:142-144` **hardcodes the same four numbers again** in `handStep`, with its own `resize` listener at `:110-114` and a comment at `:136` admitting the mirror. Adding a JS-driven `--card-scale` would create a **third** scaling authority and a second resize path, risking first-paint movement as CSS and JS disagree for a frame.
+
+  **Do this instead:** define `--card-scale` once in CSS, keep the existing breakpoint tiers as its values, and have both `card.css` and `handStep` read that single source. That removes the existing duplication rather than adding to it, needs no observer, and has no first-paint hazard. **Continuous scaling is not yet a requirement** — the user asked for dimensions that scale, not for them to scale smoothly during a drag-resize.
+
+  **If continuous scaling is later shown to be required**, the plan must first name: which hook or component owns the observer, what the value is on first render before any measurement, how it is torn down, and how `handStep` receives the identical effective scale. Do not start that without those four answers.
+
+  Keep `zoom` as the mechanism rather than refactoring card internals to `em`. Rationale, in order:
   - `zoom` already scales the box *and the type* together, which is the whole reason this file chose it (`card.css:76-78`); a fluid `--card-w` alone would leave 108 px literals and 11 `font-size` declarations at fixed size, breaking proportion at every scale.
   - The alternative — fluid `--card-w` plus converting those literals to `em` off a card-local `font-size` — is exactly the zero-shot's architecture, including the failure mode recorded as comparison finding 10: type derived from a scalar with **no floor**, unreadable at small sizes. A `clamp()` floor fixes that, but it is a 108-literal refactor of a file that shipped four commits ago.
   - `zoom` is already accounted for downstream: `KeywordChip.tsx:19-24` relies on `getBoundingClientRect` reporting post-zoom coordinates, and Task 7 Step 5 snapshots creature rects the same way. A different scaling mechanism would invalidate both.
-  - Pure-CSS continuous `zoom` is not expressible — `zoom` takes a number and `clamp()` cannot mix `vh` with a unitless value — which is why the scale factor comes from JS. One observed number, one custom property; no per-element math.
+  - Pure-CSS *continuous* `zoom` is not expressible — `zoom` takes a number and `clamp()` cannot mix `vh` with a unitless value. That is an argument against **continuous** scaling, not an argument for JS: discrete tiers in a single custom property are pure CSS and sufficient for the stated requirement.
 
   Keep `.card--board`'s `0.5` as a *relationship* (board minis are half a hand card), not as an absolute — it multiplies the scale rather than replacing it.
 
@@ -742,9 +800,21 @@ git commit -m "feat(app): stage Attack and Reflect combat"
 
 ---
 
-### Task 8: Announce attack-readiness and add the action narrative
+### Task 8: Announce attack-readiness, make cards readable, and (optionally) narrate actions
 
 Added 2026-08-10 from the zero-shot comparison. This task exists because findings 1 and 2 of that section are the only two state-announcement mechanisms the zero-shot has that this project genuinely lacks; everything else in its affordance vocabulary is already shipped or deliberately rejected.
+
+> **SPLIT REQUIRED BEFORE EXECUTION (review, 2026-08-10).** Three unrelated features were bundled here. Execute as three tasks, in this priority order:
+>
+> | Split | Steps | Priority |
+> |---|---|---|
+> | **8A — Attack-ready state** | 1, 5, 6 | High. Smallest change, fixes a real gap: the board marks only the negative (`cardview--exhausted`), never the positive. |
+> | **8B — Card hover preview** | 8a | High. Directly answers user finding 13; reading a board creature currently costs a click and a modal. |
+> | **8C — Action narrative** | 2, 4, 7 | **Optional, and lowest priority.** Re-confirm it is still wanted after 8A/8B and the Task 5 splits have been played. It is the largest of the three and the least connected to a reported complaint. |
+>
+> **8B's file list must add** `app/src/components/card.css` and `app/src/components/hand.css` — the preview changes hover treatment on both surfaces, and neither appears in the list below.
+>
+> **8B needs runtime tests it does not currently specify:** the open delay, portal cleanup on unmount, suppression during targeting, suppression while a modal owns the screen, focus behaviour, and the reduced-motion branch. jsdom cannot measure layout but it can assert every one of those.
 
 **Files:**
 - Modify: `app/src/components/CardView.tsx`
@@ -773,7 +843,9 @@ Added 2026-08-10 from the zero-shot comparison. This task exists because finding
 npx vitest run app/tests/attackReady.test.ts app/tests/actionLog.test.ts
 ```
 
-- [ ] **Step 4: Derive log text from events, not from screens.** Put the mapping beside the engine's own generated-text convention: rules text is generated in `core/src/cardtext.ts`, so log text is generated the same way rather than authored per call site. A `default` branch that throws on an unhandled `GameEvent` is correct here for the same reason `dispatch` throws — a new event must not silently vanish from the narrative.
+- [ ] **Step 4: Derive log text from events, not from screens.** Put the mapping beside the engine's own generated-text convention: rules text is generated in `core/src/cardtext.ts`, so log text is generated the same way rather than authored per call site.
+
+  **The `default` branch must NOT throw.** Corrected on review, 2026-08-10 — the earlier text here specified a throwing default "for the same reason `dispatch` throws," and that reasoning was wrong. `dispatch` throws because a missed event means a missed *state mutation*, which is a correctness bug that must surface loudly. A missed **log line** is cosmetic. Throwing there would crash a live match — over a caption. Return an empty entry, skip the line, and surface unknown events through a dev-only warning if anything at all.
 
 - [ ] **Step 5: Implement the attack-ready marker in Armorial materials.** A flat engraved hairline in the existing ready/or register, matched to `.card--playable`'s treatment at `card.css:426-430`. **No glow, no halo, no drop-shadow** — the zero-shot's `.attack-ready` gold bloom is the anti-reference, not the target. The marker must survive board `zoom: 0.5`, so specify its geometry in px that remain visible when halved.
 
@@ -817,7 +889,8 @@ git commit -m "feat(app): announce attack-readiness and log resolved actions"
 
 **Files:**
 - Modify: `app/PRODUCT.md`
-- Modify or create: `app/DESIGN.md`
+- Modify: `DESIGN.md` (repo ROOT — `app/DESIGN.md` does not exist and never did)
+- Modify: `.impeccable/design.json` (the DESIGN.md sidecar; both must move together when the scalable card box and the Legendary foil exception revise current canon)
 - Modify: `docs/superpowers/specs/2026-08-09-reflect-dynamic-combat-decision.md`
 - Test: `app/tests/armorialMigration.test.ts`
 - Test: `core/tests/pool-balance.test.ts`
@@ -860,7 +933,7 @@ Exclude only checksum-pinned upstream license bytes from whitespace checks if su
 - [ ] **Step 8: Commit documentation and guards.**
 
 ```bash
-git add app/PRODUCT.md app/DESIGN.md app/tests core/tests docs/superpowers/specs
+git add app/PRODUCT.md DESIGN.md .impeccable/design.json app/tests core/tests docs/superpowers/specs
 git commit -m "docs: define Reflect and dynamic combat language"
 ```
 
@@ -882,7 +955,11 @@ Added 2026-08-10 from user finding 11 — the difference the user named **first*
 >
 > **Open questions the draft does not answer**, and which block promoting it to a plan: whether the Toll is the right spine at all; that five of twelve houses provisionally pay no toll, which may read as five bland houses; and the sequencing collision below.
 >
-> **Scope warning, unchanged.** This task edits all 12 archetype files, `cardtext.ts`, `validate.ts`, and the balance of ~285 cards. It is *content design* — a different activity from the engine and layout work in Tasks 0–9 — and it belongs in its own plan. Its natural slot is immediately after Task 2: both hand-author values across the same 12 files, and one pass per archetype is far cheaper than two, at the cost of a larger review each. Decide that with the user; do not silently reorder.
+> **Sequencing REVERSED on review, 2026-08-10 — identity comes BEFORE Reflect authoring.** This previously said Task 10's natural slot is *after* Task 2, merged into one pass over the 12 files to avoid duplicated work. That was wrong. **Abilities determine a creature's role, and role determines its correct Reflect value** — authoring Reflect against roles that are still moving guarantees rework. Worse, the identity pilot's only real gate is a play-test, and a play-test of two simultaneous changes cannot tell you which one helped. That confound defeats the gate.
+>
+> Correct order: approve the identity contract → implement and play-test ability packages with **transitional Reflect defaults** (`reflect = attack`, already Task 1 Step 10's transitional builder behaviour) → approve or reject the direction → expand to the remaining nine houses → **then** Task 2 hand-authors final Reflect against stable roles. Batch per house for efficiency if you like; keep the ability review and the Reflect review as **separate approval gates**.
+>
+> **Scope warning, unchanged.** This task edits all 12 archetype files, `cardtext.ts`, `validate.ts`, and the balance of ~285 cards. It is *content design* — a different activity from the engine and layout work in Tasks 0–9 — and it belongs in its own plan. Once the identity direction is approved, create that plan and **reduce this task to a dependency pointer** rather than leaving a second copy of the work here.
 
 **Files:**
 - Create: `docs/superpowers/specs/2026-08-10-archetype-identity.md`
@@ -942,17 +1019,39 @@ git commit -m "feat(core): give archetypes distinct ability identities"
 ### Revision self-review, 2026-08-10 (part 2: user play findings)
 
 - **Coverage:** finding 11 creates Task 10. Finding 12 becomes Task 5 Steps 7a. Finding 13 becomes Task 8 Step 8a. Finding 14 becomes Task 5 Step 7b, deliberately as a re-evaluation rather than new work, because both of its known causes are already scheduled.
-- **Priority conflict, stated not hidden:** the user named ability design (11) first, and it is the finding with the largest effect on whether the game is fun. This plan's headline feature is Reflect. Both hand-author values across the same 12 archetype files. **Executing them as separate passes over the same files is wasteful and executing them together makes one very large review.** This is a real scheduling decision for the user, not something to resolve by task numbering.
-- **Finding 12 is a bug and is cheap.** The guaranteed cause is one missing `overflow` rule at `app/src/index.css:13-19`. It does not depend on Reflect, formations, or the renderer decision, and it degrades every turn of every match today. It is a candidate for fixing immediately rather than waiting for this plan's approval.
+- **Priority conflict, stated not hidden:** the user named ability design (11) first, and it is the finding with the largest effect on whether the game is fun. This plan's headline feature is Reflect. Both hand-author values across the same 12 archetype files. **RESOLVED on review, 2026-08-10: identity first, Reflect second, as separate approval gates.** The efficiency argument for a single pass loses to a correctness one — abilities determine a creature's role, role determines its right Reflect value, and a play-test of both changes at once cannot attribute the improvement to either. See the External review pass above and Task 10's banner.
+- ~~**Finding 12 is a bug and is cheap.** The guaranteed cause is one missing `overflow` rule at `app/src/index.css:13-19`…~~ **RETRACTED, 2026-08-10.** There was no guaranteed cause; there was an unverified hypothesis stated as a fact. The real cause is the deliberate `match-page-shift` animation. This bullet also recommended shipping the `overflow` rule immediately, ahead of plan approval — which would have shipped a fix for an unobserved problem and left the actual one running. See the External review pass above and the rewritten finding 12.
 - **Finding 11 has no test that can close it.** Task 10 Step 2's invariants prove the duplicate-verb problem is gone; only play proves the archetypes became distinct. Step 9 makes that explicit rather than letting a green suite imply success.
 - **Task numbering caveat:** Task 10 is numbered last but is independent of Tasks 0–9 and reads best right after Task 2. The numbers record insertion order, not execution order; execution order is the bullet above and the dependency line below.
 - **Round-2 coverage:** finding 15 becomes Task 5 Step 7b, finding 16 amends Task 5 Step 6 and flags Decision 11, finding 17 becomes Task 5 Step 7c.
-- **Task 5 has absorbed a lot and should probably be split.** It now carries: remove empty slots, center formations, token bands, the combat lane, the layout-shift fix, the hand-row geometry fix, and the hand-region treatment. That is no longer one reviewable deliverable. The natural seam is *layout correctness* (Steps 4–7b — all geometry, all testable) versus *treatment* (7c, 7d — visual, subjective). Split before execution unless the user prefers one large board pass.
+- **Task 5 is now split into 5A/5B/5C — see its banner.** (This bullet previously read "should probably be split.") The review made the split mandatory and corrected the seam: *match geometry correctness* (7a/7a-2/7b) is its own task and must run **ahead of** formations, because the height reclaimed by removing empty slots has to be measured against a match that has stopped moving. Treatment (7c/7d) goes last, after the user has seen the geometry land.
 - **Findings 15 and 16 are no longer competing for the same pixels.** They were: finding 15's fix wanted vertical room for the hand, finding 16's "reserve the band always" option wanted it for the board, and the layout had neither. **Decision 14 dissolves that** — a card that scales can shrink to fit the room available instead of demanding a fixed 336px, so the token band can be reserved *and* the hand can contain its cards. Still measure after Step 4 and settle 16 before implementing, but the conflict is now a budget question rather than an either/or.
 - **Decision 14 supersedes a constraint stated three times.** "The invariant 240×336 box" appears in Task 4 Step 7's invariants, in the Global Constraints, and in `card.css`'s own header comment. All three meant *cards do not disagree with each other in size*, which survives. None of them meant *240 specifically*, and the plan now says so once, in Decision 14, rather than leaving three literals to be reconciled during execution.
 - **`cardTextWell.test.ts` gets broken on purpose, exactly once.** The standing rule for that file — an edit that trips it is wrong, not the test — exists to stop flatten passes from silently deleting guards. Task 5 Step 7b Sub-step 3 is a specified change to the guarded value itself, and it re-expresses the assertion rather than removing it. Any *other* failure of that file during this plan is still the edit's fault.
-- **The scale factor is one number and it comes from JS.** Pure-CSS continuous `zoom` is not expressible, so `--card-scale` is observed and set. That makes it testable as a unit — clamp behavior, floor, and the board's half-scale relationship can all be asserted without a browser, which matters because `app/` is not type-checked in CI and layout bugs here are invisible until someone looks.
+- ~~**The scale factor is one number and it comes from JS.**~~ **RETRACTED, 2026-08-10.** `Hand.tsx:142-144` already duplicates `card.css`'s zoom tiers and `:110-114` already carries a resize listener, so a JS-driven `--card-scale` would have been a *third* scaling authority. The scale is one number in **CSS**, read by both consumers; continuous scaling is not a stated requirement. Testability was the right instinct and survives — discrete tiers in a custom property are just as assertable, and `app/` still is not type-checked in CI.
 - **One workaround gets removed, not preserved.** `pointer-events: none` on `.match-handwrap` exists to make overflowing hand cards click-through. Once Step 7b makes the row contain its cards, that rule is a leftover; leaving it in place would hide any future regression of the same bug.
+
+### External review pass, 2026-08-10 — changes required, accepted
+
+An independent review verified a baseline of 705 tests / 88 files at `b405cbf` (700/87 tracked, excluding the untracked scratch `core/tests/__def.test.ts`) and returned **changes required**. Both blocking findings were re-verified here and are correct. Every item below is now folded into the plan.
+
+**Blocking, accepted:**
+
+1. **The turn shift was misdiagnosed.** The real cause is `match-page-shift` — a deliberate 7px board translate re-triggered on every `turnStart` (`Match.tsx:651-656`, `animations.css:28-41`). The original diagnosis accepted the user's *guess* at a cause and built a CSS argument on it without grepping for an existing animation. The proposed `body { overflow: hidden }` fix would have shipped, changed nothing visible, and left the cause running. Finding 12 rewritten; Task 5 Steps 7a / 7a-2 replaced.
+2. **Bone Toll is not a payable cost.** `consume` (`effects.ts:188-196`) takes tokens only, oldest-first, with no player choice, silently pays nothing when there are no tokens, and does not gate the payoff. Handled in the spec, which now demotes the Toll from spine to technique.
+
+**Also accepted:**
+
+3. **Task 5 split into 5A/5B/5C**, and its file list corrected — it was missing `index.css`, `match.css`, `card.css`, `Hand.tsx`, `theme.css`, and the hand/card tests that its own steps require.
+4. **Task 8 split into 8A/8B/8C**, with the action log demoted to optional and re-confirmed after play.
+5. **The action log must not throw** on an unknown `GameEvent`. The earlier reasoning-by-analogy to `dispatch` was wrong: a missed mutation is a correctness bug, a missed caption is cosmetic, and crashing a match over a caption is not a trade worth making.
+6. **`app/DESIGN.md` does not exist.** Canon is root `DESIGN.md` with `.impeccable/design.json` as its sidecar. Both now named in Task 9's files and commit.
+7. **The scale factor should not come from JS.** `Hand.tsx:142-144` already mirrors `card.css`'s four zoom tiers with its own resize listener at `:110-114` — so a JS `--card-scale` would have been a *third* scaling authority and a second resize path. Centralise the existing CSS tiers into one variable instead; continuous scaling is not a stated requirement.
+8. **The per-archetype both-directions Reflect invariant is removed** — it forced every house to contain both an offensive and a defensive role, which is the homogenising pressure this work exists to undo.
+9. **Sequencing reversed**: identity before final Reflect authoring, as separate approval gates, because a play-test of two simultaneous changes cannot attribute the improvement.
+10. **Token band**: take "absorb the growth" — reserve capacity inside a fixed-height register and hide empty content visually. This reconciles Decision 11 with finding 16 instead of choosing between them.
+
+**Review positions retained without change:** no twelve-state conditional gate system; no borrowed role grid; Reflect is not the identity spine; tribes stay deferred.
 
 ### Code-grounded verification pass, 2026-08-10
 

@@ -1,14 +1,14 @@
-# House Identity Contract and Toll Technique — Design Draft
+# House Identity Contract and Toll Technique — Pilot Design
 
 **Date:** 2026-08-10
-**Status:** **ROUGH DRAFT / CONCEPT. Not approved. Do not implement from this document.**
+**Status:** **APPROVED FOR THE THREE-HOUSE PILOT.** The user approved the Ember/Bone/Vermin contract on 2026-08-10. The remaining nine-house sketch is still provisional.
 **Revised 2026-08-10 after two reviews.** The Toll is one technique inside the broader identity contract, option (a1) is the narrow legality mechanism, and `consume` stays with `vermin-swarm`.
 
-Captured to preserve the reasoning and measurements, not to authorise work. **The Problem section is durable**: it is counted from the tree and holds regardless of which solution wins. Everything after it remains a candidate answer until the three-house contract is explicitly approved and play-tested.
+**The Problem section is durable**: it is counted from the tree and holds regardless of which solution wins. The three-house contract, narrow Consume affordability gate, and testing/play-test requirements are approved implementation inputs; the other nine houses remain candidate directions until separately designed and approved.
 
 The reviews found three defects and this revision folds all three in: shipped `consume` silently underpays, five no-toll houses do not form an identity system, and assigning Consume to `bone-horde` contradicted the existing `vermin-swarmlord`. The chosen response is a pre-play affordability gate for immediate Consume costs, a five-element identity contract, and preservation of Consume as Vermin's resource relationship.
 
-**Blocking before this becomes executable:** approve the three-house contract and convert it into its own test-first implementation plan. The engine semantics below are decided; the card packages, costs, and play-test protocol are not.
+**Execution boundary:** convert this approved three-house contract into its own test-first implementation plan before changing code. The engine semantics are decided; the plan must author exact card packages, costs, structural tests, and play-test protocol without expanding into the provisional nine houses.
 
 **Origin:** Extracted from the former Task 10 of `docs/superpowers/plans/2026-08-09-reflect-dynamic-combat.md`. That plan now carries only an ordering/dependency gate for this separate identity work; it must not duplicate or improvise the card redesign.
 
@@ -130,7 +130,7 @@ Two houses may both pay Blood if one buys draw with it and the other buys buffs.
 
 ### Pilot — three-house proposal
 
-The three worst offenders are retained because they test three different resource relationships. The pilot is not definitive until its contract is approved and played.
+The three worst offenders are retained because they test three different resource relationships. The contract is approved for implementation, but the pilot is not accepted until all three houses are played and separately approved.
 
 Each pilot house must fill **all five contract elements**, not just a Toll. Weakness is mandatory.
 

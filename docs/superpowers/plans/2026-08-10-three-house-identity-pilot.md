@@ -160,7 +160,12 @@ describe('legalIntents omits unaffordable Consume plays', () => {
     expect(g.legalIntents(0).filter(i => i.kind === 'playCard')).toHaveLength(0);
     g = setup(['toll-spell'], 2);
     g.registry.register(card);
-    expect(g.legalIntents(0).filter(i => i.kind === 'playCard')).toHaveLength(1);
+    // `target: 'any'` yields one playCard intent per legal ref — both heroes
+    // are always legal, plus the 2 friendly token rats = 4 variants, so a
+    // count of 1 is impossible under the engine's enumeration (Fix round 1,
+    // review ruling; engine target enumeration kept as-is). The sibling
+    // battlecry-creature test below is targetless and legitimately stays 1.
+    expect(g.legalIntents(0).filter(i => i.kind === 'playCard')).toHaveLength(4);
   });
   it('excludes a consume battlecry creature at 0 tokens, includes it at 2', () => {
     const card = toll('toll-creature', [], [{ when: 'battlecry', effects: [consume(2), { kind: 'buff', value: 1, value2: 1, target: 'allFriendlyCreatures' }] }]);

@@ -1,5 +1,5 @@
 import { MANA_SURGE } from '../types.js';
-import type { Card, EffectSpec, EffectTarget, Intent, PlayerIndex, TargetRef } from '../types.js';
+import type { Card, EffectSpec, EffectTarget, GameState, Intent, PlayerIndex, TargetRef } from '../types.js';
 import { findCreature, isChoiceTarget, isDragon, resolveTargets, BOARD_CAP } from './effects.js';
 import { canAttack, effectiveKeywords, tauntPresent } from './keywords.js';
 import type { Game } from './game.js';
@@ -23,6 +23,9 @@ import type { Game } from './game.js';
  *    use per match — validation rejects once surged is true. `surged` starts
  *    false and is set when the card is played (audit 02: setup used to pre-set
  *    it, which made the card permanently unplayable).
+ *  - immediate Consume (a1, identity pilot): card.effects + battlecry effects
+ *    only; a card is illegal unless the whole token cost exists pre-play
+ *    (Need {required} friendly tokens to consume (have {available})).
  */
 
 /** Cost the player would actually pay to play `card`, with discounts applied. */
@@ -60,6 +63,15 @@ export function validatePlayCard(
   if (!card) return `Unknown card id: ${cardId}`;
   if (cardId === MANA_SURGE && p.surged) return 'Mana Surge already surged';
   if (p.mana < playEffectiveCost(game, card, me)) return 'Not enough mana';
+  // Identity pilot (a1): immediate Consume clauses are a PRE-PLAY cost. The
+  // card is illegal unless the whole token cost exists before the intent
+  // resolves; tokens summoned by the same card never satisfy it. Shared
+  // helper with legalIntents (playCard branch) so validation and
+  // enumeration cannot disagree.
+  const afford = immediateConsumeAffordability(game.state, me, card);
+  if (!afford.payable) {
+    return `Need ${afford.required} friendly tokens to consume (have ${afford.available})`;
+  }
   // Board cap (audit 01 C2, Task 3): a board of BOARD_CAP non-token creatures
   // cannot play more creatures — hand-played creatures are never tokens, so only
   // the non-token count matters. Effect summons cap too, so the invariant holds.
@@ -77,6 +89,38 @@ export function validatePlayCard(
 /** Effect specs of a creature card's battlecry trigger group(s), if any. */
 function battlecryEffects(card: Card): EffectSpec[] {
   return (card.triggers ?? []).filter(g => g.when === 'battlecry').flatMap(g => g.effects);
+}
+
+/** Sum of every IMMEDIATE Consume clause's cost (value ?? 1): top-level
+ *  card.effects plus battlecry trigger effects. A Consume inside a later
+ *  trigger (deathrattle/start/endOfTurn/onDamage) is a PAYOFF, not a play
+ *  cost, and never gates the card (identity pilot, a1). Pure — reads the
+ *  card def only. */
+export function requiredConsumeTokens(card: Card): number {
+  const immediate = [...card.effects, ...battlecryEffects(card)];
+  return immediate.reduce((n, s) => (s.kind === 'consume' ? n + (s.value ?? 1) : n), 0);
+}
+
+export interface ConsumeAffordability {
+  required: number;
+  available: number;
+  payable: boolean;
+}
+
+/** Pre-play affordability for a card's immediate Consume clauses (identity
+ *  pilot, a1). `available` is the controller's pre-play friendly token count
+ *  (CreatureState.token === true); `payable` is available >= required. Reads
+ *  state BEFORE the play intent resolves, so tokens the card itself summons
+ *  never satisfy the cost. ONE shared predicate for validatePlayCard and
+ *  legalIntents — the two branches must never disagree. */
+export function immediateConsumeAffordability(
+  state: GameState,
+  player: PlayerIndex,
+  card: Card,
+): ConsumeAffordability {
+  const required = requiredConsumeTokens(card);
+  const available = state.players[player].board.filter(c => c.token).length;
+  return { required, available, payable: available >= required };
 }
 
 /**
@@ -172,6 +216,11 @@ export function legalIntents(game: Game, player: PlayerIndex): Intent[] {
     // is never a token) — mirror how unaffordable cards are skipped (validatePlayCard rejects).
     if (card.type === 'creature' && p.board.filter(c => !c.token).length >= BOARD_CAP) continue;
     if (p.mana < playEffectiveCost(game, card, player)) continue;
+    // Identity pilot (a1): an unaffordable immediate-Consume card is
+    // unplayable — same predicate validatePlayCard uses, so a play that
+    // enumeration offers can never be rejected at submit (mirror how
+    // unaffordable cards are skipped above).
+    if (!immediateConsumeAffordability(game.state, player, card).payable) continue;
     // Same effect list validatePlayCard validates against — spell effects AND
     // battlecry effects — so enumeration and validation cannot disagree. (No
     // curated creature carries `effects`, but a Forge one may, and it would

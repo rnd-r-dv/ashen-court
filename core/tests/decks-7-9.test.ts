@@ -155,4 +155,31 @@ describe('decks 7-9 (Bone Horde, Grave Pact, Night Coven)', () => {
       expect(surv.health).toBe(4);                                                        // buff-1/-1(aec) hit the survivor
     });
   });
+
+  // Task 3: Bone Horde identity — Legion Call is a death-engine activation,
+  // not a Toll: it destroys a CHOSEN friendly creature (choice target), and
+  // the destroyed creature's deathrattle fires before the three-card payoff.
+  describe('bone-legion death-engine activation', () => {
+    it('is unplayable without a friendly creature to destroy', () => {
+      const game = newGame(BONE_HORDE_HERO, BONE_HORDE_DECK);
+      toMain(game);
+      game.state.players[0].hand.unshift('bone-legion');
+      game.state.players[0].mana = 10;
+      expect(game.legalIntents(0).filter(i => i.kind === 'playCard' && i.handIndex === 0)).toEqual([]);
+    });
+
+    it('destroys the chosen creature, fires its deathrattle, then adds the three-card payoff', () => {
+      const game = newGame(BONE_HORDE_HERO, BONE_HORDE_DECK);
+      toMain(game);
+      const offering = addCreature(game, 0, {
+        id: 'bone-offering', attack: 2, health: 2,
+        trigger: 'deathrattle', effects: [{ kind: 'summon', cardId: 'token-skeleton' }],
+      });
+      game.state.players[0].hand.unshift('bone-legion');
+      game.state.players[0].mana = 10;
+      game.submit({ kind: 'playCard', handIndex: 0, target: { type: 'creature', id: offering.id } });
+      expect(game.state.players[0].board.some(c => c.id === offering.id)).toBe(false);
+      expect(game.state.players[0].board.filter(c => c.token && c.cardId === 'token-skeleton')).toHaveLength(4);
+    });
+  });
 });

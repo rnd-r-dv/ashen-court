@@ -82,12 +82,12 @@ const duplicateCommons = (house: ArchetypeId): string[] => {
 const WAIVERS: Record<string, string> = {};
 
 it('duplicate-common report is empty or fully waived (spec test 1)', () => {
-  // Per-house staging (green-per-task ruling): this task changes Ember only,
-  // so the enforcement loop is scoped to Ember here. Task 3's Step 1
-  // broadens it to ['ember', 'bone', 'vermin'] so Bone's pre-existing
-  // duplicate is RED exactly when Task 3 starts, then Task 3's data
-  // implementation turns it green. The helper/report stays house-capable.
-  for (const house of ['ember'] as const) {
+  // Three-house enforcement: Ember (Task 2) redesigned its duplicates, and
+  // this Task 3 Step 1 broadens the loop back to all three houses so Bone's
+  // pre-existing duplicate is RED exactly during Task 3's RED run; Task 3's
+  // data implementation (bone-cairn redesign) turns it green. The
+  // helper/report stays house-capable for future per-house staging.
+  for (const house of ['ember', 'bone', 'vermin'] as const) {
     const report = duplicateCommons(house).filter(line => {
       const ids = line.split(': ')[1]!.split(', ');
       return ids.some(id => !(id in WAIVERS));
@@ -137,5 +137,35 @@ describe('ember court identity', () => {
     }
     expect(offenders, offenders.join(', ')).toEqual([]);
     expect(EMBER_COURT_HERO.power.effects.some(s => s.kind === 'heal' || s.kind === 'draw')).toBe(false);
+  });
+});
+
+describe('bone horde identity', () => {
+  const house = byHouse('bone');
+  const REACH = new Set(['any', 'hero', 'allEnemies', 'randomEnemy']);
+  it('has no reach to the enemy hero (board-only payoff)', () => {
+    const offenders: string[] = [];
+    for (const c of house) {
+      for (const s of allSpecs(c)) {
+        if (s.kind === 'dealDamage' && s.target && REACH.has(s.target)) offenders.push(c.id);
+      }
+    }
+    expect(offenders, offenders.join(', ')).toEqual([]);
+  });
+  it('never uses Consume (mechanically separate from Vermin)', () => {
+    expect(house.some(c => allSpecs(c).some(s => s.kind === 'consume'))).toBe(false);
+  });
+  it('rebuilds through deathrattle on at least 6 cards', () => {
+    const dr = house.filter(c => (c.triggers ?? []).some(t => t.when === 'deathrattle'));
+    expect(dr.length).toBeGreaterThanOrEqual(6);
+  });
+  it('bone-legion is a death-engine activation, not a Toll: destroy-friendly choice with a skeleton payoff', () => {
+    const legion = house.find(c => c.id === 'bone-legion')!;
+    expect(legion.effects).toEqual([
+      { kind: 'destroy', target: 'friendlyCreature' },
+      { kind: 'summon', cardId: 'token-skeleton', value: 3 },
+    ]);
+    // no Consume, no overload: Bone charges no toll
+    expect(legion.effects.some(s => s.kind === 'consume' || s.kind === 'overload')).toBe(false);
   });
 });

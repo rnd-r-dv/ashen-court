@@ -192,3 +192,11 @@ export const summon = (cardId: string, value?: number): EffectSpec => ({
 	cardId,
 	...(value !== undefined ? { value } : {}),
 });
+/** Ash Toll (ember identity): lock N mana at the start of the caster's next
+ *  turn (overload). Charged unconditionally at resolution (effects.ts). */
+export const overload = (value: number): EffectSpec => ({ kind: "overload", value });
+/** Fodder Toll (vermin identity): consume N friendly tokens (oldest first,
+ *  effects.ts). Immediate Consume clauses are gated by (a1) before play;
+ *  trigger-position Consume is a payoff, not a cost. Shared by the vermin
+ *  data file, which used to declare its own private copy. */
+export const consume = (value: number): EffectSpec => ({ kind: "consume", value });

@@ -265,9 +265,7 @@ describe("cardText — vanilla and keyword-only cards (Task 43)", () => {
 describe("cardText — real curated cards (Task 43)", () => {
 	it("ember-cauterize exact string", () => {
 		const pool = new Map(buildPool().map((c) => [c.id, c]));
-		expect(cardText(pool.get("ember-cauterize")!)).toBe(
-			"Deal 3 damage to any target. Restore 3 health to your hero.",
-		);
+		expect(cardText(pool.get("ember-cauterize")!)).toBe("Deal 6 damage to any target. Overload: 1.");
 	});
 	it("pool coverage — every card with rules-bearing data has non-empty text, spells always", () => {
 		const pool = buildPool();

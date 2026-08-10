@@ -1,6 +1,6 @@
 import type { Card, EffectSpec, EffectTarget, HeroSpec } from '../types.js';
 import type { DeckDef } from './index.js';
-import { archetypeCards, dmg, heal, summon } from './builders.js';
+import { archetypeCards, dmg, overload, summon } from './builders.js';
 
 /** Spell-damage aura (ember identity): grant Spell Power to a chosen friendly
  *  creature. Spell Power applies only to SPELL damage (effects.ts), so the
@@ -30,19 +30,19 @@ export const CARDS: Card[] = [
   creature('ember-ashhunter', 'Ash Hunter', 2, 2, 2, 'common', ['stealth'], [], 'It stalks the cooled fields where the fires have passed, harvesting whatever survived the burning.'),
   spell('ember-searing', 'Searing Wave', 2, 'common', [dmg(1, 'allEnemies')], 'The court\'s opening argument: heat enough to crack shields and curl banners before the first blade is drawn.'),
   creature('ember-flamewhelp', 'Flamewhelp', 2, 2, 1, 'common', ['rush'], [], 'Born hungry and taught to charge, the whelps throw themselves at whatever stands — the court calls it eagerness.'),
-  spell('ember-blast', 'Blast', 3, 'common', [dmg(4, 'any')], 'A fist of fire hurled from the high galleries. There is no diplomacy in it.'),
+  spell('ember-blast', 'Blast', 3, 'common', [dmg(5, 'any'), overload(2)], 'A fist of fire hurled from the high galleries. There is no diplomacy in it.'),
   creature('ember-firebrand', 'Firebrand', 3, 3, 3, 'common', [], [{ when: 'battlecry', effects: [spellPower(1, 'allFriendlyCreatures')] }], 'Snatched burning from a dying pyre and given a sword, the firebrand carries the court\'s anger into the line.'),
-  creature('ember-igniter', 'Igniter', 3, 2, 3, 'common', [], [{ when: 'battlecry', effects: [dmg(1, 'any')] }], 'Every siege begins with one small flame where no flame should be.'),
-  spell('ember-cauterize', 'Cauterize', 4, 'common', [dmg(3, 'any'), heal(3)], 'The court\'s surgeons know a seared wound cannot bleed again — and they let the enemy pay for the flame.'),
+  creature('ember-igniter', 'Igniter', 3, 2, 3, 'common', [], [{ when: 'battlecry', effects: [dmg(2, 'any')] }], 'Every siege begins with one small flame where no flame should be.'),
+  spell('ember-cauterize', 'Cauterize', 4, 'common', [dmg(6, 'any'), overload(1)], 'The court\'s surgeons know a seared wound cannot bleed again — and they let the enemy pay for the flame.'),
   creature('ember-hellhound', 'Hellhound', 4, 4, 3, 'common', ['charge'], [], 'Bred in the kennels beneath the Throne of Ash, the hounds answer only to the scent of fear.'),
   // Rares (5)
   spell('ember-firestorm', 'Firestorm', 5, 'rare', [dmg(4, 'allEnemies')], 'When the court tires of words, it lets the sky speak.'),
-  creature('ember-phoenixwhelp', 'Phoenix Whelp', 5, 5, 4, 'rare', ['lifesteal'], [], 'A fledgling of the Sovereign\'s brood, learning that every dying ember is a debt owed to fire.'),
-  spell('ember-pyroblast', 'Pyroblast', 5, 'rare', [dmg(7, 'any')], 'The last word in the court\'s vocabulary of fire. There are no appeals.'),
+  creature('ember-phoenixwhelp', 'Phoenix Whelp', 5, 5, 4, 'rare', [], [{ when: 'deathrattle', effects: [dmg(2, 'randomEnemy')] }], 'A fledgling of the Sovereign\'s brood, learning that every dying ember is a debt owed to fire.'),
+  spell('ember-pyroblast', 'Pyroblast', 5, 'rare', [dmg(8, 'any'), overload(2)], 'The last word in the court\'s vocabulary of fire. There are no appeals.'),
   creature('ember-flamebringer', 'Flamebringer', 6, 5, 5, 'rare', [], [{ when: 'battlecry', effects: [dmg(2, 'any')] }], 'He does not announce the burning. He is the announcement.'),
   artifact('ember-emberforged', 'Emberforged Blade', 4, 'rare', [{ when: 'startOfTurn', effects: [dmg(1, 'randomEnemy')] }], 'Forged in the heart of the Sovereign\'s pyre, the blade remembers every fire it has known — and hungers for the next.'),
   // Epics (3)
-  spell('ember-conflagration', 'Conflagration', 7, 'epic', [dmg(2, 'allEnemies')], 'The Ember Court does not wage war; it sets the world alight and calls the settling ash peace.'),
+  spell('ember-conflagration', 'Conflagration', 7, 'epic', [dmg(5, 'allEnemies'), overload(3)], 'The Ember Court does not wage war; it sets the world alight and calls the settling ash peace.'),
   creature('ember-ashwing', 'Ashwing', 7, 7, 6, 'epic', ['charge'], [], 'It does not descend to fight. It arrives, and the field remembers it should already be ash.'),
   creature('ember-magmasoul', 'Magmasoul', 8, 7, 7, 'epic', ['windfury'], [], 'A heart of molten stone, struck twice with the same fury — the first blow is the warning, the second is the verdict.'),
   // Legendaries (2)

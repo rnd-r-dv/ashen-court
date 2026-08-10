@@ -82,16 +82,17 @@ describe('decks 1-3 (Ember Court, Hollow Choir, Vermin Swarm)', () => {
   // the explicit ref for hero/self (healing the CHOSEN target instead of the
   // caster's own hero).
   describe('hero/self auto-resolve for mixed cards (controller ruling)', () => {
-    it('ember-cauterize damages the chosen enemy creature AND heals own hero', () => {
+    it('ember-cauterize deals 6 to the chosen target and charges Ash (no heal)', () => {
       const game = newGame(EMBER_COURT_HERO, EMBER_COURT_DECK);
       toMain(game);
-      const victim = addCreature(game, 1, { id: 'enemy-scout', attack: 2, health: 5 });
+      const victim = addCreature(game, 1, { id: 'enemy-scout', attack: 2, health: 7 });
       game.state.players[0].hand.unshift('ember-cauterize');
       game.state.players[0].mana = 10;
-      game.state.players[0].hero.hp = 28;
+      game.state.players[0].hero.hp = 20;
       game.submit({ kind: 'playCard', handIndex: 0, target: { type: 'creature', id: victim.id } });
-      expect(game.state.players[1].board.find(c => c.id === victim.id)!.health).toBe(2);  // dmg3(any) hit the target
-      expect(game.state.players[0].hero.hp).toBe(30);                                     // heal3(h) hit OWN hero
+      expect(game.state.players[1].board.find(c => c.id === victim.id)!.health).toBe(1);  // 6 damage to the target
+      expect(game.state.players[0].hero.hp).toBe(20);                                     // NO heal lands
+      expect(game.state.players[0].overload).toBe(1);                                     // Ash charged at resolution
     });
 
     it('choir-verdict destroys the chosen enemy creature AND heals own hero', () => {

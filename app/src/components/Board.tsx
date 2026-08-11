@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, TargetRef } from '@ashen/core';
-import { BOARD_CAP } from '@ashen/core';
 import type { ArchetypeId } from '@ashen/core';
 import CardView, { FACE_DOWN_CARD } from './CardView.js';
 import HeroPortrait, { HeroPowerBlazon } from './HeroPortrait.js';
@@ -14,22 +13,15 @@ import { houseOfHeroName } from '../game/house.js';
 import './board.css';
 
 /**
- * How many empty slot outlines to draw beside the creatures already down.
- * An empty row used to render a bare em dash, which reads as "nothing here"
- * instead of "your side, room for N" — and gave summon animations nowhere to
- * land. Clamped at zero so a transient over-cap board cannot produce a
- * negative repeat count. Tokens do NOT count against this (they live in
- * their own subordinate band, Task 6).
- */
-export function slotCount(occupied: number): number {
-  return Math.max(0, BOARD_CAP - occupied);
-}
-
-/**
  * Stable partition of one side's board by `creature.token`: normal creatures
  * keep their relative order in the register, tokens keep theirs in the
  * sub-band. Splitting must never reorder either group — order is part of the
  * board's visual state (slot points drive combat FX).
+ *
+ * Task 5B: there are no capacity slots any more. The engine's normal cap
+ * (BOARD_CAP, core) stays exactly seven — the board simply renders the
+ * occupied formation, and tokens never consume a normal slot (they live in
+ * the always-mounted token sub-band below).
  */
 function partitionRegisters(board: readonly CreatureState[]): [CreatureState[], CreatureState[]] {
   const normals: CreatureState[] = [];
@@ -397,21 +389,31 @@ export default function Board({
               ))}
             </div>
           </div>
-          <div className="board-register">
+          <div className="board-register board-player-register">
             <div className="board-row board-row--top">
               <AnimatePresence>{foeNormals.map((c) => creatureSlot(c, false, false))}</AnimatePresence>
-              {Array.from({ length: slotCount(foeNormals.length) }, (_, i) => (
-                <span className="board-slot--empty" key={`empty-${i}`} aria-hidden="true" />
-              ))}
-            </div>
-            {foeTokens.length > 0 && (
-              <div className="board-row board-row--tokens board-row--tokens--top" aria-label="Enemy tokens">
+              {/* Task 5B: the token sub-band is ALWAYS mounted inside the
+                  player register, reserving exactly one token card's width.
+                  Empty content is visibility-hidden (:empty, exit-safe) and
+                  aria-hidden — the reserve stays in the layout, so a spawn
+                  changes no outer register bounds. */}
+              <div
+                className="board-token-register board-token-register--top"
+                aria-label={foeTokens.length > 0 ? 'Enemy tokens' : undefined}
+                aria-hidden={foeTokens.length === 0 ? true : undefined}
+              >
                 <AnimatePresence>{foeTokens.map((c) => creatureSlot(c, false, true))}</AnimatePresence>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </section>
+
+      {/* Task 5B: the reserved axis between the two registers — an empty,
+          pointer-inert effects layer with no ornament. Combat FX (Match's
+          .match-fx overlay) fly across it; the lane itself only guarantees
+          the lane stays empty and never eats a click. */}
+      <div className="board-combat-lane" aria-hidden="true" />
 
       {/* friendly zone (bottom) */}
       <section
@@ -424,20 +426,20 @@ export default function Board({
               without hover (Task 7). */}
           <HeroPowerBlazon hero={meP.hero} />
         </div>
-        <div className="board-zone-body">
-          <div className="board-register">
-            <div className="board-row board-row--bottom">
-              <AnimatePresence>{meNormals.map((c) => creatureSlot(c, true, false))}</AnimatePresence>
-              {Array.from({ length: slotCount(meNormals.length) }, (_, i) => (
-                <span className="board-slot--empty" key={`empty-${i}`} aria-hidden="true" />
-              ))}
-            </div>
-            {meTokens.length > 0 && (
-              <div className="board-row board-row--tokens board-row--tokens--bottom" aria-label="Your tokens">
-                <AnimatePresence>{meTokens.map((c) => creatureSlot(c, true, true))}</AnimatePresence>
+          <div className="board-zone-body">
+            <div className="board-register board-player-register">
+              <div className="board-row board-row--bottom">
+                <AnimatePresence>{meNormals.map((c) => creatureSlot(c, true, false))}</AnimatePresence>
+                {/* Task 5B: always-mounted token sub-band (see the enemy side). */}
+                <div
+                  className="board-token-register board-token-register--bottom"
+                  aria-label={meTokens.length > 0 ? 'Your tokens' : undefined}
+                  aria-hidden={meTokens.length === 0 ? true : undefined}
+                >
+                  <AnimatePresence>{meTokens.map((c) => creatureSlot(c, true, true))}</AnimatePresence>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
           <div className="board-side board-side--bottom">
             <HeroPortrait
               hero={meP.hero}

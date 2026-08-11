@@ -2,9 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
-import { BOARD_CAP } from '@ashen/core';
 import type { Card as CardSpec } from '@ashen/core';
-import { slotCount } from '../src/components/Board.js';
 import CardView from '../src/components/CardView.js';
 
 // React 18's act() requires the testing-environment flag (see drivers.test.ts).
@@ -51,24 +49,10 @@ afterEach(() => {
   root = null;
 });
 
-describe('slotCount', () => {
-  it('shows the full capacity when the board is empty', () => {
-    expect(slotCount(0)).toBe(BOARD_CAP);
-  });
-
-  it('shows only the remaining room once creatures are down', () => {
-    expect(slotCount(3)).toBe(BOARD_CAP - 3);
-  });
-
-  it('shows no empty slots on a full board', () => {
-    expect(slotCount(BOARD_CAP)).toBe(0);
-  });
-
-  it('never returns a negative count', () => {
-    // Defensive: a future effect could exceed the cap transiently.
-    expect(slotCount(BOARD_CAP + 2)).toBe(0);
-  });
-});
+// Task 5B: the decorative capacity-slot helper is gone — the board draws no
+// empty slot outlines beside the creatures already down (the engine's normal
+// cap of seven is untouched; it lives in core as BOARD_CAP). Its absence is
+// pinned in boardFormation.test.ts; this suite now covers only the plate.
 
 describe('card plate surface', () => {
   it('hand plate carries a cost marker', () => {

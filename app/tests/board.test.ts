@@ -13,7 +13,7 @@ import Match from '../src/screens/Match.js';
 import { buildMatchEntry } from '../src/game/matchSetup.js';
 import Board from '../src/components/Board.js';
 import type { BoardTargeting } from '../src/components/Board.js';
-import { BOARD_CAP, heroPowerText } from '@ashen/core';
+import { heroPowerText } from '@ashen/core';
 import type { Card as CardSpec, CreatureState, GameState, Intent, PlayerIndex, PlayerState, TargetRef } from '@ashen/core';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -122,8 +122,7 @@ describe('Match board (Task 31)', () => {
       // attack with ready creatures (token band included — tokens attack too)
       for (let i = 0; i < 6; i++) {
         const ready = document.querySelector(
-          '.board-row--bottom .cardview:not(.cardview--exhausted):not(.cardview--frozen), ' +
-            '.board-row--tokens--bottom .cardview:not(.cardview--exhausted):not(.cardview--frozen)',
+          '.board-row--bottom .cardview:not(.cardview--exhausted):not(.cardview--frozen)',
         );
         if (!ready) break;
         click(ready);
@@ -290,23 +289,22 @@ describe('board registers and token sub-bands (Task 6)', () => {
     const me = [creature('me-1', false), creature('me-token-1', true), creature('me-token-2', true)];
     renderBoard(boardState(foe, me));
 
-    // enemy register: 2 normals + capacity outlines, tokens counted out
-    expect(host!.querySelectorAll('.board-row--top .board-slot')).toHaveLength(2);
-    expect(host!.querySelectorAll('.board-row--top .board-slot--empty')).toHaveLength(BOARD_CAP - 2);
-    const foeTokens = host!.querySelectorAll('.board-row--tokens--top .board-slot');
+    // enemy register: 2 normals, no decorative capacity outlines; tokens are
+    // counted out into their always-mounted sub-band (Task 5B)
+    expect(host!.querySelectorAll('.board-row--top .board-slot:not(.board-slot--token)')).toHaveLength(2);
+    expect(host!.querySelectorAll('.board-slot--empty')).toHaveLength(0);
+    const foeTokens = host!.querySelectorAll('.board-token-register--top .board-slot');
     expect(foeTokens).toHaveLength(1);
     expect(foeTokens[0]!.getAttribute('data-creature-id')).toBe('foe-token');
 
-    // friendly register: 1 normal + capacity outlines — tokens never consume
-    // a normal-row slot
-    expect(host!.querySelectorAll('.board-row--bottom .board-slot')).toHaveLength(1);
-    expect(host!.querySelectorAll('.board-row--bottom .board-slot--empty')).toHaveLength(BOARD_CAP - 1);
-    expect(host!.querySelectorAll('.board-row--tokens--bottom .board-slot')).toHaveLength(2);
+    // friendly register: 1 normal — tokens never consume a normal-row slot
+    expect(host!.querySelectorAll('.board-row--bottom .board-slot:not(.board-slot--token)')).toHaveLength(1);
+    expect(host!.querySelectorAll('.board-token-register--bottom .board-slot')).toHaveLength(2);
   });
 
   it('renders tokens with the same CardView language at a smaller scale', () => {
     renderBoard(boardState([], [creature('me-token-1', true)]));
-    const slot = host!.querySelector('.board-row--tokens--bottom .board-slot')!;
+    const slot = host!.querySelector('.board-token-register--bottom .board-slot')!;
     expect(slot.getAttribute('data-creature-id')).toBe('me-token-1');
     // same live-stat language as a normal board plate
     expect(slot.querySelector('.cardview')).not.toBeNull();
@@ -325,7 +323,7 @@ describe('board registers and token sub-bands (Task 6)', () => {
     const slot = host!.querySelector('.board-row--bottom .board-slot')!;
     expect(slot.querySelector('.card--selected')).not.toBeNull();
     // the token band renders beside it, untouched
-    expect(host!.querySelector('.board-row--tokens--bottom .cardview')).not.toBeNull();
+    expect(host!.querySelector('.board-token-register--bottom .cardview')).not.toBeNull();
   });
 
   it('passes the friendly lockedMana through to the mana tray', () => {

@@ -3,9 +3,15 @@
  * The Armorial direction contract (Task 4) makes the board a page of arms:
  * two banded registers divided by an engraved rule, each under its house
  * banner in the margin, with the token row a subordinate sub-band. Canonical
- * tokens only (--line/--line-dim/--house-*/--or); no gradients, glows, inset
+ * tokens only (line, line-dim, house fields, or); no gradients, glows, inset
  * shadows, bevels, or faux metal. Gules is reserved for damage FX and or for
- * the active turn — neither leaks into these rules. */
+ * the active turn — neither leaks into these rules.
+ *
+ * Note (Task 5B): token names here are written WITHOUT leading dashes — a
+ * dash-dash token run followed by a slash would form a comment terminator
+ * and drop the very first rule below it from the cascade (the latent bug
+ * that silently disabled `.board { flex: 1 }` until this task's comment
+ * repair restored it). */
 
 .board {
   display: flex;
@@ -14,6 +20,10 @@
   flex: 1;
   gap: var(--space-2);
   min-height: 0;
+  /* Task 5B: the token sub-scale, owned once and consumed by both the token
+     plate zoom and the token register's one-token reserve (board.css: the
+     reserve must equal one rendered token card, so both read this token). */
+  --token-zoom: 0.72;
 }
 
 /* Each zone is a page band: margin rail on the left (the house banner), the
@@ -135,7 +145,7 @@
 /* ---- creature registers ---- */
 .board-register {
   border-top: 1px solid var(--line-dim);
-  padding-top: 8px;
+  padding-top: 6px;
 }
 
 /* The enemy band closes with its own rule; the friendly band's top rule is
@@ -144,61 +154,68 @@
   border-bottom: 1px solid var(--line-dim);
 }
 
+/* Task 5B: one centered max-content formation per side. The row shrinks to
+   its occupied content and centers with auto margins — no decorative empty
+   slots, so a creature landing never reflows the row (the min-height floor
+   keeps the row deterministic whether it holds 0 or 7 cards). Wrapping is
+   off: the formation is one line at every supported width, and seven board
+   minis (840px) + six gaps fit the 1280×900 register before spacing ever
+   needs to contract below the clamp's 8px floor. */
 .board-row {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: clamp(8px, 1.6vw, 16px);
-  min-height: clamp(90px, 13vh, 152px);
-  flex-wrap: wrap;
-  padding: 0 var(--space-4);
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto;
+  gap: clamp(8px, 1vw, 16px);
+  min-height: clamp(104px, 11.5vh, 120px);
 }
 
-.board-row--top {
-  min-height: clamp(90px, 13vh, 152px);
-}
-
-/* per-creature animation slot (Task 39): framer drives slam-in / death exit */
+/* per-creature animation slot (Task 39): framer drives slam-in / death exit.
+   flex: 0 0 auto keeps the plate from squishing if a formation ever outgrows
+   its register (cards never overlap or reorder). */
 .board-slot {
   position: relative;
+  flex: 0 0 auto;
 }
 
-/* Tokens are the same CardView language at a smaller scale (Task 6): the
-   sub-band is set off from the register by a dashed subordinate rule. */
-.board-row--tokens {
-  justify-content: center;
-  border-top: 1px dashed var(--line-dim);
-  margin-top: 6px;
-  padding-top: 6px;
-  min-height: clamp(74px, 9vh, 104px);
+/* Task 5B: the token sub-band — always mounted INSIDE the player register,
+   beside the normal formation, set off by a dashed subordinate rule (the
+   band's Task 6 language, now inline instead of beneath: the fixed-height
+   register this plan requires could not fit the floor viewport as a stacked
+   row — see the task report). The band reserves EXACTLY one token card's
+   width (--token-zoom × the board card box), so a spawn fills the reserve
+   without changing a single outer register bound; the 0→1 spawn is
+   byte-identical. Empty content is visibility-hidden — the reserve keeps
+   its layout box, the band reads as nothing, and pointer events die with
+   the visibility — never display:none, which would unmount the reserve. */
+.board-token-register {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1vw, 16px);
+  min-width: calc(var(--card-w) * var(--board-card-scale) * var(--token-zoom));
+  padding-left: clamp(8px, 1vw, 16px);
+  border-left: 1px dashed var(--line-dim);
+}
+
+/* `:empty` (not a tokens.length class) so the LAST token's AnimatePresence
+   exit still plays: while the exiting plate is in the DOM the register is
+   not :empty, and it only goes invisible once the dissolve completes. */
+.board-token-register:empty {
+  visibility: hidden;
 }
 
 .board-slot--token {
-  zoom: 0.72;
+  zoom: var(--token-zoom);
 }
 
-/* Empty capacity marker, sized to a board mini so the row does not reflow
-   when a creature lands in a slot.
-   
-   These are literal px on purpose. A board mini is 240 x 205 at zoom 0.5
-   (card.css: --card-w, and .card--board's derived --card-h), but those
-   custom properties are scoped to .card and are not in scope here. Copying
-   them into :root would create a second copy of a DERIVED value that drifts
-   the moment the art ratio changes — the exact failure the card-frame plan
-   avoids by deriving --card-art-h. A decorative outline being a few px off
-   is harmless; a silently stale duplicate is not.
-
-   Scoped to --empty so the pre-existing creature wrapper (.board-slot,
-   position: relative only) never inherits the dashed outline: with no
-   universal box-sizing reset the wrapper is content-box, so a 1px dashed
-   border would draw OUTSIDE the card and show stray chrome around every
-   creature. */
-.board-slot--empty {
-  width: 120px;
-  height: 103px;
-  border-radius: var(--radius-sm);
-  border: 1px dashed var(--line-dim);
+/* The reserved axis between the two registers (Task 5B): an empty,
+   pointer-inert flex item that carries the board's slack. No ornament — it
+   is the lane combat FX cross and nothing else. */
+.board-combat-lane {
   flex: 0 0 auto;
+  pointer-events: none;
 }
 
 /* End Turn button */
@@ -209,12 +226,8 @@
 
 /* Short windows: rows compress so the board fits above the hand. */
 @media (max-height: 760px) {
-  .board-row,
-  .board-row--top {
-    min-height: clamp(84px, 12vh, 110px);
-  }
-  .board-row--tokens {
-    min-height: clamp(64px, 8vh, 84px);
+  .board-row {
+    min-height: clamp(100px, 12vh, 110px);
   }
 }
 

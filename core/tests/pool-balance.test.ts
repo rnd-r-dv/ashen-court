@@ -20,7 +20,10 @@ const pool = buildPool().filter((c) => c.archetype !== "token");
 // byte-for-byte; any drift (ID, cost, Attack, Health, or Reflect) fails.
 // 140 curated rows + 6 token rows = 146. The token rows sit in TOKEN_LEDGER
 // below so the `!card.token` filtered `pool` can never accidentally double-count.
-const LEDGER: Record<string, [cost: number, attack: number, reflect: number, health: number]> = {
+const LEDGER: Record<
+	string,
+	[cost: number, attack: number, reflect: number, health: number]
+> = {
 	// --- Ember Court (13), lean Aggressor ---
 	"ember-cinderling": [1, 2, 1, 1],
 	"ember-sparkmage": [1, 1, 0, 1],
@@ -177,7 +180,10 @@ const LEDGER: Record<string, [cost: number, attack: number, reflect: number, hea
 };
 
 /** Token creatures (§4): all six stay at parity with their Attack. */
-const TOKEN_LEDGER: Record<string, [cost: number, attack: number, reflect: number, health: number]> = {
+const TOKEN_LEDGER: Record<
+	string,
+	[cost: number, attack: number, reflect: number, health: number]
+> = {
 	"token-rat": [0, 1, 1, 1],
 	"token-skeleton": [0, 1, 1, 1],
 	"token-wisp": [0, 1, 1, 1],
@@ -284,7 +290,9 @@ describe("pool balance", () => {
 		const curated = all.filter(
 			(c) => c.type === "creature" && c.archetype !== "token",
 		);
-		const tokens = all.filter((c) => c.type === "creature" && c.archetype === "token");
+		const tokens = all.filter(
+			(c) => c.type === "creature" && c.archetype === "token",
+		);
 		expect(curated).toHaveLength(140);
 		expect(tokens).toHaveLength(6);
 		// Every ledger id exists in the pool as a creature and vice versa — the
@@ -305,10 +313,7 @@ describe("pool balance", () => {
 		expect(creatures).toHaveLength(146);
 		for (const c of creatures) {
 			const row = merged[c.id];
-			expect(
-				row,
-				`${c.id} missing from the approved ledger`,
-			).toBeDefined();
+			expect(row, `${c.id} missing from the approved ledger`).toBeDefined();
 			expect(
 				[c.cost, c.attack, c.reflect, c.health],
 				`${c.id} drifts from the approved ledger`, // no cost/A/H/Reflect drift
@@ -321,10 +326,15 @@ describe("pool balance", () => {
 		const nonCreatures = all.filter((c) => c.type !== "creature");
 		expect(nonCreatures).toHaveLength(139); // 124 spells + 14 artifacts + mana-surge
 		for (const c of nonCreatures) {
-			expect(c.reflect, `${c.id} must not carry a creature stat`).toBeUndefined();
+			expect(
+				c.reflect,
+				`${c.id} must not carry a creature stat`,
+			).toBeUndefined();
 		}
 		for (const c of all.filter((c) => c.type === "creature")) {
-			expect(Number.isInteger(c.reflect), `${c.id} reflect ${c.reflect}`).toBe(true);
+			expect(Number.isInteger(c.reflect), `${c.id} reflect ${c.reflect}`).toBe(
+				true,
+			);
 			expect(c.reflect!, `${c.id} reflect`).toBeGreaterThanOrEqual(0);
 		}
 	});
@@ -350,9 +360,15 @@ describe("pool balance", () => {
 	it("pool-wide diversity keeps all three Reflect-vs-Attack directions", () => {
 		// Ledger §7.1: 48 creatures with R < A, 54 with R = A, 44 with R > A.
 		const creatures = buildPool().filter((c) => c.type === "creature");
-		const lt = creatures.filter((c) => (c.reflect ?? 0) < (c.attack ?? 0)).length;
-		const eq = creatures.filter((c) => (c.reflect ?? 0) === (c.attack ?? 0)).length;
-		const gt = creatures.filter((c) => (c.reflect ?? 0) > (c.attack ?? 0)).length;
+		const lt = creatures.filter(
+			(c) => (c.reflect ?? 0) < (c.attack ?? 0),
+		).length;
+		const eq = creatures.filter(
+			(c) => (c.reflect ?? 0) === (c.attack ?? 0),
+		).length;
+		const gt = creatures.filter(
+			(c) => (c.reflect ?? 0) > (c.attack ?? 0),
+		).length;
 		expect(lt).toBe(48);
 		expect(eq).toBe(54);
 		expect(gt).toBe(44);

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Card } from "@ashen/core";
+import { buildPool } from "@ashen/core";
 import {
 	saveCustomCard,
 	loadCustomCards,
@@ -84,11 +85,69 @@ describe("custom cards", () => {
 	});
 	it("migrateCard leaves new-schema cards untouched (no Reflect repair)", () => {
 		expect(migrateCard(card())).toEqual(card());
-		// A card that already carries Reflect but no stamp is not a legacy
-		// shape — migration must not rewrite it or add a stamp.
-		const unstamped = card({ id: "unstamped" });
-		delete (unstamped as Partial<Card>).schemaVersion;
-		expect(migrateCard(unstamped)).toEqual(unstamped);
+	});
+	// Fix round 1: a creature carrying an EXPLICIT Reflect with an absent/1
+	// schemaVersion is still legacy storage (written before the stamp existed).
+	// The migration must stamp schemaVersion 2 WITHOUT touching that explicit
+	// Reflect or the `version` revision — repairing only the stamp, not the stat.
+	it("migrateCard stamps a creature with explicit Reflect but no schemaVersion (preserving Reflect, version, id)", () => {
+		const legacy = card({
+			id: "legacy-explicit",
+			name: "Emberhand",
+			reflect: 7,
+			version: 9,
+		});
+		delete (legacy as Partial<Card>).schemaVersion;
+		const migrated = migrateCard(legacy);
+		expect(migrated.schemaVersion).toBe(2); // stamp added
+		expect(migrated.reflect).toBe(7); // explicit Reflect preserved, NOT attack-derived
+		expect(migrated.attack).toBe(3); // attack untouched
+		expect(migrated.version).toBe(9); // revision preserved
+		expect(migrated.id).toBe("legacy-explicit"); // identity preserved
+	});
+	it("migrateCard stamps a schemaVersion-1 creature with explicit Reflect identically", () => {
+		const legacy = card({
+			id: "legacy-explicit-v1",
+			schemaVersion: 1 as const,
+			reflect: 4,
+		});
+		const migrated = migrateCard(legacy);
+		expect(migrated.schemaVersion).toBe(2);
+		expect(migrated.reflect).toBe(4); // explicit Reflect kept
+		expect(migrated.version).toBe(1);
+	});
+	it("migrateCard is idempotent for an explicit-Reflect creature with no stamp", () => {
+		const legacy = card({ id: "legacy-idem", reflect: 5 });
+		delete (legacy as Partial<Card>).schemaVersion;
+		const once = migrateCard(legacy);
+		expect(migrateCard(once)).toEqual(once); // second pass changes nothing
+	});
+	it("migrateCard does not stamp spells or artifacts at any schemaVersion", () => {
+		const spell = card({
+			id: "legacy-spell-v1",
+			name: "Old Ritual",
+			type: "spell",
+			schemaVersion: 1 as const,
+		});
+		delete spell.reflect;
+		delete spell.attack;
+		delete spell.health;
+		expect(migrateCard(spell)).toEqual(spell); // no stamp, no Reflect
+		const artifact = card({
+			id: "legacy-artifact-v1",
+			name: "Old Relic",
+			type: "artifact",
+			schemaVersion: 1 as const,
+		});
+		delete artifact.reflect;
+		delete artifact.attack;
+		delete artifact.health;
+		expect(migrateCard(artifact)).toEqual(artifact); // no stamp, no Reflect
+	});
+	it("migrateCard leaves every curated card untouched (all are schemaVersion 2)", () => {
+		for (const c of buildPool()) {
+			expect(migrateCard(c)).toEqual(c);
+		}
 	});
 	it("a stored spell or artifact retains no Reflect under migration", () => {
 		const spell = card({
@@ -102,12 +161,30 @@ describe("custom cards", () => {
 		const [loaded] = loadCustomCards();
 		expect(loaded!.reflect).toBeUndefined();
 	});
-	it("does NOT silently repair a schemaVersion-2 creature missing Reflect (Task 3 owns the gate)", () => {
+	it("loadCustomCards rejects a stored schemaVersion-2 creature missing Reflect (never returns playable data)", () => {
 		const schema2 = card({ id: "schema2-001", schemaVersion: 2 });
 		delete schema2.reflect;
-		localStorage.setItem("tcg.customCards", JSON.stringify([schema2]));
+		// Seed a valid sibling so a whole-array fallback would be visible: the
+		// rejection must drop ONLY the invalid card (M5 filter semantics), not
+		// discard the array. The storage boundary reads but never rewrites — the
+		// raw entry stays untouched so the Forge can still surface it as broken.
+		localStorage.setItem(
+			"tcg.customCards",
+			JSON.stringify([schema2, card({ id: "valid-001", name: "Valid" })]),
+		);
+		const loaded = loadCustomCards();
+		expect(loaded.map((c) => c.id)).toEqual(["valid-001"]); // invalid one dropped
+		expect(
+			(JSON.parse(localStorage.getItem("tcg.customCards")!) as unknown[]).length,
+		).toBe(2); // storage itself not rewritten
+	});
+	it("loads a stored creature with explicit Reflect but no stamp, stamping 2 while preserving Reflect", () => {
+		const legacy = card({ id: "legacy-explicit-load", reflect: 6 });
+		delete (legacy as Partial<Card>).schemaVersion;
+		localStorage.setItem("tcg.customCards", JSON.stringify([legacy]));
 		const [loaded] = loadCustomCards();
-		expect(loaded!.reflect).toBeUndefined(); // a 2-stamped card is authored, not legacy
+		expect(loaded!.reflect).toBe(6); // explicit Reflect survives the boundary
+		expect(loaded!.schemaVersion).toBe(2); // stamp added at the boundary
 	});
 	it("upserts by id when the name is unchanged (re-saving an edit)", () => {
 		saveCustomCard(card());

@@ -58,37 +58,48 @@ function write(key: string, value: unknown): boolean {
  * app boundary (localStorage load, JSON import). Cards authored or exported
  * before the Reflect contract existed carry no `reflect` and no
  * `schemaVersion` (or a stamped 1); migrate them deterministically to
- * schemaVersion 2 with Reflect = Attack so they pass core validation and
- * fight with mirror-stat parity.
+ * schemaVersion 2 so they pass core validation and fight with mirror-stat
+ * parity.
  *
- * The gate is exact: a CUSTOM creature with Reflect ABSENT and schemaVersion
- * NOT 2 is repaired. A schemaVersion-2 creature missing Reflect is authored
- * under the current contract — a genuine error — and is returned untouched so
- * validation surfaces it (import rejects; storage load leaves it for the
- * caller, never silently rewritten). Spells and artifacts have no Reflect
- * stat and are returned unchanged. IDs and the existing `version` revision
- * field are never touched. Pure and deterministic: no RNG, same card in →
- * same card out, so LAN replay stays byte-identical.
+ * The repair is exact: a creature with schemaVersion NOT 2 is legacy storage.
+ * Its Reflect becomes the explicit value when present (cards written after
+ * Reflect was added but before the stamp existed — Fix round 1), or Attack
+ * when absent (the pre-Reflect legacy shape). Either way the card is stamped
+ * schemaVersion 2; the id and the `version` revision field are never touched.
+ * A schemaVersion-2 creature missing Reflect is authored under the current
+ * contract — a genuine error — and is returned untouched so validation
+ * surfaces it (import rejects; storage load drops it at the boundary, never
+ * silently rewritten). Spells and artifacts have no Reflect stat and are
+ * returned unchanged (never stamped). Pure and deterministic: no RNG, same
+ * card in → same card out, so LAN replay stays byte-identical.
  */
 export function migrateCard(card: Card): Card {
-	if (
-		card.type === "creature" &&
-		card.reflect === undefined &&
-		card.schemaVersion !== 2
-	) {
-		return { ...card, reflect: card.attack ?? 0, schemaVersion: 2 };
+	if (card.type === "creature" && card.schemaVersion !== 2) {
+		return {
+			...card,
+			reflect: card.reflect ?? card.attack ?? 0,
+			schemaVersion: 2,
+		};
 	}
 	return card;
 }
 
-/** Read + shape-check saved custom cards; wrong-shape storage falls back to []
- * and every stored card passes through the shared Task 3 migration. */
+/**
+ * Read + shape-check saved custom cards; wrong-shape storage falls back to []
+ * and every stored card passes through the shared Task 3 migration. Fix round
+ * 1: after migration every creature is schemaVersion 2, so a creature still
+ * missing Reflect is authored under the current contract — a genuine error.
+ * It is rejected at the boundary (dropped, never repaired, never returned as
+ * playable data, and never rewritten back to storage) so it cannot pass deck
+ * validation and reach createCreature with undefined Reflect.
+ */
 export function loadCustomCards(): Card[] {
 	const raw = read<unknown>(KEY_CARDS, []);
 	if (!Array.isArray(raw)) return [];
 	return raw
 		.filter((c): c is Card => typeof c === "object" && c !== null)
-		.map(migrateCard);
+		.map(migrateCard)
+		.filter((c) => !(c.type === "creature" && c.reflect === undefined));
 }
 
 /**

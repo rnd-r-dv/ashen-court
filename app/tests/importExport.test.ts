@@ -130,6 +130,31 @@ describe("JSON import/export round-trip", () => {
 		expect(imported!.reflect).toBeUndefined();
 	});
 
+	it("import stamps schemaVersion 2 on a creature with explicit Reflect but no stamp (Reflect and version preserved)", () => {
+		const legacy = validCard({
+			id: "legacy-import-explicit",
+			reflect: 4,
+			version: 12,
+		});
+		delete (legacy as Partial<Card>).schemaVersion;
+		const [imported] = importCardsJson(JSON.stringify([legacy]));
+		expect(imported!.schemaVersion).toBe(2); // stamp added
+		expect(imported!.reflect).toBe(4); // explicit Reflect preserved, not attack-derived
+		expect(imported!.attack).toBe(1); // attack untouched
+		expect(imported!.version).toBe(12); // revision preserved
+		expect(imported!.id).toBe("legacy-import-explicit");
+	});
+	it("import stamps a schemaVersion-1 creature with explicit Reflect identically", () => {
+		const legacy = validCard({
+			id: "legacy-import-explicit-v1",
+			schemaVersion: 1 as const,
+			reflect: 2,
+		});
+		const [imported] = importCardsJson(JSON.stringify([legacy]));
+		expect(imported!.schemaVersion).toBe(2);
+		expect(imported!.reflect).toBe(2);
+		expect(imported!.version).toBe(1);
+	});
 	it("does NOT silently repair a schemaVersion-2 creature missing Reflect (Task 3 owns the gate)", () => {
 		const schema2 = validCard({ id: "schema2-import", schemaVersion: 2 });
 		delete schema2.reflect;

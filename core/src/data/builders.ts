@@ -45,6 +45,7 @@ export interface ArchetypeCardBuilders {
 		name: string,
 		cost: number,
 		attack: number,
+		reflect: number,
 		health: number,
 		rarity: Rarity,
 		keywords?: Keyword[],
@@ -93,6 +94,7 @@ export function archetypeCards(
 			name,
 			cost,
 			attack,
+			reflect,
 			health,
 			rarity,
 			keywords = [],
@@ -105,9 +107,10 @@ export function archetypeCards(
 			cost,
 			attack,
 			health,
-			// Task 1 transitional: Reflect mirrors Attack until the Identity Gate
-			// stabilizes card roles and Task 2 hand-authors explicit values.
-			reflect: attack,
+			// Task 2: Reflect is hand-authored per card (approved ledger
+			// 2026-08-10) — the Task 1 transitional `reflect = attack` mirror is
+			// gone and every curated call passes an explicit value.
+			reflect,
 			keywords,
 			triggers,
 			effects: [],
@@ -176,7 +179,8 @@ export const buff = (
 	value: number,
 	value2: number,
 	target: EffectTarget,
-): EffectSpec => ({ kind: "buff", value, value2, target });
+	value3 = 0,
+): EffectSpec => ({ kind: "buff", value, value2, target, value3 });
 export const destroy = (target: EffectTarget): EffectSpec => ({
 	kind: "destroy",
 	target,

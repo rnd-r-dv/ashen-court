@@ -611,7 +611,17 @@ function healRef(game: Resolver, ref: TargetRef, amount: number): void {
 
 /** Buff adds attack, health/maxHealth, and reflect; negative values shrink
  *  (0-health death uses the normal death path). value/value2/value3 = the
- *  Attack/Health/Reflect deltas (Task 1). */
+ *  Attack/Health/Reflect deltas (Task 1).
+ *
+ *  Task 2 floor: live Reflect is clamped at 0. A debuffed creature pushed
+ *  below 0 would otherwise deal NEGATIVE counter-damage in combat — combat
+ *  uses `defender.reflect` as the counter amount, so a negative Reflect would
+ *  HEAL the attacker for each swing into it. The approved balance ledger
+ *  (2026-08-10) keeps every deck-legal interaction above 0 in practice, but
+ *  the floor is the safety guard so no future buff/debuff combination can
+ *  turn Reflect into healing. Attack may still go negative (matching how the
+ *  game already tolerates negative attack); only the counter-damage axis is
+ *  floored. */
 function buffRef(
 	game: Resolver,
 	ref: TargetRef,
@@ -625,7 +635,7 @@ function buffRef(
 	c.attack += atk;
 	c.health += hp;
 	c.maxHealth += hp;
-	c.reflect += refl;
+	c.reflect = Math.max(0, c.reflect + refl);
 	push(game, {
 		type: "buffApplied",
 		creatureId: c.id,

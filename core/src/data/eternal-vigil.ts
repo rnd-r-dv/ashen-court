@@ -24,28 +24,28 @@ export const HERO: HeroSpec = {
 export const CARDS: Card[] = [
   // Commons (11)
   spell('vigil-bless', 'Bless', 1, 'common', [heal(2, 'any')], "A whispered benediction mends flesh and steadies trembling hands."),
-  creature('vigil-guard', 'Guard', 1, 1, 3, 'common', ['taunt'], [], "The first shield raised where the shadows begin to stir."),
+  creature('vigil-guard', 'Guard', 1, 1, 2, 3, 'common', ['taunt'], [], "The first shield raised where the shadows begin to stir."),
   spell('vigil-pray', 'Prayer', 2, 'common', [heal(4)], "Each murmured word is a wall raised against the dark."),
-  creature('vigil-squire', 'Squire', 2, 2, 2, 'common', ['shield'], [], "Trained in the cloisters, tempered on the dawn watch."),
+  creature('vigil-squire', 'Squire', 2, 2, 2, 2, 'common', ['shield'], [], "Trained in the cloisters, tempered on the dawn watch."),
   spell('vigil-lights', 'Lights', 2, 'common', [dmg(1, 'allEnemies')], "The Order's lanterns hunt every corner where shadow dares to gather."),
-  creature('vigil-paladin', 'Paladin', 3, 2, 4, 'common', ['taunt'], [], "No blade passes where a paladin has sworn his vigil."),
+  creature('vigil-paladin', 'Paladin', 3, 2, 3, 4, 'common', ['taunt'], [], "No blade passes where a paladin has sworn his vigil."),
   spell('vigil-smite', 'Smite', 3, 'common', [dmg(3, 'enemyCreature')], "Righteous fury, measured and swift."),
-  creature('vigil-monk', 'Monk', 3, 3, 3, 'common', ['lifesteal'], [], "Discipline is the monk's blade; stillness is his armor."),
-  creature('vigil-shieldbearer', 'Shieldbearer', 4, 1, 6, 'common', ['taunt', 'shield'], [], "Their shields have outlasted a hundred sieges of the dark."),
+  creature('vigil-monk', 'Monk', 3, 3, 4, 3, 'common', ['lifesteal'], [], "Discipline is the monk's blade; stillness is his armor."),
+  creature('vigil-shieldbearer', 'Shieldbearer', 4, 1, 3, 6, 'common', ['taunt', 'shield'], [], "Their shields have outlasted a hundred sieges of the dark."),
   spell('vigil-hymn', 'Hymn of Dawn', 4, 'common', [heal(6), { kind: 'giveKeyword', keyword: 'lifesteal', target: 'friendlyCreature' }], 'Sung at first light, it asks the wounded to stand once more.'),
-  creature('vigil-crusader', 'Crusader', 5, 4, 5, 'common', ['rush'], [], "He marches where the light burns thinnest."),
+  creature('vigil-crusader', 'Crusader', 5, 4, 4, 5, 'common', ['rush'], [], "He marches where the light burns thinnest."),
   // Rares (5)
   spell('vigil-divine', 'Divine Shield', 2, 'rare', [giveK('shield', 'friendlyCreature')], "Faith made visible: armor woven from conviction alone."),
   spell('vigil-layhands', 'Lay on Hands', 5, 'rare', [heal(8), draw(1)], 'The oldest rite of the order, and the one it can least afford to spend.'),
-  creature('vigil-avenger', 'Avenger', 5, 5, 4, 'rare', ['rush'], [], "Vengeance rides ahead of the host; mercy follows behind."),
-  creature('vigil-warden', 'Warden of Dawn', 6, 5, 6, 'rare', ['lifesteal'], [], "Every wound he takes, the dawn repays tenfold."),
+  creature('vigil-avenger', 'Avenger', 5, 5, 5, 4, 'rare', ['rush'], [], "Vengeance rides ahead of the host; mercy follows behind."),
+  creature('vigil-warden', 'Warden of Dawn', 6, 5, 6, 6, 'rare', ['lifesteal'], [], "Every wound he takes, the dawn repays tenfold."),
   spell('vigil-sanctify', 'Sanctify', 6, 'rare', [heal(10), { kind: 'giveKeyword', keyword: 'shield', target: 'allFriendlyCreatures' }], 'The ground itself is consecrated; what stands upon it does not fall easily.'),
   // Epics (3)
-  creature('vigil-archon', 'Archon of Dawn', 7, 6, 7, 'epic', ['taunt', 'lifesteal'], [], "An immovable pillar of first light."),
+  creature('vigil-archon', 'Archon of Dawn', 7, 6, 7, 7, 'epic', ['taunt', 'lifesteal'], [], "An immovable pillar of first light."),
   spell('vigil-radiance', 'Radiance', 5, 'epic', [heal(5), draw(2)], "In its glow the faithful find both solace and clarity."),
-  creature('vigil-saint', 'Saint', 8, 6, 9, 'epic', ['lifesteal'], [], "Suffering passes through her and returns as mercy."),
+  creature('vigil-saint', 'Saint', 8, 6, 7, 9, 'epic', ['lifesteal'], [], "Suffering passes through her and returns as mercy."),
   // Legendaries (2)
-  creature('vigil-aldric', 'Ser Aldric', 9, 8, 8, 'legendary', ['taunt', 'lifesteal'], [], "He has stood guard so long that dawn itself waits on his word."),
+  creature('vigil-aldric', 'Ser Aldric', 9, 8, 9, 8, 'legendary', ['taunt', 'lifesteal'], [], "He has stood guard so long that dawn itself waits on his word."),
   artifact('vigil-eternal', 'The Eternal Vigil', 6, 'legendary', [{ when: 'startOfTurn', effects: [heal(3)] }], "The flame that never gutters, watched by those who never sleep."),
 ];
 

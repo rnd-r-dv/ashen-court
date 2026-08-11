@@ -26,28 +26,28 @@ export const CARDS: Card[] = [
   // Commons (11)
   spell('star-spark', 'Spark', 1, 'common', [dmg(2, 'anyCreature')], 'A cinder torn from the Archon\'s forge falls where she wills it.'),
   spell('star-meteor', 'Meteor Shard', 2, 'common', [dmg(3, 'enemyCreature')], 'What the heavens discard, Stellara wields as a blade.'),
-  creature('star-acolyte', 'Star Acolyte', 2, 2, 3, 'common', ['taunt'], [], 'Newest to the Archon\'s choir, they read destinies in the ash of dying stars.'),
+  creature('star-acolyte', 'Star Acolyte', 2, 2, 2, 3, 'common', ['taunt'], [], 'Newest to the Archon\'s choir, they read destinies in the ash of dying stars.'),
   spell('star-meditate', 'Meditate', 2, 'common', [{ kind: 'discover' }, gainMana(1)], 'Silence, and the firmament answers: one whispered truth, one spark of power.'),
   spell('star-focus', 'Star Focus', 3, 'common', [gainMana(2)], 'Scattered starfire gathered into a lens — and the sky bends to her purpose.'),
-  creature('star-guardian', 'Guardian', 3, 2, 4, 'common', ['taunt'], [], 'Wrought from a constellation\'s core, it stands where lesser lights would fall.'),
-  creature('star-sentinel', 'Sentinel', 4, 3, 5, 'common', ['taunt'], [], 'It has watched the void since before the first spark was struck — and it watches still.'),
+  creature('star-guardian', 'Guardian', 3, 2, 3, 4, 'common', ['taunt'], [], 'Wrought from a constellation\'s core, it stands where lesser lights would fall.'),
+  creature('star-sentinel', 'Sentinel', 4, 3, 4, 5, 'common', ['taunt'], [], 'It has watched the void since before the first spark was struck — and it watches still.'),
   spell('star-comet', 'Comet', 4, 'common', [dmg(4, 'enemyCreature')], 'The comet\'s path was fixed the moment the Archon raised her hand.'),
   spell('star-gravitate', 'Gravitate', 5, 'common', [dmg(3, 'allEnemies')], 'Every shard and stray ember obeys the pull of a greater mass.'),
-  creature('star-mage', 'Starmage', 5, 4, 6, 'common', [], [{ when: 'battlecry', effects: [spellPow(1, 'friendlyCreature')] }], 'Mages of the starforged court weave the sky\'s light into armor and blade alike.'),
+  creature('star-mage', 'Starmage', 5, 4, 5, 6, 'common', [], [{ when: 'battlecry', effects: [spellPow(1, 'friendlyCreature')] }], 'Mages of the starforged court weave the sky\'s light into armor and blade alike.'),
   spell('star-fall', 'Starfall', 6, 'common', [dmg(6, 'any')], 'When Stellara calls, the firmament answers — a whole sky falling at once.'),
   // Rares (5)
-  creature('star-prophet', 'Prophet', 4, 3, 3, 'rare', [], [{ when: 'battlecry', effects: [discCheap(1)] }], 'What the Prophet has foreseen, the Archon need not pay full price for.'),
-  creature('star-oracle', 'Oracle', 5, 3, 4, 'rare', [], [{ when: 'battlecry', effects: [discCheap(1)] }], 'Her visions are never wrong, and the price of what follows is already known.'),
+  creature('star-prophet', 'Prophet', 4, 3, 3, 3, 'rare', [], [{ when: 'battlecry', effects: [discCheap(1)] }], 'What the Prophet has foreseen, the Archon need not pay full price for.'),
+  creature('star-oracle', 'Oracle', 5, 3, 4, 4, 'rare', [], [{ when: 'battlecry', effects: [discCheap(1)] }], 'Her visions are never wrong, and the price of what follows is already known.'),
   spell('star-chorus', 'Celestial Chorus', 6, 'rare', [draw(2), gainMana(1)], 'A thousand star-voices in unison: each note a memory, each harmony a new power.'),
-  creature('star-giant', 'Star Giant', 7, 7, 7, 'rare', ['taunt'], [], 'A titan born of coalesced starlight; the sky dims where it walks.'),
+  creature('star-giant', 'Star Giant', 7, 7, 7, 7, 'rare', ['taunt'], [], 'A titan born of coalesced starlight; the sky dims where it walks.'),
   spell('star-eclipse', 'Eclipse', 7, 'rare', [dmg(7, 'any')], 'Stellara draws a veil across the sun, and the world reels in the sudden dark.'),
   // Epics (3)
-  creature('star-wanderer', 'Wanderer', 8, 8, 8, 'epic', ['charge'], [], 'No constellation claims it; it crosses the heavens unbound, answering to no sky.'),
+  creature('star-wanderer', 'Wanderer', 8, 8, 6, 8, 'epic', ['charge'], [], 'No constellation claims it; it crosses the heavens unbound, answering to no sky.'),
   spell('star-void', 'Chorus of the Void', 9, 'epic', [dmg(9, 'any')], 'The void is not silent — it sings with the voices of the stars it has swallowed.'),
-  creature('star-megastar', 'Megastar', 10, 10, 10, 'epic', ['windfury'], [], 'A star grown beyond its sky, forged to burn where gods once trod.'),
+  creature('star-megastar', 'Megastar', 10, 10, 8, 10, 'epic', ['windfury'], [], 'A star grown beyond its sky, forged to burn where gods once trod.'),
   // Legendaries (2)
-  creature('star-archon', 'Archon Stellara', 12, 12, 12, 'legendary', ['taunt'], [], 'The Archon\'s will is the sky\'s own law; every star in her court burns to her design.'),
-  creature('star-constellation', 'Living Constellation', 8, 7, 7, 'legendary', [], [{ when: 'battlecry', effects: [discCheap(2)] }], 'It redraws the firmament as it moves, and the next summon is already written in its light.'),
+  creature('star-archon', 'Archon Stellara', 12, 12, 12, 12, 'legendary', ['taunt'], [], 'The Archon\'s will is the sky\'s own law; every star in her court burns to her design.'),
+  creature('star-constellation', 'Living Constellation', 8, 7, 6, 7, 'legendary', [], [{ when: 'battlecry', effects: [discCheap(2)] }], 'It redraws the firmament as it moves, and the next summon is already written in its light.'),
 ];
 
 // sig: 3x each common (11), 2x each rare (5), 1x each epic (3), 1x each legendary (2)

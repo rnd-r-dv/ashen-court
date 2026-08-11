@@ -20,29 +20,29 @@ export const HERO: HeroSpec = {
 
 export const CARDS: Card[] = [
   // Commons (11)
-  creature('roots-sapling', 'Sapling', 1, 1, 2, 'common', ['taunt'], [], 'Every forest begins as a single stubborn root.'),
+  creature('roots-sapling', 'Sapling', 1, 1, 2, 2, 'common', ['taunt'], [], 'Every forest begins as a single stubborn root.'),
   spell('roots-grow', 'Grow', 1, 'common', [gainMana(1)], 'The old woods do not rush; they simply grow.'),
   spell('roots-vine', 'Creeping Vine', 1, 'common', [dmg(1, 'anyCreature')], 'It takes its time. It always arrives.'),
-  creature('roots-sprout', 'Sprout', 2, 2, 2, 'common', ['taunt'], [], 'Beneath the loam, something green and patient stirs.'),
+  creature('roots-sprout', 'Sprout', 2, 2, 2, 2, 'common', ['taunt'], [], 'Beneath the loam, something green and patient stirs.'),
   spell('roots-bloom', 'Bloom', 3, 'common', [gainMana(2)], 'When the old grove blooms, mana spills like sap from the bark.'),
-  creature('roots-barkhide', 'Barkhide', 3, 2, 4, 'common', ['taunt'], [], 'Its bark remembers every blade that ever struck it — and forgives none.'),
-  creature('roots-forager', 'Forager', 3, 3, 3, 'common', [], [{ when: 'battlecry', effects: [gainMana(1)] }], 'It walks the roots of the world, gathering what the forest sheds.'),
+  creature('roots-barkhide', 'Barkhide', 3, 2, 3, 4, 'common', ['taunt'], [], 'Its bark remembers every blade that ever struck it — and forgives none.'),
+  creature('roots-forager', 'Forager', 3, 3, 3, 3, 'common', [], [{ when: 'battlecry', effects: [gainMana(1)] }], 'It walks the roots of the world, gathering what the forest sheds.'),
   spell('roots-thorn', 'Thornlash', 3, 'common', [dmg(3, 'anyCreature')], 'The grove does not warn twice.'),
-  creature('roots-ancients', "Ancient's Wrath", 4, 4, 4, 'common', ['taunt'], [], 'Roused from a thousand-year sleep, the ancients remember what was taken from them.'),
+  creature('roots-ancients', "Ancient's Wrath", 4, 4, 4, 4, 'common', ['taunt'], [], 'Roused from a thousand-year sleep, the ancients remember what was taken from them.'),
   artifact('roots-sylvan', 'Sylvan Grove', 4, 'common', [{ when: 'startOfTurn', effects: [gainMana(1), { kind: 'refillMana', value: 1 }] }], 'In the heart of the grove, the trees whisper the slow arithmetic of growth.'),
-  creature('roots-ironwood', 'Ironwood', 5, 4, 6, 'common', ['taunt'], [], 'No axe has dulled it. No fire has scarred it.'),
+  creature('roots-ironwood', 'Ironwood', 5, 4, 5, 6, 'common', ['taunt'], [], 'No axe has dulled it. No fire has scarred it.'),
   // Rares (5)
   spell('roots-regen', 'Regrowth', 3, 'rare', [heal(4)], 'What the deep roots touch does not die.'),
-  creature('roots-worldtree', 'Worldtree Sapling', 6, 5, 5, 'rare', [], [{ when: 'battlecry', effects: [gainMana(2)] }], 'Planted from a seed of the first world, it will one day hold up the sky.'),
+  creature('roots-worldtree', 'Worldtree Sapling', 6, 5, 5, 5, 'rare', [], [{ when: 'battlecry', effects: [gainMana(2)] }], 'Planted from a seed of the first world, it will one day hold up the sky.'),
   spell('roots-verdant', 'Verdant Bloom', 3, 'rare', [gainMana(2), draw(1)], "Spring's first breath, distilled into a single blossom."),
-  creature('roots-treant', 'Elder Treant', 7, 7, 7, 'rare', ['taunt'], [], 'It has stood so long that the mountain grew around its feet.'),
+  creature('roots-treant', 'Elder Treant', 7, 7, 7, 7, 'rare', ['taunt'], [], 'It has stood so long that the mountain grew around its feet.'),
   spell('roots-bounty', "Nature's Bounty", 4, 'rare', [draw(2), gainMana(1)], 'The forest gives freely to those who remember how to ask.'),
   // Epics (3)
-  creature('roots-goliath', 'Goliath', 8, 8, 8, 'epic', [], [{ when: 'battlecry', effects: [gainMana(2)] }], "Older than the kingdom's oldest stone, and twice as patient."),
+  creature('roots-goliath', 'Goliath', 8, 8, 8, 8, 'epic', [], [{ when: 'battlecry', effects: [gainMana(2)] }], "Older than the kingdom's oldest stone, and twice as patient."),
   spell('roots-awaken', 'Awakening', 8, 'epic', [gainMana(2), summon('token-treant', 3)], 'When the deep roots awaken, the whole world leans in to listen.'),
-  creature('roots-titan', 'Titan of the Deep Roots', 10, 10, 10, 'epic', ['taunt'], [], 'Its roots bind the very bones of the world. Nothing passes.'),
+  creature('roots-titan', 'Titan of the Deep Roots', 10, 10, 11, 10, 'epic', ['taunt'], [], 'Its roots bind the very bones of the world. Nothing passes.'),
   // Legendaries (2)
-  creature('roots-worldmother', 'Worldmother', 12, 12, 12, 'legendary', [], [{ when: 'battlecry', effects: [buff(2, 2, 'allFriendlyCreatures')] }], 'She is the first tree, the root of all roots, the mother of every grove.'),
+  creature('roots-worldmother', 'Worldmother', 12, 12, 12, 12, 'legendary', [], [{ when: 'battlecry', effects: [buff(2, 2, 'allFriendlyCreatures', 1)] }], 'She is the first tree, the root of all roots, the mother of every grove.'),
   artifact('roots-heart', 'Heart of the Forest', 7, 'legendary', [{ when: 'endOfTurn', effects: [summon('token-treant')] }], "The forest's heart beats slowly — once a turn, it births a guardian."),
 ];
 

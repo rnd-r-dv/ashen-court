@@ -3,6 +3,7 @@ import { Game } from "../src/engine/game.js";
 import { applyEffect } from "../src/engine/effects.js";
 import type { EffectCtx } from "../src/engine/effects.js";
 import { summarize } from "../src/engine/stats.js";
+import type { GameEvent } from "../src/types.js";
 import { makeTestSetup, addCreature } from "./helpers.js";
 
 const g = () => Game.create(makeTestSetup());
@@ -28,6 +29,8 @@ describe("dealDamage", () => {
 			shields: 0,
 			warded: false,
 			frozen: false,
+			silenced: false,
+			token: false,
 			spellPower: 0,
 		});
 		applyEffect(game, ctx, {
@@ -110,6 +113,8 @@ describe("heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
 			shields: 0,
 			warded: false,
 			frozen: false,
+			silenced: false,
+			token: false,
 			spellPower: 0,
 		});
 		applyEffect(game, ctx, { kind: "heal", value: 5, target: "anyCreature" });
@@ -133,6 +138,8 @@ describe("heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
 			shields: 0,
 			warded: false,
 			frozen: false,
+			silenced: false,
+			token: false,
 			spellPower: 0,
 		});
 		applyEffect(game, ctx, {
@@ -162,6 +169,8 @@ describe("heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
 			shields: 0,
 			warded: false,
 			frozen: false,
+			silenced: false,
+			token: false,
 			spellPower: 0,
 		});
 		// value = Attack delta, value2 = Health delta, value3 = Reflect delta.
@@ -174,6 +183,52 @@ describe("heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
 		expect(c.board[0]!.attack).toBe(5);
 		expect(c.board[0]!.health).toBe(5);
 		expect(c.board[0]!.reflect).toBe(4);
+	});
+
+	it("a negative buff floors live Reflect at 0, so combat never deals negative counter-damage (Task 2)", () => {
+		const game = g();
+		game.state.phase = "main";
+		// Defender starts at reflect 1; a -3 Reflect debuff would take it to -2
+		// without the floor, and combat would then deal NEGATIVE counter-damage
+		// (a heal) to anything attacking into it. The approved Task 2 clamp
+		// keeps live Reflect at >= 0.
+		const defender = addCreature(game, 1, {
+			id: "t-floored",
+			attack: 2,
+			health: 5,
+			reflect: 1,
+		});
+		applyEffect(
+			game,
+			ctx,
+			{ kind: "buff", value: 0, value2: 0, value3: -3, target: "anyCreature" },
+			{ type: "creature", id: defender.id },
+		);
+		expect(defender.reflect).toBe(0); // floored, not -2
+
+		const attacker = addCreature(game, 0, {
+			id: "t-hitter",
+			attack: 4,
+			health: 6,
+			exhausted: false,
+		});
+		game.submit({
+			kind: "attack",
+			attackerId: attacker.id,
+			target: { type: "creature", id: defender.id },
+		});
+		// the defender ate 4 (5 -> 1) and reflected exactly 0 — the attacker took
+		// no damage and was never healed by a negative amount. A floored 0 emits
+		// NO counter-damage event at all (the engine skips zero damage).
+		expect(defender.health).toBe(1);
+		expect(attacker.health).toBe(6);
+		const counter = game.state.log.filter(
+			(e): e is Extract<GameEvent, { type: "damageDealt" }> =>
+				e.type === "damageDealt" &&
+				e.target.type === "creature" &&
+				e.target.id === attacker.id,
+		);
+		expect(counter).toHaveLength(0);
 	});
 	it("silence preserves permanent stat modifications, reflect included (Task 1)", () => {
 		const game = g();
@@ -277,6 +332,8 @@ describe("heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
 			shields: 0,
 			warded: false,
 			frozen: false,
+			silenced: false,
+			token: false,
 			spellPower: 0,
 		});
 		applyEffect(game, ctx, { kind: "freeze", target: "anyCreature" });
@@ -308,6 +365,8 @@ describe("heal / buff / summon / gainMana / freeze / destroy / copyCard / giveKe
 			shields: 0,
 			warded: false,
 			frozen: false,
+			silenced: false,
+			token: false,
 			spellPower: 0,
 		});
 		applyEffect(game, ctx, {

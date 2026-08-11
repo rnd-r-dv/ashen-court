@@ -23,6 +23,10 @@ export interface ForgeDraft {
 	type: CardType;
 	cost: number;
 	attack: string;
+	// Task 3: Reflect is an explicit, independent authoring input (never
+	// derived from Attack). Strings while editing (empty = invalid), like
+	// attack/health.
+	reflect: string;
 	health: string; // strings while editing (empty = invalid)
 	keywords: Keyword[];
 	trigger: Trigger | "";
@@ -42,6 +46,7 @@ export function createDraft(): ForgeDraft {
 		type: "creature",
 		cost: 2,
 		attack: "",
+		reflect: "", // Task 3: explicit Reflect input — a new draft never fills it from Attack
 		health: "",
 		keywords: [],
 		trigger: "",
@@ -86,16 +91,19 @@ export function draftToCard(d: ForgeDraft): Card {
 		art: { ...d.art, ...(d.uploadImage ? { imageUrl: d.uploadImage } : {}) },
 		flavor: d.flavor.trim() || undefined,
 		author: "custom",
+		// Task 3: every Forge-authored custom card stamps the Reflect schema —
+		// distinct from `version` (a Date.now() revision value, never touched by
+		// migration). schemaVersion-2 cards are authored under the current
+		// contract and are never silently repaired.
+		schemaVersion: 2,
 		version: Date.now(),
 	};
 	if (d.type === "creature") {
 		card.attack = toStat(d.attack);
+		// Task 3: Reflect comes from its own input — the Task 1 bridge default
+		// (reflect = attack) is gone.
+		card.reflect = toStat(d.reflect);
 		card.health = toStat(d.health);
-		// Task 1 compatibility bridge (temporary): Forge has no Reflect field
-		// yet, so a created creature mirrors its Attack (the core contract
-		// requires reflect >= 0 on every creature). Task 3 adds the explicit
-		// Forge Reflect input and replaces this default.
-		card.reflect = toStat(d.attack);
 	}
 	if (!isSpell && d.trigger) {
 		card.triggers = [{ when: d.trigger, effects: d.effects }];
@@ -103,26 +111,18 @@ export function draftToCard(d: ForgeDraft): Card {
 	return card;
 }
 
-/**
- * Task 1 compatibility bridge (temporary; replaced by Task 3's explicit
- * Forge Reflect input and schemaVersion migration). Custom creatures created
- * or stored/imported before the Reflect contract existed carry no `reflect`;
- * normalize them deterministically to Reflect = Attack so they pass core
- * validation and fight with mirror-stat parity. Only cards without a
- * schemaVersion: 2 stamp are repaired — a 2-stamped creature missing Reflect
- * is authored under the new contract and is a genuine error, so it must
- * surface rather than be silently rewritten (Task 3 owns that gate). IDs and
- * existing `version` values are preserved untouched.
- */
-export function normalizeLegacyReflect(card: Card): Card {
-	if (
-		card.type === "creature" &&
-		card.reflect === undefined &&
-		card.schemaVersion !== 2
-	) {
-		return { ...card, reflect: card.attack ?? 0 };
-	}
-	return card;
+/** The three independent stat deltas of a `buff` EffectSpec (Task 3): value =
+ *  Attack, value3 = Reflect, value2 = Health (see the EffectSpec doc in core
+ *  types — value2 historically defaulted to value for serialized
+ *  compatibility, so the Forge writes every axis explicitly). An unset slot
+ *  reads 0 for its axis, so a +2/+2 preset still exposes an editable 0
+ *  Reflect axis. */
+export type StatAxis = "attack" | "reflect" | "health";
+
+export function buffAxis(spec: EffectSpec, axis: StatAxis): number {
+	if (axis === "reflect") return spec.value3 ?? 0;
+	if (axis === "health") return spec.value2 ?? 0;
+	return spec.value ?? 0;
 }
 
 /**
@@ -171,6 +171,14 @@ export function draftIssues(d: ForgeDraft): ValidationIssue[] {
 			issues.push({
 				field: "attack",
 				message: "Attack is required.",
+				severity: "error",
+			});
+		// Task 3: Reflect is required and never defaults from Attack — an empty
+		// entry is an error exactly like Attack/Health.
+		if (!d.reflect.trim())
+			issues.push({
+				field: "reflect",
+				message: "Reflect is required.",
 				severity: "error",
 			});
 		if (!d.health.trim())

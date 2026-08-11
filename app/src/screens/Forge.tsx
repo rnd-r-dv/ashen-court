@@ -13,6 +13,7 @@ import type {
 } from "@ashen/core";
 import type { ForgeDraft } from "../forge/formState.js";
 import {
+	buffAxis,
 	createDraft,
 	draftIssues,
 	draftToCard,
@@ -116,6 +117,10 @@ interface EffectRow {
 	presetIndex: number;
 	target?: EffectTarget; // undefined = keep the preset's default target
 	value?: number; // undefined = keep the preset's default value
+	// Task 3 three-axis buff editing: a `buff` row edits its stat deltas
+	// independently — value = Attack, value3 = Reflect, value2 = Health.
+	value2?: number; // Health delta (buff)
+	value3?: number; // Reflect delta (buff)
 }
 
 interface FormState {
@@ -123,6 +128,7 @@ interface FormState {
 	type: CardType;
 	cost: number;
 	attack: string;
+	reflect: string;
 	health: string;
 	keywords: Keyword[];
 	trigger: Trigger | "";
@@ -138,16 +144,28 @@ function initialForm(): FormState {
 	return { ...draft, rows: [] };
 }
 
+/** Merge a row's explicit edits over its preset spec. Shared by rowsToSpecs
+ *  (what the card actually carries) and the row editor (what the sliders
+ *  show), so the two can never disagree about an axis value. */
+function rowSpec(row: EffectRow): EffectSpec {
+	const preset = EFFECT_PRESETS[row.presetIndex];
+	if (!preset) return { kind: "draw", value: 1 }; // defensive; index always in range via UI
+	const spec: EffectSpec = { ...preset.spec };
+	if (row.target !== undefined) spec.target = row.target;
+	if (row.value !== undefined && VALUE_KINDS.has(spec.kind))
+		spec.value = row.value;
+	// Task 3: a buff spec carries three independent stat deltas. Each axis is
+	// edited on its own — Reflect (value3) and Health (value2) are written
+	// explicitly, never left to the value2-defaults-to-value fallback.
+	if (spec.kind === "buff") {
+		if (row.value2 !== undefined) spec.value2 = row.value2;
+		if (row.value3 !== undefined) spec.value3 = row.value3;
+	}
+	return spec;
+}
+
 function rowsToSpecs(rows: EffectRow[]): EffectSpec[] {
-	return rows.map((row) => {
-		const preset = EFFECT_PRESETS[row.presetIndex];
-		if (!preset) return { kind: "draw", value: 1 }; // defensive; index always in range via UI
-		const spec: EffectSpec = { ...preset.spec };
-		if (row.target !== undefined) spec.target = row.target;
-		if (row.value !== undefined && VALUE_KINDS.has(spec.kind))
-			spec.value = row.value;
-		return spec;
-	});
+	return rows.map(rowSpec);
 }
 
 export default function Forge() {
@@ -378,6 +396,25 @@ export default function Forge() {
 								))}
 							</div>
 							<div className="forge-field">
+								<label className="forge-label" htmlFor="forge-reflect">
+									Reflect
+								</label>
+								<input
+									id="forge-reflect"
+									className="forge-input"
+									type="number"
+									min={0}
+									value={form.reflect}
+									onChange={(e) => set("reflect", e.target.value)}
+									placeholder="0"
+								/>
+								{issuesFor("reflect").map((i, n) => (
+									<p className="forge-error" key={n}>
+										{i.message}
+									</p>
+								))}
+							</div>
+							<div className="forge-field">
 								<label className="forge-label" htmlFor="forge-health">
 									Health
 								</label>
@@ -395,7 +432,7 @@ export default function Forge() {
 										{i.message}
 									</p>
 								))}
-							</div>
+								</div>
 						</section>
 					)}
 					{issuesFor("stats").map((i, n) => (
@@ -516,6 +553,16 @@ export default function Forge() {
 							const showTarget = TARGET_KINDS.has(kind);
 							const showValue = VALUE_KINDS.has(kind);
 							const value = row.value ?? preset?.spec.value ?? 0;
+							// Task 3: a buff effect edits its three stat deltas on
+							// independent axes — Attack → value, Reflect → value3,
+							// Health → value2. The slider block reads the merged spec so
+							// a preset's default is visible until the axis is touched.
+							const spec = rowSpec(row);
+							const STAT_AXES = [
+								"attack",
+								"reflect",
+								"health",
+							] as const;
 							return (
 								<div className="forge-effect-row" key={i}>
 									<select
@@ -544,22 +591,53 @@ export default function Forge() {
 											))}
 										</select>
 									)}
-									{showValue && (
-										<label className="forge-slider-label">
-											{value}
-											<input
-												className="forge-slider"
-												type="range"
-												min={0}
-												max={10}
-												step={1}
-												value={value}
-												onChange={(e) =>
-													setRow(i, "value", Number(e.target.value))
-												}
-											/>
-										</label>
-									)}
+									{showValue &&
+										(kind === "buff" ? (
+											<div className="forge-buff-axes">
+												{STAT_AXES.map((axis) => (
+													<label className="forge-slider-label" key={axis}>
+														<span className="forge-buff-axis-name">
+															{axis}
+														</span>
+														{buffAxis(spec, axis)}
+														<input
+															className="forge-slider"
+															type="range"
+															min={0}
+															max={10}
+															step={1}
+															value={buffAxis(spec, axis)}
+															onChange={(e) =>
+																setRow(
+																	i,
+																	axis === "attack"
+																		? "value"
+																		: axis === "reflect"
+																			? "value3"
+																			: "value2",
+																	Number(e.target.value),
+																)
+															}
+														/>
+													</label>
+												))}
+											</div>
+										) : (
+											<label className="forge-slider-label">
+												{value}
+												<input
+													className="forge-slider"
+													type="range"
+													min={0}
+													max={10}
+													step={1}
+													value={value}
+													onChange={(e) =>
+														setRow(i, "value", Number(e.target.value))
+													}
+												/>
+											</label>
+										))}
 									<button
 										type="button"
 										className="forge-remove-btn"

@@ -1,6 +1,6 @@
 import type { Card } from "@ashen/core";
 import { buildPool, validateCard } from "@ashen/core";
-import { poolRuleIssues, normalizeLegacyReflect } from "./forge/formState.js";
+import { poolRuleIssues } from "./forge/formState.js";
 
 // localStorage keys (shared with the app's other modules)
 const KEY_CARDS = "tcg.customCards";
@@ -53,16 +53,42 @@ function write(key: string, value: unknown): boolean {
 
 // ---- custom cards ----
 
-/** Read + shape-check saved custom cards; wrong-shape storage falls back to [].
- * Task 1 bridge: legacy creatures saved before Reflect existed are normalized
- * to Reflect = Attack at read time, so stored cards validate and fight with
- * mirror-stat parity (schemaVersion-2 cards missing Reflect are NOT repaired). */
+/**
+ * Task 3 schema migration — the ONE shared path for custom cards crossing any
+ * app boundary (localStorage load, JSON import). Cards authored or exported
+ * before the Reflect contract existed carry no `reflect` and no
+ * `schemaVersion` (or a stamped 1); migrate them deterministically to
+ * schemaVersion 2 with Reflect = Attack so they pass core validation and
+ * fight with mirror-stat parity.
+ *
+ * The gate is exact: a CUSTOM creature with Reflect ABSENT and schemaVersion
+ * NOT 2 is repaired. A schemaVersion-2 creature missing Reflect is authored
+ * under the current contract — a genuine error — and is returned untouched so
+ * validation surfaces it (import rejects; storage load leaves it for the
+ * caller, never silently rewritten). Spells and artifacts have no Reflect
+ * stat and are returned unchanged. IDs and the existing `version` revision
+ * field are never touched. Pure and deterministic: no RNG, same card in →
+ * same card out, so LAN replay stays byte-identical.
+ */
+export function migrateCard(card: Card): Card {
+	if (
+		card.type === "creature" &&
+		card.reflect === undefined &&
+		card.schemaVersion !== 2
+	) {
+		return { ...card, reflect: card.attack ?? 0, schemaVersion: 2 };
+	}
+	return card;
+}
+
+/** Read + shape-check saved custom cards; wrong-shape storage falls back to []
+ * and every stored card passes through the shared Task 3 migration. */
 export function loadCustomCards(): Card[] {
 	const raw = read<unknown>(KEY_CARDS, []);
 	if (!Array.isArray(raw)) return [];
 	return raw
 		.filter((c): c is Card => typeof c === "object" && c !== null)
-		.map(normalizeLegacyReflect);
+		.map(migrateCard);
 }
 
 /**
@@ -206,15 +232,17 @@ export function importCardsJson(text: string): Card[] {
 	}
 	const cards: Card[] = [];
 	for (const raw of parsed) {
-		// I5 runs BEFORE the bridge: null/primitive elements must reach the
+		// I5 runs BEFORE the migration: null/primitive elements must reach the
 		// 'malformed card data' path (see the try/catch below), not crash inside
-		// normalization.
-		// Task 1 bridge: legacy exports carry creatures with no `reflect`;
-		// normalize to Reflect = Attack before validation so they import cleanly
-		// (schemaVersion-2 cards missing Reflect stay broken and are rejected).
+		// migration.
+		// Task 3 migration: legacy exports carry creatures with no `reflect`;
+		// migrateCard stamps schemaVersion 2 and sets Reflect = Attack (ids and
+		// `version` untouched) so they import cleanly. schemaVersion-2 cards
+		// missing Reflect are authored, not legacy — left unrepaired so the
+		// validateCard gate below rejects them.
 		const candidate = (
 			raw !== null && typeof raw === "object"
-				? normalizeLegacyReflect(raw as Card)
+				? migrateCard(raw as Card)
 				: raw
 		) as Card;
 		// I5: never touch .id on a null/primitive element — optional chaining keeps

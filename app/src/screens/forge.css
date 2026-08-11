@@ -154,6 +154,27 @@ select.forge-input {
 	white-space: nowrap;
 }
 
+/* Task 3: a buff effect row edits its three stat deltas on independent axes
+   (Attack → value, Reflect → value3, Health → value2). The axis band spans the
+   full effect-row grid width below the preset/target selects, so the three
+   sliders never crowd the row's other controls. Plain text labels are fine
+   here — the card-space constraint applies to plates, not data entry. */
+.forge-buff-axes {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 20px;
+	padding: 2px 0;
+}
+
+.forge-buff-axes .forge-slider-label {
+	flex: 1 1 150px;
+}
+
+.forge-buff-axis-name {
+	text-transform: capitalize;
+}
+
 .forge-add-btn,
 .forge-file-btn,
 .forge-remove-btn,

@@ -57,7 +57,9 @@ const PLAY_CARD = "neutral-boar";
 const SEED_DISCOVER = 79;
 
 /** Simple valid custom card (1-cost 1/1 creature) — passes validateCard.
- * Carries the Task 1 bridge shape: a Forge-created card has Reflect = Attack. */
+ * Task 3 shape: a Forge-authored card carries explicit Reflect AND the
+ * schemaVersion 2 stamp (the Task 1 bridge default of Reflect = Attack is
+ * gone — the wire card is exactly what Forge saves). */
 const CUSTOM_CARD: Card = {
 	id: "custom-1",
 	name: "Custom One",
@@ -66,6 +68,7 @@ const CUSTOM_CARD: Card = {
 	attack: 1,
 	health: 1,
 	reflect: 1,
+	schemaVersion: 2,
 	keywords: [],
 	effects: [],
 	rarity: "common",
@@ -564,6 +567,10 @@ describe("LAN rooms", () => {
 			const custom = joined.cards.find((c) => c.id === CUSTOM_CARD.id);
 			expect(custom).toBeDefined();
 			expect(custom?.name).toBe("Custom One");
+			// Task 3: the synced def keeps the Forge-authored stats verbatim —
+			// Reflect and the schemaVersion 2 stamp survive host registration.
+			expect(custom?.reflect).toBe(1);
+			expect(custom?.schemaVersion).toBe(2);
 			expect((await hostStartP).type).toBe("gameStart");
 			expect((await guestStartP).type).toBe("gameStart");
 		} finally {
@@ -852,6 +859,135 @@ describe("LAN rooms", () => {
 		} finally {
 			host?.close();
 			guest?.close();
+			await srv.close();
+		}
+	});
+
+	it("a version-2 custom creature retains Reflect across registration, sync, shadow and reconnect replay", async () => {
+		expect(
+			validateCard(CUSTOM_CARD).filter((i) => i.severity === "error"),
+		).toEqual([]);
+		expect(CUSTOM_CARD.schemaVersion).toBe(2);
+		expect(CUSTOM_CARD.reflect).toBe(1);
+		// Host deck: ember deck with the custom creature in the last slot. Seed
+		// 69 (fixed by test): after both keep-[] mulligans, player 0's hand is
+		// [custom-1, neutral-boar, ember-igniter, ember-phoenixwhelp] — the
+		// custom creature sits at hand index 0 and costs 1, so it can be played
+		// on the opening turn (the board then holds the version-2 creature with
+		// its Reflect stat resolved into CreatureState).
+		const deck = [...DECK];
+		deck[deck.length - 1] = CUSTOM_CARD.id;
+		const SEED_REFLECT = 69;
+		const srv = await makeServer();
+		let host: TestClient | undefined;
+		let guest: TestClient | undefined;
+		let re: TestClient | undefined;
+		let code = "";
+		try {
+			({ host, guest } = await makeClients(srv));
+			// Registration: the host's createRoom carries the version-2 creature.
+			host.send({
+				type: "createRoom",
+				name: "Hosty",
+				deckIds: deck,
+				customCards: [CUSTOM_CARD],
+				heroId: HERO_NAME,
+				seed: SEED_REFLECT,
+			});
+			const created = await host.waitFor((m) => m.type === "roomCreated");
+			if (created.type !== "roomCreated")
+				throw new Error("roomCreated never arrived");
+			code = created.code;
+			const joinedP = guest.waitFor((m) => m.type === "joined");
+			const hostStartP = host.waitFor((m) => m.type === "gameStart");
+			const guestStartP = guest.waitFor((m) => m.type === "gameStart");
+			guest.send({
+				type: "joinRoom",
+				code: created.code,
+				deckIds: DECK,
+				customCards: [],
+				heroId: HERO_NAME,
+			});
+			// Guest sync: 'joined' carries the merged registry incl. the custom
+			// def — Reflect and the schemaVersion stamp ride the wire verbatim.
+			const joined = await joinedP;
+			if (joined.type !== "joined") throw new Error("joined never arrived");
+			const synced = joined.cards.find((c) => c.id === CUSTOM_CARD.id);
+			expect(synced).toBeDefined();
+			expect(synced?.reflect).toBe(1);
+			expect(synced?.schemaVersion).toBe(2);
+			expect((await hostStartP).type).toBe("gameStart");
+			expect((await guestStartP).type).toBe("gameStart");
+
+			// Deterministic shadow: the oracle mirror is built from the same
+			// version-2 def; both mulligans then a real playCard of the custom
+			// creature. The mirror's CreatureState resolves reflect = 1.
+			const mirror = mirrorGame([deck, DECK], SEED_REFLECT, [CUSTOM_CARD]);
+			const m1 = mirror.submit({ kind: "mulligan", keep: [] });
+			const m1P = host.waitFor(eventsEq(m1));
+			host.send({ type: "intent", intent: { kind: "mulligan", keep: [] } });
+			expect((await m1P).type).toBe("events");
+			const m2 = mirror.submit({ kind: "mulligan", keep: [] });
+			const m2P = guest.waitFor(eventsEq(m2));
+			guest.send({ type: "intent", intent: { kind: "mulligan", keep: [] } });
+			expect((await m2P).type).toBe("events");
+			const handIndex = mirror.state.players[0].hand.indexOf(CUSTOM_CARD.id);
+			expect(handIndex).toBe(0);
+			const play = mirror.submit({ kind: "playCard", handIndex });
+			expect(play.some((e) => e.type === "cardPlayed")).toBe(true);
+			const creature = mirror.state.players[0].board.find(
+				(c) => c.cardId === CUSTOM_CARD.id,
+			);
+			expect(creature?.reflect).toBe(1);
+			const playP = host.waitFor(eventsEq(play));
+			host.send({ type: "intent", intent: { kind: "playCard", handIndex } });
+			expect((await playP).type).toBe("events");
+
+			// Reconnect replay: the guest drops and rejoins; the burst replays
+			// the FULL log onto a fresh shadow built from the re-sent joined
+			// payload (registry incl. the version-2 def). The reconnected
+			// client's next intent still matches the oracle byte-for-byte — the
+			// custom creature's Reflect survived host registration, guest sync,
+			// shadow construction, and the replay.
+			const leftP = host.waitFor((m) => m.type === "playerLeft");
+			guest.close();
+			expect((await leftP).type).toBe("playerLeft");
+			re = new TestClient(await connect(urlOf(srv)));
+			const reJoinedP = re.waitFor((m) => m.type === "joined");
+			re.send({
+				type: "joinRoom",
+				code,
+				deckIds: DECK,
+				customCards: [],
+				heroId: HERO_NAME,
+			});
+			const reJoined = await reJoinedP;
+			if (reJoined.type !== "joined") throw new Error("joined never arrived");
+			const reSynced = reJoined.cards.find((c) => c.id === CUSTOM_CARD.id);
+			expect(reSynced).toBeDefined();
+			expect(reSynced?.reflect).toBe(1);
+			expect(reSynced?.schemaVersion).toBe(2);
+			const r1 = re.waitFor(intentEq({ kind: "mulligan", keep: [] }));
+			const r2 = re.waitFor(intentEq({ kind: "mulligan", keep: [] }));
+			const r3 = re.waitFor(intentEq({ kind: "playCard", handIndex }));
+			const startP = re.waitFor((m) => m.type === "gameStart");
+			for (const p of [r1, r2, r3]) {
+				const msg = await p;
+				if (msg.type !== "intent")
+					throw new Error("replayed intent never arrived");
+				expect(msg.replay).toBe(true);
+			}
+			expect((await startP).type).toBe("gameStart");
+			// The game continues byte-for-byte: the reconnected guest ends the
+			// turn and the broadcast matches the oracle that replayed the same log.
+			const end = mirror.submit({ kind: "endTurn" });
+			const endP = re.waitFor(eventsEq(end));
+			host.send({ type: "intent", intent: { kind: "endTurn" } });
+			expect((await endP).type).toBe("events");
+		} finally {
+			host?.close();
+			guest?.close();
+			re?.close();
 			await srv.close();
 		}
 	});

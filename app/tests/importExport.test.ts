@@ -23,7 +23,8 @@ import ImportExport from "../src/components/ImportExport.js";
 	globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** A valid 1-cost 1/1 creature fixture (validated by @ashen/core). */
+/** A valid 1-cost 1/1 creature fixture (validated by @ashen/core). New-schema
+ *  shape (Task 3): schemaVersion 2 + explicit Reflect, as Forge now authors. */
 const validCard = (over: Partial<Card> = {}): Card => ({
 	id: "custom-import-001",
 	name: "Import Test",
@@ -32,6 +33,7 @@ const validCard = (over: Partial<Card> = {}): Card => ({
 	attack: 1,
 	health: 1,
 	reflect: 1,
+	schemaVersion: 2,
 	keywords: [],
 	effects: [],
 	rarity: "common",
@@ -86,22 +88,46 @@ describe("JSON import/export round-trip", () => {
 		expect(importCardsJson(json)).toEqual(cards);
 	});
 
-	// Task 1 compatibility bridge: exports/imports written before the Reflect
-	// contract existed carry creatures with no `reflect`. Import normalizes them
-	// deterministically to Reflect = Attack (ids and `version` untouched) so
-	// they pass core validation and fight with mirror-stat parity. Task 3
-	// replaces this bridge with an explicit Forge input + schemaVersion migration.
-	it("normalizes legacy imports missing Reflect to Reflect = Attack (Task 1 bridge)", () => {
+	// Task 3 schema migration: exports/imports written before the Reflect
+	// contract existed carry creatures with no `reflect` and no `schemaVersion`
+	// (or a stamped 1). Import migrates them deterministically to schemaVersion
+	// 2 with Reflect = Attack (ids and the `version` revision field untouched).
+	it("migrates a legacy import (no schemaVersion, no Reflect) to schema 2 with Reflect = Attack", () => {
 		const legacy = validCard({
 			id: "legacy-import-001",
 			name: "Old Import",
 			version: 5,
 		});
+		delete (legacy as Partial<Card>).schemaVersion;
 		delete legacy.reflect; // shape as exported before the field existed
 		const [imported] = importCardsJson(JSON.stringify([legacy]));
 		expect(imported!.reflect).toBe(1); // attack of the legacy 1/1
+		expect(imported!.schemaVersion).toBe(2); // stamped by the migration
 		expect(imported!.id).toBe("legacy-import-001"); // identity preserved
 		expect(imported!.version).toBe(5); // revision value preserved
+	});
+	it("migrates a schemaVersion-1 import missing Reflect identically", () => {
+		const legacy = validCard({ id: "legacy-import-v1", schemaVersion: 1 as const });
+		delete legacy.reflect;
+		const [imported] = importCardsJson(JSON.stringify([legacy]));
+		expect(imported!.reflect).toBe(1);
+		expect(imported!.schemaVersion).toBe(2);
+		expect(imported!.id).toBe("legacy-import-v1");
+	});
+	it("an imported legacy spell or artifact retains no Reflect", () => {
+		const spell = validCard({
+			id: "legacy-import-spell",
+			type: "spell",
+			effects: [{ kind: "draw", value: 1 }],
+		});
+		delete (spell as Partial<Card>).schemaVersion;
+		delete spell.reflect;
+		// Spells carry no creature stats (validateCard rejects them) — strip the
+		// creature fixture's attack/health so the spell shape is faithful.
+		delete spell.attack;
+		delete spell.health;
+		const [imported] = importCardsJson(JSON.stringify([spell]));
+		expect(imported!.reflect).toBeUndefined();
 	});
 
 	it("does NOT silently repair a schemaVersion-2 creature missing Reflect (Task 3 owns the gate)", () => {

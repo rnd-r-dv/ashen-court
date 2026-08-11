@@ -14,7 +14,7 @@
 // and replays the intent log so it catches up to the live state.
 import { describe, expect, it, vi } from 'vitest';
 import { CardRegistry, DECK_DEFS, Game, HEROES, buildPool, expandDeck } from '@ashen/core';
-import type { GameEvent, HeroSpec, Intent, PlayerIndex } from '@ashen/core';
+import type { Card, GameEvent, HeroSpec, Intent, PlayerIndex } from '@ashen/core';
 import type { ClientMessage, ServerMessage } from '@ashen/server/protocol';
 import type { AddressInfo } from 'ws';
 import { startServer } from '../../server/src/index.js';
@@ -478,6 +478,105 @@ describe('LAN full mirroring (real server)', () => {
     } finally {
       host.client.close();
       guest.client.close();
+      await srv.close();
+    }
+  }, 20000);
+
+  it('a version-2 custom creature keeps Reflect through shadow creation and reconnect replay (Task 3)', async () => {
+    const custom: Card = {
+      id: 'custom-1',
+      name: 'Custom One',
+      type: 'creature',
+      cost: 1,
+      attack: 1,
+      health: 1,
+      reflect: 1,
+      schemaVersion: 2,
+      keywords: [],
+      effects: [],
+      rarity: 'common',
+      archetype: 'neutral',
+      art: { preset: 'ember', palette: ['#2b0d0d', '#ff6b35'], seed: 1 },
+      author: 'custom',
+      version: 1,
+    };
+    // Host deck: ember deck with the version-2 creature in the last slot. Seed
+    // 69 (fixed by test): after both keep-[] mulligans, player 0's hand is
+    // [custom-1, neutral-boar, ember-igniter, ember-phoenixwhelp] — the custom
+    // creature sits at hand index 0 and costs 1, so it is playable turn 1.
+    const hostDeck = [...DECK];
+    hostDeck[hostDeck.length - 1] = custom.id;
+    const SEED_REFLECT = 69;
+    const shadow = (): Game =>
+      Game.create(
+        { decks: [hostDeck, DECK], heroes: [HERO, HERO], seed: SEED_REFLECT },
+        new CardRegistry([...buildPool(), custom]),
+      );
+    const mirror = shadow();
+    const { srv, url } = await makeServer();
+    const host = new LanHarness(url);
+    const guest = new LanHarness(url);
+    const hostDriver = wire(host, shadow());
+    const guestDriver = wire(guest, shadow());
+    let re: LanHarness | null = null;
+    try {
+      // Host registration carries the version-2 creature on the wire.
+      host.send({ type: 'createRoom', name: 'Hosty', deckIds: hostDeck, customCards: [custom], heroId: HERO.name, seed: SEED_REFLECT });
+      const created = await host.waitFor(m => m.type === 'roomCreated');
+      if (created.type !== 'roomCreated') throw new Error('roomCreated never arrived');
+      const joinedP = guest.waitFor(m => m.type === 'joined');
+      const oppP = host.waitFor(m => m.type === 'opponentJoined');
+      const hostStartP = host.waitFor(m => m.type === 'gameStart');
+      const guestStartP = guest.waitFor(m => m.type === 'gameStart');
+      guest.send({ type: 'joinRoom', code: created.code, deckIds: DECK, customCards: [], heroId: HERO.name });
+      // Guest sync: 'joined' carries the merged registry — Reflect and the
+      // schemaVersion stamp ride the wire verbatim from the host's payload.
+      const joined = await joinedP;
+      if (joined.type !== 'joined') throw new Error('joined never arrived');
+      const synced = joined.cards.find(c => c.id === custom.id);
+      expect(synced).toBeDefined();
+      expect(synced?.reflect).toBe(1);
+      expect(synced?.schemaVersion).toBe(2);
+      await oppP;
+      await hostStartP;
+      await guestStartP;
+      // Deterministic shadow creation: both drivers rebuild from the server
+      // setup, then the host plays the custom creature — the version-2 def
+      // resolves Reflect 1 into CreatureState on every side.
+      expect(hostDriver.game().serialize()).toBe(guestDriver.game().serialize());
+      expect(hostDriver.game().serialize()).toBe(mirror.serialize());
+      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
+      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'mulligan', keep: [] });
+      const handIndex = mirror.state.players[0].hand.indexOf(custom.id);
+      expect(handIndex).toBe(0);
+      await drive(host, guest, mirror, hostDriver, guestDriver, { kind: 'playCard', handIndex });
+      expect(mirror.state.players[0].board.find(c => c.cardId === custom.id)?.reflect).toBe(1);
+      expect(hostDriver.game().state.players[0].board.find(c => c.cardId === custom.id)?.reflect).toBe(1);
+
+      // Reconnect replay: the guest rebuilds its shadow from the re-sent
+      // 'joined' payload (registry incl. the version-2 def) and replays the
+      // intent log; the custom creature's Reflect survives the rebuild.
+      guest.client.close();
+      await host.waitFor(m => m.type === 'playerLeft');
+      re = new LanHarness(url);
+      const rd = wire(re, shadow());
+      const reJoinedP = re.waitFor(m => m.type === 'joined');
+      const reStartP = re.waitFor(m => m.type === 'gameStart');
+      re.send({ type: 'joinRoom', code: created.code, deckIds: DECK, customCards: [], heroId: HERO.name });
+      const reJoined = await reJoinedP;
+      if (reJoined.type !== 'joined') throw new Error('joined never arrived');
+      const reSynced = reJoined.cards.find(c => c.id === custom.id);
+      expect(reSynced).toBeDefined();
+      expect(reSynced?.reflect).toBe(1);
+      expect(reSynced?.schemaVersion).toBe(2);
+      await reStartP;
+      expect(rd.game().serialize()).toBe(hostDriver.game().serialize());
+      expect(rd.game().serialize()).toBe(mirror.serialize());
+      expect(rd.game().state.players[0].board.find(c => c.cardId === custom.id)?.reflect).toBe(1);
+    } finally {
+      host.client.close();
+      guest.client.close();
+      re?.client.close();
       await srv.close();
     }
   }, 20000);

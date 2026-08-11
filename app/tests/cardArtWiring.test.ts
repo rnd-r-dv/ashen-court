@@ -71,29 +71,23 @@ describe('generated art wiring', () => {
     cleanup();
   });
 
-  it('renders the same spec as flat solids — no SVG gradient elements', () => {
-    // Armorial direction (Task 5): the procedural composition is preserved
-    // (same seeded layers from the same recipe) but drawn in flat tinctures.
-    // Any reintroduced <linearGradient>/<radialGradient> definition or
-    // url(#...) fill reference is a direction regression.
-    const { host, cleanup } = render(common);
-    const svg = host.querySelector('.card__art svg')!;
-    expect(svg).not.toBeNull();
-    // Comma selector: jsdom's nwsapi throws on the bare SVG tag name
-    // ('linearGradient') but resolves the comma form correctly.
-    expect(svg.querySelectorAll('linearGradient, radialGradient').length).toBe(0);
-    expect(svg.querySelectorAll('defs').length).toBe(0);
-    // The composition still renders its layers from the same spec: sky rect,
-    // silhouette paths, runic glyph, and ember specks.
-    expect(svg.querySelector('rect')).not.toBeNull();
-    expect(svg.querySelectorAll('path').length).toBeGreaterThan(0);
-    expect(svg.querySelector('text')).not.toBeNull();
-    expect(svg.querySelectorAll('circle').length).toBeGreaterThan(0);
-    // Every fill is a solid color, never a url(#gradient) reference.
-    const gradientRefs = [...svg.querySelectorAll('[fill]')].filter((el) =>
-      (el.getAttribute('fill') ?? '').startsWith('url('),
-    );
-    expect(gradientRefs).toEqual([]);
+  it('keeps the full-bleed legendary image region with the three-mark rail', () => {
+    // Task 4 (reflect plan) Step 7: epic/legendary bleed plates keep their
+    // larger full-bleed image area — the rail replaces the two pips, but
+    // the art still fills the box behind the name row, ribbon, and text
+    // well. The rail rides the bleed card's bottom ink plate in the same
+    // .card__stats slot the banded card uses.
+    const { host, cleanup } = render({ ...legendary, id: 'HAS_ART' });
+    expect(host.querySelector('.card--bleed')).not.toBeNull();
+    expect(host.querySelector('.card__art img')).not.toBeNull();
+    const marks = [...host.querySelectorAll('.card__stat')];
+    expect(marks).toHaveLength(3);
+    expect(marks.map((m) => m.className)).toEqual([
+      'card__stat card__stat--attack',
+      'card__stat card__stat--reflect',
+      'card__stat card__stat--health',
+    ]);
+    expect(host.querySelector('.card--bleed .card__stats')).not.toBeNull();
     cleanup();
   });
 });

@@ -31,6 +31,20 @@
   --gules: #A81E22;
   --or: #B8913C;
 
+  /* ---- stat-mark tinctures (Task 4, reflect plan) ----
+   * The three card stat glyphs are restrained red/blue/green, and color is
+   * never the only cue (each mark also has a distinct silhouette and an
+   * accessible name). --stat-attack aliases the canonical damage gules by
+   * VALUE: the migration guard's raw-hex exemption applies only to this
+   * file, so the alias lives here and gules discipline stays enforceable
+   * everywhere else (the attack glyph is the world's one red, meaning hurt).
+   * --stat-reflect (muted azure) and --stat-health (muted green) are
+   * deliberately distinct from every --house-* field and from --or, asserted
+   * in statMark.test.ts. */
+  --stat-attack: #A81E22;
+  --stat-reflect: #5E83B0;
+  --stat-health: #7C9E5A;
+
   /* ---- house tinctures ---- */
   --house-ember: #B4341C;
   --house-choir: #C9BFA4;

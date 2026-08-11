@@ -316,17 +316,23 @@
   flex: 0 0 auto;
 }
 
-/* ---- creature stat pips ----------------------------------------
-   INSIDE the art panel's lower corners, not straddling its edge.
-   The previous rule hung them 13px below the panel, where the type
-   ribbon lives, so on every creature the pips covered the ribbon's
+/* ---- creature stat rail ----------------------------------------
+   INSIDE the art panel's lower edge, not straddling it. The previous
+   rule hung the pips 13px below the panel, where the type ribbon
+   lives, so on every creature the pips covered the ribbon's
    icon and its rarity label. Keeping them inside makes the overlap
    structurally impossible — no per-type padding, no special cases.
 
-   Each pip is a WORD over a NUMERAL in Cardo small caps — a bare
-   number would leave the player guessing which stat it is
-   (PRODUCT.md principle 2). The words are visible and repeated in
-   each pip's aria-label. Gules and or never decorate pips.        */
+   Task 4 (reflect plan) replaced the two labeled corner pips with one
+   three-cell stat rail: Attack → Reflect → Health, each cell an authored
+   glyph beside its numeral (StatMark). No stat word is printed on the
+   plate — each mark's aria-label names it for AT ("Attack 4", never a
+   bare 4), and the numeral is presentational inside the role="img" mark.
+   Gules and or never decorate the rail: the glyph colors come from the
+   plan's muted stat tokens (theme.css, consumed in statmark.css).
+
+   The rail is a space-between row of content-sized cells, so a two-digit
+   value costs a wider cell and never collides with its neighbors. */
 .card__stats {
   position: absolute;
   left: 6px;
@@ -334,33 +340,30 @@
   bottom: 6px;
   display: flex;
   justify-content: space-between;
+  gap: 4px;
   pointer-events: none;
 }
 .card__stat {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 46px;
-  height: 42px;
+  gap: 6px;
+  min-width: 0;
   padding: 2px 6px;
   border-radius: 3px;
   background: var(--ground);
   border: 1px solid var(--line-dim);
   color: var(--text);
 }
-.card__stat-label {
-  font-variant-caps: small-caps;
-  font-size: 8.5px;
-  letter-spacing: 0.7px;
-  color: var(--text-dim);
-  line-height: 1;
-}
+/* The rail numeral floor is DECLARED px, not a scalar (Task 4 Step 7a):
+   25px × the minimum supported hand scale 0.66 = 16.5px effective, above
+   the plan's 16px bar. Never shrink this type to make the rail fit —
+   contract spacing first (the board override below does exactly that). */
 .card__stat-value {
-  margin-top: 2px;
-  font-size: 15px;
+  font-size: 25px;
   font-weight: 700;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- rules text and flavor -------------------------------------
@@ -454,21 +457,28 @@
   display: none;
 }
 
-/* Board minis still carry stats — the pip labels must survive the zoom,
-   so the pips and their type step up in card units (zoom halves them on
-   screen). The label is 18px so that at zoom 0.5 it lands at ~9px with a
-   ~6.5px cap height — above the 6px noise floor set for board copy. 18px
-   fits the 46px pip (18 label + 2 gap + 21 value = 41px of content). */
-.card--board .card__stat {
-  min-width: 62px;
-  height: 46px;
-  padding: 3px 8px;
+/* Board minis still carry the three-mark rail — and its type must survive
+   the half zoom. The numeral floor is 32px declared = 16px effective at
+   zoom 0.5, the plan's legibility bar for board minis. To fit three cells
+   (including two-digit values) into the narrower panel the rail CONTRACTS
+   SPACING (gaps, padding, glyph size), never the numeral type — Task 4
+   Step 7a's "contract spacing before shrinking type". */
+.card--board .card__stats {
+  left: 3px;
+  right: 3px;
+  bottom: 3px;
+  gap: 2px;
 }
-.card--board .card__stat-label {
-  font-size: 18px;
+.card--board .card__stat {
+  gap: 2px;
+  padding: 1px 3px;
+}
+.card--board .statmark-icon {
+  width: 24px;
+  height: 24px;
 }
 .card--board .card__stat-value {
-  font-size: 21px;
+  font-size: 32px;
 }
 
 /* ============================================================

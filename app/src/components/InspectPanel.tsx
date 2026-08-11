@@ -133,7 +133,7 @@ export default function InspectPanel({ creature, def, onClose }: InspectPanelPro
           <CardView
             card={def}
             size="preview"
-            stats={{ attack: creature.attack, health: creature.health }}
+            stats={{ attack: creature.attack, reflect: creature.reflect, health: creature.health }}
             keywords={creature.keywords}
             silenced={creature.silenced}
             status={{ exhausted: creature.exhausted, frozen: creature.frozen, shields: creature.shields }}

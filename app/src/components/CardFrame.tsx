@@ -2,12 +2,14 @@ import type { ReactNode } from 'react';
 import type { CardType, Keyword, Rarity } from '@ashen/core';
 import type { Treatment } from './cardTreatment.js';
 import KeywordChip from './KeywordChip.js';
+import StatMark from './StatMark.js';
 import './card.css';
 
 /**
  * Card chrome (Task 37): layered rarity frames, type ribbon, cost gem,
- * attack/health pips and name plate. The art slot (`children`) is filled
- * by Card.tsx with CardArt — CardFrame only knows the frame and text.
+ * three-cell stat rail (attack/reflect/health) and name plate. The art slot
+ * (`children`) is filled by Card.tsx with CardArt — CardFrame only knows
+ * the frame and text.
  *
  * Rarity treatments (Armorial, Task 5): hairline weight only, declared in
  * card.css — common = 1px dim hairline, rare = 1px cream, epic = 2px cream,
@@ -37,8 +39,12 @@ export interface CardFrameProps {
    *  as a third defense stat — the exact misread recorded in app/PRODUCT.md.
    *  The cost must leave the DOM, not merely be styled away. */
   showCost?: boolean;
-  /** Creature stats — attack/health pips render only for creatures. */
+  /** Creature stats — the three-cell stat rail renders only for creatures.
+   *  Reflect defaults to 0 when absent (the engine treats undefined
+   *  CreatureState reflect as 0 counter-damage; every curated creature
+   *  carries an explicit value). */
   attack?: number;
+  reflect?: number;
   health?: number;
   /** Keyword chips — card-definition keywords, unless Card.tsx overrides them
    *  with the creature's LIVE board keywords (silence empties the engine's
@@ -90,15 +96,6 @@ const TYPE_ICON: Record<CardType, string> = {
 
 const BACK_SIGIL = '\u2726';
 
-/** Visible stat labels — Cardo small caps over the numeral (Task 5). The
- *  words carry the meaning (a player must never guess which stat a number
- *  is), so the aria-label repeats them for AT and the visible span renders
- *  them in small caps. */
-const STAT_LABEL = {
-  attack: 'Attack',
-  health: 'Health',
-} as const;
-
 export default function CardFrame({
   rarity,
   type,
@@ -107,6 +104,7 @@ export default function CardFrame({
   archetype,
   showCost = true,
   attack,
+  reflect,
   health,
   keywords,
   staticKeywords = false,
@@ -162,24 +160,19 @@ export default function CardFrame({
             )}
           </div>
 
-          {/* Corner pips, not a layout row: a creature and a spell must occupy
-              the SAME box, so stats are lifted out of the flow entirely. Each
-              pip is a word in small caps over the numeral — never a bare
-              number (PRODUCT.md: every number must be unambiguous). */}
+          {/* Three-cell stat rail, not a layout row: a creature and a spell
+              must occupy the SAME box, so stats are lifted out of the flow
+              entirely. Each cell is a glyph beside its numeral (StatMark) in
+              Attack → Reflect → Health order — no stat word is printed, and
+              each mark's aria-label names it for AT, so no number on the
+              plate is ever bare or ambiguous (PRODUCT.md). The plan's muted
+              stat tokens color the glyphs; gules appears only as the attack
+              mark's alias, never as a frame decoration. */}
           {!faceDown && isCreature && attack !== undefined && health !== undefined && (
             <div className="card__stats">
-              <span className="card__stat card__stat--attack" aria-label={`${STAT_LABEL.attack} ${attack}`}>
-                <span className="card__stat-label" aria-hidden="true">
-                  {STAT_LABEL.attack}
-                </span>
-                <span className="card__stat-value">{attack}</span>
-              </span>
-              <span className="card__stat card__stat--health" aria-label={`${STAT_LABEL.health} ${health}`}>
-                <span className="card__stat-label" aria-hidden="true">
-                  {STAT_LABEL.health}
-                </span>
-                <span className="card__stat-value">{health}</span>
-              </span>
+              <StatMark kind="attack" value={attack} />
+              <StatMark kind="reflect" value={reflect ?? 0} />
+              <StatMark kind="health" value={health} />
             </div>
           )}
         </div>

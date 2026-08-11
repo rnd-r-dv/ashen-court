@@ -1,0 +1,27 @@
+/* StatMark (Task 4, reflect plan) — one cell of the card's three-cell stat
+   rail: an authored currentColor SVG glyph beside its numeral. Flat charges
+   in the Armorial register — no gradients, glows, shadows, bevels, or faux
+   metal (armorialMigration.test.ts guards the whole tree). The glyph is
+   drawn with `stroke="currentColor"` / `fill="currentColor"`, so this file
+   is the single place the three stat tinctures attach.
+   
+   Color is never the only cue: every mark also has a distinct silhouette
+   (blade / returning arrow / heart) and an accessible name on the outer
+   mark (statMark.test.ts). */
+
+.statmark-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: block;
+}
+
+/* The three stat tinctures — the plan's muted tokens from theme.css.
+   --stat-attack aliases the canonical damage gules, so the attack glyph is
+   the world's one red, meaning hurt. The azure and green are restrained
+   stat colors, distinct from every house field (asserted in statMark.test.ts).
+   Gules-as-attack-mark is the plan's explicit sanctioned exception; the
+   damage/death FX gules allowlist is unchanged. */
+.card__stat--attack .statmark-icon { color: var(--stat-attack); }
+.card__stat--reflect .statmark-icon { color: var(--stat-reflect); }
+.card__stat--health .statmark-icon { color: var(--stat-health); }

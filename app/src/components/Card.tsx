@@ -101,6 +101,7 @@ export default function Card({
       archetype={card.archetype}
       showCost={showCost}
       attack={card.attack}
+      reflect={card.reflect}
       health={card.health}
       keywords={shownKeywords}
       staticKeywords={staticKeywords}

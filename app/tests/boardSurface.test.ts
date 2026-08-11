@@ -10,7 +10,10 @@ import CardView from '../src/components/CardView.js';
 // React 18's act() requires the testing-environment flag (see drivers.test.ts).
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** A creature whose stats every assertion hand-checks against. */
+/** A creature whose stats every assertion hand-checks against. Reflect 0
+ *  here is deliberate: this fixture predates the three-stat contract and the
+ *  plate must truthfully show the engine's 0 counter-damage for an absent
+ *  reflect — never "undefined" and never a borrowed attack value. */
 const CREATURE: CardSpec = {
   id: 'surface-warden',
   name: 'Surface Warden',
@@ -84,28 +87,34 @@ describe('card plate surface', () => {
     expect(host!.querySelector('.card__cost')).toBeNull();
   });
 
-  it('attack and health carry accessible labels at hand size', () => {
+  it('attack, reflect and health carry accessible labels at hand size', () => {
     render('hand');
     const atk = host!.querySelector('.card__stat--attack')!;
+    const refl = host!.querySelector('.card__stat--reflect')!;
     const hp = host!.querySelector('.card__stat--health')!;
-    // Accessible label names the stat; a bare number does not.
+    // Accessible label names the stat on the outer mark; a bare number does
+    // not. The plate prints NO stat words — the glyph carries the meaning
+    // and the label announces it (Task 4, reflect plan).
     expect(atk.getAttribute('aria-label')).toBe('Attack 4');
+    expect(refl.getAttribute('aria-label')).toBe('Reflect 0');
     expect(hp.getAttribute('aria-label')).toBe('Health 5');
-    // And the word is VISIBLE (Cardo small caps), not just announced.
-    expect(atk.textContent).toContain('Attack');
-    expect(hp.textContent).toContain('Health');
+    expect(atk.textContent).not.toContain('Attack');
+    expect(hp.textContent).not.toContain('Health');
   });
 
-  it('attack and health carry accessible labels at board size', () => {
-    // Board minis still show stats — the labels must survive the zoom, not
-    // vanish with the cost gem.
+  it('attack, reflect and health carry accessible labels at board size', () => {
+    // Board minis still show the three-mark rail — the labels must survive
+    // the zoom, not vanish with the cost gem. (This fixture's def carries no
+    // explicit reflect, so the plate truthfully shows Reflect 0.)
     render('board');
     const atk = host!.querySelector('.card__stat--attack')!;
+    const refl = host!.querySelector('.card__stat--reflect')!;
     const hp = host!.querySelector('.card__stat--health')!;
     expect(atk.getAttribute('aria-label')).toBe('Attack 4');
+    expect(refl.getAttribute('aria-label')).toBe('Reflect 0');
     expect(hp.getAttribute('aria-label')).toBe('Health 5');
-    expect(atk.textContent).toContain('Attack');
-    expect(hp.textContent).toContain('Health');
+    expect(atk.textContent).not.toContain('Attack');
+    expect(hp.textContent).not.toContain('Health');
   });
 
   it('exposes the card archetype as data-archetype for the house tincture', () => {

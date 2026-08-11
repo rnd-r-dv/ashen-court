@@ -71,7 +71,7 @@ describe('board card live keywords and silence', () => {
       createElement(CardView, {
         card: def(),
         size: 'board',
-        stats: { attack: 3, health: 3 },
+        stats: { attack: 3, reflect: 3, health: 3 },
         keywords: ['stealth'],
         silenced: true,
       }),
@@ -92,7 +92,7 @@ describe('board card live keywords and silence', () => {
       createElement(CardView, {
         card: def(),
         size: 'board',
-        stats: { attack: 3, health: 3 },
+        stats: { attack: 3, reflect: 3, health: 3 },
         keywords: ['taunt', 'stealth'],
       }),
     );
@@ -107,5 +107,26 @@ describe('board card live keywords and silence', () => {
     expect(chips()).toEqual(['taunt']);
     expect(chips()).not.toContain('stealth');
     expect(host!.textContent).toMatch(/Deathrattle:/);
+  });
+
+  it('renders live Reflect over the board creature definition', () => {
+    // Task 4 (reflect plan): the board plate's Reflect mark reads the LIVE
+    // CreatureState.reflect, same live-state-over-definition rule as
+    // attack/health/keywords. The def carries 2; the live creature carries
+    // 5 — only the live value may appear, and all three marks stay in
+    // Attack → Reflect → Health order.
+    const d: CardSpec = { ...def(), reflect: 2 };
+    render(
+      createElement(CardView, {
+        card: d,
+        size: 'board',
+        stats: { attack: 3, reflect: 5, health: 3 },
+        keywords: ['stealth'],
+        silenced: true,
+      }),
+    );
+    expect(host!.querySelector('.card__stat--reflect')!.getAttribute('aria-label')).toBe('Reflect 5');
+    expect(host!.querySelector('.card__stat--attack')!.getAttribute('aria-label')).toBe('Attack 3');
+    expect(host!.querySelector('.card__stat--health')!.getAttribute('aria-label')).toBe('Health 3');
   });
 });

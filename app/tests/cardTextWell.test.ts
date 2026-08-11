@@ -96,16 +96,15 @@ describe('card text well', () => {
     expect(block('.card--board .card__body')).toMatch(/display:\s*none/);
   });
 
-  it('keeps board stat labels legible under the half zoom', () => {
-    // Board minis render at zoom 0.5 (card.css), which halves every px in
-    // the rules below. A 13px label lands at ~6.5px on screen with a cap
-    // height of ~4.7px — under the 6px noise floor this file sets for board
-    // copy and under PRODUCT.md's match-legibility bar. The pip VALUES and
-    // aria-labels were already right; the WORD must survive the zoom too.
-    // Floor 16px (the review's minimum); the shipped value is 18px.
-    const label = block('.card--board .card__stat-label');
-    const size = Number(/font-size:\s*([\d.]+)px/.exec(label)?.[1]);
-    expect(size).toBeGreaterThanOrEqual(16);
+  it('floors the board stat numeral in effective px under the half zoom', () => {
+    // Board minis render at zoom 0.5 (card.css), halving every declared px
+    // on screen. The three-cell rail numeral must stay readable: 32px
+    // declared lands at exactly 16px effective — the plan's floor for the
+    // rail type (Task 4 Step 7a). Never shrink the rail's type to fit;
+    // contract spacing instead.
+    const value = block('.card--board .card__stat-value');
+    const size = Number(/font-size:\s*([\d.]+)px/.exec(value)?.[1]);
+    expect(size).toBeGreaterThanOrEqual(32);
   });
 
   it('keeps the card plate flat: no gradients, glows, or depth shadows', () => {

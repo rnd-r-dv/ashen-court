@@ -48,8 +48,11 @@ export interface CardViewProps {
   targetable?: boolean;
   /** Dimmed (unplayable, not your turn, or waiting during targeting). */
   muted?: boolean;
-  /** Live board stats override (damage/buffs) — board creatures only. */
-  stats?: { attack: number; health: number };
+  /** Live board stats override (damage/buffs) — board creatures only.
+   *  All three axes are live: Reflect rides CreatureState.reflect, exactly
+   *  like attack/health. Undefined reflect (a legacy deserialized state)
+   *  renders as 0 — the engine's own truth (game.ts: defender.reflect ?? 0). */
+  stats?: { attack: number; reflect: number; health: number };
   /** Live board keywords override — board creatures only (Task 0). Hand
    *  cards omit it and keep the immutable card-definition chips. */
   keywords?: readonly Keyword[];
@@ -99,9 +102,14 @@ export default function CardView({
     .filter(Boolean)
     .join(' ');
 
-  // Board creatures carry live stats — override the def's pips so damage and
-  // buffs read correctly. faceDown cards never show stats.
-  const spec = stats && !faceDown ? { ...card, attack: stats.attack, health: stats.health } : card;
+  // Board creatures carry live stats — override the def's marks so damage
+  // and buffs read correctly on all three axes. faceDown cards never show
+  // stats. An undefined live reflect degrades to 0 (engine truth), never to
+  // the def's number.
+  const spec =
+    stats && !faceDown
+      ? { ...card, attack: stats.attack, reflect: stats.reflect ?? 0, health: stats.health }
+      : card;
   const badges: string[] = [];
   if (status?.frozen) badges.push('frozen');
   if ((status?.shields ?? 0) > 0) badges.push(`shield ${status!.shields}`);

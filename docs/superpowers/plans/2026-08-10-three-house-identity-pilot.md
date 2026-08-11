@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Ember Court, Bone Horde, and Vermin Swarm mechanically and feelably distinct by implementing the approved five-element identity contract for exactly those three houses — Ash Toll (overload) in Ember, deathrattle/rebuild with no reach in Bone, and Fodder Toll (gated immediate Consume) in Vermin — with no engine change beyond the shared immediate-Consume affordability gate, then play-testing all three to a separate user verdict per house.
+**Goal:** Make Ember Court, Bone Horde, and Vermin Swarm mechanically and feelably distinct by implementing the approved five-element identity contract for exactly those three houses — Ash Toll (overload) in Ember, deathrattle/rebuild with no reach in Bone, and Fodder Toll (gated immediate Consume) in Vermin — with no engine change beyond the shared immediate-Consume affordability gate, then hand the user a concise optional checklist for their own asynchronous verdict per house.
 
 **Architecture:** One narrow engine change — a pure, shared `immediateConsumeAffordability` helper consumed by `validatePlayCard` and `legalIntents` — makes Consume a real pre-play cost. House identity then lives entirely in card data (existing `EffectKind`s only: `overload`, `consume`, `destroy`, `dealDamage`, `buff`, `summon`) plus structural tests that make the approved contract executable. Reflect stays transitional (`reflect = attack`) through the existing builder; final Reflect authoring is deliberately deferred to the parent plan's Task 2.
 
@@ -18,6 +18,7 @@ Copied verbatim from `docs/superpowers/specs/2026-08-10-house-toll-identity-desi
 - **Consume stays tokens-only, oldest-first** (`core/src/engine/effects.ts:188`). Immediate Consume clauses always precede payoff clauses on curated Toll cards; a Consume inside a later trigger (deathrattle/start/endOfTurn/onDamage) is a payoff, never a play cost.
 - **No hero power may carry Consume.** Hero powers use a separate validation path; Consume there would silently bypass the gate.
 - **Budget integrity is necessary, not sufficient.** `statBudget(cost)` and `STAT_BUDGET_SLACK = 4` are unchanged; deck size stays 60; `RARITY_COPY_LIMIT` stays. Validation prices stats and keywords, not effect packages — two-clause cards are balanced by play-test, never by claiming a green budget.
+- **Agents do not run play-tests.** No bot-match matrix, opponent fishing, or multi-turn gameplay automation is part of implementation acceptance. Human feel and balance testing is user-owned, asynchronous, and may be recorded later without blocking green code tasks.
 - **Scope is the three-house pilot only.** `ember-court`, `bone-horde`, `vermin-swarm`, plus shared tests and the shared legality behavior. The other nine houses stay untouched.
 - **Deterministic replay and LAN mirroring stay byte-identical.** The gate filters legality only; it never mutates state.
 - **Only existing `EffectKind`s** (`dealDamage`, `draw`, `heal`, `buff`, `summon`, `overload`, `consume`, `destroy`, `spellPower`, ...) may appear on redesigned cards.
@@ -958,120 +959,39 @@ git commit -m "feat(data): vermin swarm identity — Fodder Toll, weak bodies, c
 
 ---
 
-### Task 5: Play-test protocol and the pilot verdict gate
+### Task 5: Hand off the user-owned pilot verdict
 
 **Files:**
 
-- Create: `docs/superpowers/playtests/2026-08-10-three-house-pilot.md`
+- Create or modify: `docs/superpowers/playtests/2026-08-10-three-house-pilot.md`
 
 **Interfaces:**
 
 - Consumes: the completed Task 1 gate and Tasks 2–4 card packages.
-- Produces: the executable play-test protocol and the pilot's only acceptance gate. This gate CANNOT be closed by automated tests — a separate user verdict per house is required, and the pilot is accepted only when all three houses are played and separately approved. STOP after the verdicts; the nine-house expansion is a separate design/approval, out of scope for this plan.
+- Produces: a concise optional manual checklist and any verdicts the user chooses to provide. This task is documentation-only and non-blocking for implementation completion. The nine-house expansion remains a separate design/approval, out of scope for this plan.
 
-- [ ] **Step 1: Write the protocol document**
+- [ ] **Step 1: Write the concise manual checklist**
 
-Create `docs/superpowers/playtests/2026-08-10-three-house-pilot.md`:
+List four qualitative questions per house: Ember sequencing/starvation/reach/distinction; Bone rebuilding/no-reach/curve/distinction; Vermin generate-consume/toll choice/sweeper weakness/distinction. Do not prescribe a bot difficulty, opponent matrix, match count, seeds, turn counts, final HP, toll ledger, or per-match telemetry.
 
-```markdown
-# Three-House Identity Pilot — Play-test Protocol (final gate)
+- [ ] **Step 2: Stop before gameplay**
 
-**Date:** 2026-08-10
-**Status:** OPEN — cannot be closed by automated tests. Runs after Task 4 of
-`docs/superpowers/plans/2026-08-10-three-house-identity-pilot.md`.
+Do not launch the app, automate turns, fish for opponents, or execute matches. Tell the user the checklist is available whenever they choose to play manually. Missing play-test results do not fail Tasks 1–4 or block later implementation.
 
-## Purpose
-Prove the three pilot houses feel distinct and fill their approved
-five-element contracts. Structural and engine tests establish legality; only
-human play establishes identity. Each house needs a SEPARATE user verdict,
-and the pilot is accepted only when all three approve.
+- [ ] **Step 3: Record only user-supplied verdicts**
 
-## Setup (exactly this, every match)
-- App, bot mode, Grandmaster difficulty (Mode Select -> Grandmaster).
-- Human always pilots the pilot house (player 0).
-- Curated sig decks only — no custom cards, no custom decks.
-- The app picks a fresh random curated bot deck whenever `buildMatchEntry` runs (`app/src/game/matchSetup.ts:59-68`). To reach the matrix-specified opponent, return to Mode Select and start a new match; do **not** rely on Rematch to reroll a persisted setup. Hero -> house: Pyra Emberveil -> Ember, Baron Von Bone -> Bone, Rat King Moulder -> Vermin.
-- The seed is not exposed in the UI. Record it when captured from the driver
-  (devtools session state), else record "not exposed". Each matrix slot is
-  one match at one seed; each new match entry uses a fresh seed.
+If the user later supplies APPROVE/REJECT for Ember, Bone, or Vermin, record their attestation and concise reason without inventing match details. A verdict may cover any or all houses and can be revised after later manual play.
 
-## Match matrix (12 matches)
-| Slot | Pilot (human) | Opponent (bot) | What this tests |
-| --- | --- | --- | --- |
-| E1 | Ember | Bone | reach vs midrange board |
-| E2 | Ember | Vermin | burn vs token width |
-| E3 | Ember | Grave Pact | distinct from burn + draw |
-| E4 | Ember | Eternal Vigil | no-heal weakness under pressure |
-| B1 | Bone | Ember | rebuild vs reach |
-| B2 | Bone | Vermin | the two summon houses separate |
-| B3 | Bone | Hollow Choir | removal vs recursion |
-| B4 | Bone | Dragonflight | midrange mirror |
-| V1 | Vermin | Ember | token width vs burn |
-| V2 | Vermin | Bone | the two summon houses separate |
-| V3 | Vermin | Stormwrought | sweeper vulnerability |
-| V4 | Vermin | Night Coven | width vs buffs |
-
-## Record per match (exact template)
-- Slot, observed opponent hero, seed (or "not exposed"), W/L/Draw, turns,
-  both heroes' final HP.
-- Toll ledger — for every toll card SEEN, note price paid / declined and the
-  outcome:
-  - Ember (Ash = overload): Blast, Cauterize, Pyroblast, Conflagration —
-    which turns were overload-locked, and whether that cost a play.
-  - Vermin (Fodder = consume): Nibble, Frenzy, Swarmlord, Alpha Rat — tokens
-    generated before the play, tokens consumed, and the payoff delivered.
-  - Bone (no toll): Legion Call — which friendly creature was sacrificed and
-    what its deathrattle added; note when the spell was unplayable (no
-    friendly creature) and whether that mattered.
-- Board evidence: Ember — overload-locked turns; Bone — which deaths spawned
-  skeletons and whether the board visibly rebuilt; Vermin — the
-  generate-then-consume cycle in sequence.
-- One-line feel note per match.
-
-## Success/failure questions (answer after each house's block of 4)
-### Ember
-1. Did overload create real sequencing decisions (you skipped a play to avoid
-   a locked turn, or regretted a locked turn)? FAIL if "no" in 3+ matches.
-2. Did the deck run out of gas / fail to recover from behind? FAIL if it
-   never felt starved.
-3. Was direct reach to the enemy hero decisive at least once?
-4. Did it feel distinct from Grave Pact's burn + draw?
-### Bone
-1. Did the board visibly rebuild itself after ordinary creature deaths?
-2. With a lost board, was there genuinely no route to the enemy hero?
-3. Did the midrange curve feel right (not a rush deck, not a control deck)?
-4. Did it feel distinct from Vermin?
-### Vermin
-1. Did generate-then-consume feel like a loop, not an accident?
-2. Were toll decisions (spend fodder vs keep width) real choices?
-3. Did sweepers punish the wide board?
-4. Did it feel distinct from Bone?
-
-## Verdict
-Per house, record APPROVE or REJECT with a one-line reason. The pilot is
-accepted only when all three houses are played and separately approved. STOP
-after the verdicts — the nine-house expansion is a separate design and
-approval, not part of this pilot.
-```
-
-- [ ] **Step 2: Run the play-test protocol**
-
-Execute the matrix above in the app. Every match must follow the setup and the recording template. Record the toll ledger and board evidence per slot, then answer the success/failure questions per house.
-
-- [ ] **Step 3: Record the three separate user verdicts**
-
-Fill the Verdict section of the protocol doc with one APPROVE/REJECT per house (Ember, Bone, Vermin), each with a one-line reason. The pilot is not accepted until all three approve; if any house rejects, revise the identity spec for that house and re-run its block before this plan is considered complete.
-
-- [ ] **Step 4: Commit the protocol and verdicts**
+- [ ] **Step 4: Commit documentation only when it changes**
 
 ```bash
 git add docs/superpowers/playtests/2026-08-10-three-house-pilot.md
-git commit -m "docs(playtest): record three-house identity pilot verdicts"
+git commit -m "docs(playtest): record user-owned identity verdicts"
 ```
 
-- [ ] **Step 5: Stop at the pilot verdict**
+- [ ] **Step 5: Stop at the pilot scope**
 
-Do NOT expand the approved contract to the remaining nine houses in this plan. If the pilot is accepted, the parent plan's Identity Gate (step 5) records the stabilized roles for its Task 2 (final Reflect authoring) and a separate plan owns the nine-house expansion. If rejected, revise the identity spec and this pilot before any further house work.
+Do NOT expand the approved contract to the remaining nine houses in this plan. A separate plan and explicit approval own any expansion.
 
 ---
 
@@ -1084,15 +1004,15 @@ Do NOT expand the approved contract to the remaining nine houses in this plan. I
 - Bone identity (deathrattle/rebuild, board-only, no reach, midrange) — Task 3: both `allEnemies` reach cards retargeted to `allEnemyCreatures`; six deathrattle creatures; `bone-legion` is a destroy-friendly death-engine activation explicitly NOT a toll, with `friendlyCreature` choice-target legality specified (unplayable with no friendly body, gated by existing `validateEffectTargets`/`targetVariants`); zero Consume in Bone.
 - Vermin identity (tokens + immediate Consume conversion, collective payoff, weak bodies/sweeper vulnerability, cheap curve) — Task 4: four Fodder-Toll cards across two rarities, every immediate Consume precedes its payoff; hero power free of Consume; all bodies at or below `statBudget(cost)`.
 - Testing section — Task 1 covers the affordability matrix (0/1/2 tokens, multiple clauses sum, omitted value, later trigger, same-card summon, legal-enumeration/validation agreement, pure gate determinism); Task 4 adds accepted-intent replay over curated `vermin-nibble`; `house-identity.test.ts` covers the duplicate-common report with trigger context, toll coverage, overload nonzero, Consume ordering, hero-power exclusion, no-heal/draw for Ember, no-reach for Bone, weak-body/curve for Vermin, all-pool-validates, exact immutable ID/signature hashes, unchanged deck membership, and the approved five-element matrix.
-- Play-test gate — Task 5: fixed protocol (curated decks, fixed matchup order, fixed bot level, fixed recording template; seed recorded when exposed), exact match matrix, per-house success/failure questions, required separate verdict per house, STOP after verdict.
+- User-owned feel check — Task 5 writes only a concise optional per-house question set and records verdicts the user supplies; agents never run a match matrix or multi-turn play-test.
 - "Remaining nine houses untouched" — only `ember-court.ts`, `bone-horde.ts`, `vermin-swarm.ts`, `builders.ts`, `intents.ts`, and the shared test files are modified.
-- "Balance effect packages explicitly; budget not proof" — every task states the exact final card (type/cost/Attack/Reflect/Health/keywords/triggers/effects) and the play-test gate is the balance authority; no task claims `validateCard` proves cost.
+- "Balance effect packages explicitly; budget not proof" — every task states the exact final card (type/cost/Attack/Reflect/Health/keywords/triggers/effects); automated rules prove structure and legality, while longer feel/balance judgments remain the user's optional manual follow-up. No task claims `validateCard` proves cost.
 
 **2. Placeholder scan.** No "TBD"/"TODO"/"implement later"; no "write tests for above"; every card change names an immutable ID with exact resulting data; every test file is written out in full; every diff has exact before/after text.
 
 **3. Type consistency.** `requiredConsumeTokens(card: Card): number` and `immediateConsumeAffordability(state: GameState, player: PlayerIndex, card: Card): { required; available; payable }` are defined in Task 1 and consumed identically in Tasks 1 (tests) and 4 (toll coverage). `overload`/`consume` builders are added in Task 2 and used in Tasks 2/4. `duplicateCommons`, `byHouse`, `allSpecs`, `meanCost`, `weightedSpend`, `MATRIX`, `WAIVERS` are defined once in Task 2's test file and reused in Tasks 3–4 with identical names. The `bone-legion` effects assertion in Task 3 matches the exact spec array produced in its Step 3. The `ember-cauterize` cardtext string in Task 2 matches `effectText` output for `[dmg(6,'any'), overload(1)]` ("Deal 6 damage to any target. Overload: 1.").
 
-**Known balance risks (deliberate, play-test-owned):** `ember-blast` (3-mana deal 5 + overload 2) is the strongest common in the pool; `bone-cairn` (3-mana 0/4 taunt, deathrattle summon 3) and `bone-legion` (sacrifice + summon 3 + the victim's deathrattle) are strong midrange plays; `vermin-nibble` (1-mana deal 2 with fodder) is efficient removal. These are the intended identity signals, and Task 5 exists specifically to catch any that overperform.
+**Known balance risks (deliberate, user-play-owned):** `ember-blast` (3-mana deal 5 + overload 2) is the strongest common in the pool; `bone-cairn` (3-mana 0/4 taunt, deathrattle summon 3) and `bone-legion` (sacrifice + summon 3 + the victim's deathrattle) are strong midrange plays; `vermin-nibble` (1-mana deal 2 with fodder) is efficient removal. These are intended identity signals for the user's own later manual play, not an agent-run acceptance matrix.
 
 ## Execution Handoff
 

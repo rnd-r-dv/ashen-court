@@ -28,6 +28,7 @@
 - All motion honors `prefers-reduced-motion`; reduced motion removes lunges, shake, particles, hover transitions, and looping foil while preserving state clarity.
 - Any WebGL implementation must be optional, locally bundled, unavailable-WebGL safe, and free of CDN/runtime network dependencies for offline LAN play.
 - Desktop/laptop support floor remains 1280×900; verify at both 1280×900 and 1440×900.
+- Agent execution must not include long play-tests, bot-match matrices, or multi-turn gameplay grinding. Human gameplay feel and balance play-testing is user-owned, asynchronous, and never blocks an implementation task. Agents verify with deterministic fixtures, direct serialized-state setup, focused runtime scenes, and at most one bounded browser pass per task; they must not advance turns repeatedly to stage a visual matrix.
 - Do not execute this plan until the user approves this corrected revision and the Identity Gate between Tasks 1 and 2 is satisfied.
 - Do-not-regress criteria apply to every task and are verified in Task 9: reduced-motion and ARIA coverage may only increase, forbidden shadow/glow/gradient recipes stay banned, 1280×900 remains supported, and no match surface becomes `xl`-only. The 5:7 ratio and equal geometry across card types remain invariant; rendered size is responsive.
 
@@ -55,7 +56,7 @@ This list overrides insertion history and task numbering:
 
 1. Task 0 — renderer comparison and recorded user decision.
 2. Task 1 — Reflect engine contract with transitional `reflect = attack` builders.
-3. **Identity Gate** — approve, separately plan, implement, and play-test the three-house identity pilot; expand it only after approval.
+3. **Identity Gate** — approve, separately plan, and implement the three-house identity pilot; the user supplies the manual play-test verdict asynchronously, and agent execution never runs a match matrix.
 4. Task 2 — hand-author final Reflect values against stable card roles.
 5. Task 3 — custom-card schema migration and Forge.
 6. Task 4 — compact stat marks.
@@ -124,7 +125,7 @@ A different codebase, not a variant of this one: React 19, Tailwind 4, `peerjs` 
 
 The user played both builds and reported the four differences that actually made the zero-shot feel better. These supersede the source-derived guesses where they conflict: they are perceptual evidence from the person the game is for, gathered by playing, which is exactly what the broken screenshot set failed to provide. Each is grounded below in the code that causes it.
 
-11. **Card ability design — archetypes feel more defined, abilities more fun.** This is the largest comparison finding and is intentionally **not implemented inside this plan**. Zero-shot cards routinely carry two clauses in tension, while this pool is overwhelmingly single-clause and often repeats one verb at different numbers. The separate house-identity draft measures that problem. The Identity Gate after Task 1 requires its own approved implementation plan and play-test before final Reflect authoring.
+11. **Card ability design — archetypes feel more defined, abilities more fun.** This is the largest comparison finding and is intentionally **not implemented inside this plan**. Zero-shot cards routinely carry two clauses in tension, while this pool is overwhelmingly single-clause and often repeats one verb at different numbers. The separate house-identity draft measures that problem. The Identity Gate after Task 1 requires its own approved implementation plan and a user-owned manual verdict before final Reflect authoring; no agent-run match matrix is required.
 
 12. **Layout shift at end of turn. — MISDIAGNOSED; CORRECTED ON REVIEW 2026-08-10.**
 
@@ -348,9 +349,9 @@ git commit -m "feat(core): add independent Reflect combat damage"
 **This is a blocking approval gate, not an implementation task inside this plan.** It must run after Task 1 and before Task 2.
 
 1. Review and approve `docs/superpowers/specs/2026-08-10-house-toll-identity-design.md`.
-2. Write a separate test-first implementation plan for the three-house Ember/Bone/Vermin pilot. That plan owns the shared immediate-Consume affordability helper, card packages, costs, play-test protocol, and commits.
-3. Implement and play-test the pilot with Task 1's transitional `reflect = attack`; do not hand-author final Reflect concurrently.
-4. Obtain a separate user verdict on identity. If rejected, revise the identity spec and pilot without proceeding to Task 2.
+2. Write a separate test-first implementation plan for the three-house Ember/Bone/Vermin pilot. That plan owns the shared immediate-Consume affordability helper, card packages, costs, a concise user-owned manual checklist, and commits; it must not assign a match matrix to an agent.
+3. Implement the pilot with Task 1's transitional `reflect = attack`; do not hand-author final Reflect concurrently and do not grind live matches to stage evidence.
+4. Obtain the user's asynchronous manual verdict on identity. If rejected, revise the identity spec and pilot without proceeding to Task 2; missing per-match telemetry is not an implementation failure.
 5. If accepted, expand the approved five-element contract to the remaining nine houses in the separate identity plan, then record the stabilized roles Task 2 consumes.
 
 The identity spec deliberately excludes tribes and any engine change beyond the shared immediate-Consume legality helper. Do not recreate the superseded former Task 10 in this file.
@@ -832,7 +833,7 @@ Do not ship both as user-facing settings unless the Task 0 decision document exp
 
 - [ ] **Step 9: Integrate queue skip and interruption.** `skip()` cancels active DOM/WebGL animation handles, destroys transient layers, advances through queued callbacks, and lands on the already-authoritative state. Component unmount performs identical cleanup.
 
-- [ ] **Step 10: Browser-verify real matches.** Capture attacker survival, defender survival, mutual death, token combat, lifesteal Reflect, and a seven-card formation. Verify no clipping, stale ghost cards, pointer interception, or frame exceeding 50ms on the verification machine.
+- [ ] **Step 10: Browser-verify deterministic combat scenes.** Automated runtime tests own attacker survival, defender survival, mutual death, token combat, lifesteal Reflect, and seven-card-formation semantics. In one bounded browser pass, load those states through direct serialized/test-fixture setup rather than playing turns, capture the representative pass-through and reduced-motion scenes at both supported viewports, and verify no clipping, stale ghost cards, pointer interception, or frame exceeding 50ms. Do not run live matches or advance turns to assemble the matrix.
 
 - [ ] **Step 11: Run full verification.**
 
@@ -969,7 +970,7 @@ npx vitest run app/tests/actionLog.test.ts app/tests/storage.test.ts
 
 - [ ] **Step 5: Implement a collapsible overlay rail.** It must not consume board width at 1280×900, become `xl`-only, or cover primary controls. Store only the open preference, not match history.
 
-- [ ] **Step 6: Browser-verify and commit 8C.** Capture closed/open states after a multi-event turn including death and Discover; verify keyboard toggle, modal silence, and reduced motion.
+- [ ] **Step 6: Browser-verify and commit 8C.** Inject one deterministic multi-event history fixture containing death and Discover; capture closed/open states and verify keyboard toggle, modal silence, and reduced motion. Do not play through a multi-turn match to manufacture the log.
 
 ```bash
 npx vitest run app/tests/actionLog.test.ts app/tests/storage.test.ts
@@ -1006,7 +1007,7 @@ git commit -m "feat(app): add optional resolved-action narrative"
 
 - [ ] **Step 2: Audit accessibility.** Keyboard targeting order matches DOM order; all stat marks have names; color is redundant with shape; combat and hover-preview duplicates are pointer-inert/`aria-hidden`; reduced motion is complete; no live region repeats each animation frame.
 
-- [ ] **Step 3: Audit performance and cleanup.** Run repeated combats, hover cycles, rematch, navigation away, and skip. Confirm no orphan canvas, animation frame, timeout, resize listener, or portal remains. Cap device pixel ratio for an approved WebGL layer at 2.
+- [ ] **Step 3: Audit performance and cleanup without play-testing.** Use automated mount/unmount, fake-timer, queue-skip, portal, and listener-lifecycle tests plus one bounded synthetic replay profile. Confirm no orphan animation frame, timeout, resize listener, portal, or transient layer remains. Do not run repeated live combats, rematches, navigation loops, or bot matches; the user owns longer manual play-testing.
 
 - [ ] **Step 4: Update product and design documentation.** Explain Attack versus Reflect, simultaneous rules versus staged presentation, SVG marks and color tokens, responsive hand scale, centered formations, the fixed-height token reserve with visually hidden empty content, flat Legendary foil timing, hover preview, readiness marker, optional-action-log disposition, and renderer fallback.
 

@@ -270,7 +270,12 @@ describe('Task 8 — Armorial motion grammar', () => {
     }
   });
 
-  it('match-shift CSS animation ends at rest — no hold fill', () => {
+  it('never animates the whole board wrapper — the turn-start page shift is gone (Task 5A)', () => {
+    // The deliberate turn-start register shift (Match retriggering
+    // `match-shift` + the `match-page-shift` keyframe) is REMOVED: the board
+    // wrapper must stay stationary across turn boundaries — that movement is
+    // the reported symptom (plan finding 12). The only translate the board
+    // may take is the framer x-shake on damage, which lives in Match.tsx.
     // Captured in a const: Vite's jsdom transform rewrites the literal
     // `new URL(rel, import.meta.url)` asset pattern to resolve against the
     // document base, which fileURLToPath rejects. The const escapes the
@@ -280,19 +285,16 @@ describe('Task 8 — Armorial motion grammar', () => {
       fileURLToPath(new URL('../src/screens/animations.css', here)),
       'utf8',
     );
-    // The register page-shift rule: flat, one long beat, linear — and no
-    // fill mode, so the board returns to rest when the class is toggled off
-    // instead of freezing at the last keyframe.
-    const shiftRule = css.match(/\.match-boardwrap\.match-shift\s*\{([^}]*)\}/)?.[1] ?? '';
-    expect(shiftRule, 'match-shift animation rule must exist').not.toBe('');
-    expect(shiftRule).toContain('match-page-shift');
-    expect(shiftRule).toContain('var(--beat-long)');
-    expect(shiftRule).toContain('linear');
-    expect(shiftRule).not.toMatch(/\bboth\b/);
-    expect(shiftRule).not.toMatch(/\bforwards\b/);
-    // The keyframes end where they began: translateY(0) at the 100% pose.
-    const finalPose =
-      css.match(/@keyframes match-page-shift[\s\S]*?100%\s*\{([^}]*)\}/)?.[1] ?? '';
-    expect(finalPose).toContain('translateY(0)');
+    // Comments may name the dead recipe (the removal rationale belongs in
+    // the source); only executable rules are a regression — same idiom as
+    // cardTextWell.test.ts's executableCss.
+    const executableCss = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(executableCss).not.toMatch(/match-shift/);
+    expect(executableCss).not.toMatch(/match-page-shift/);
+    expect(executableCss).not.toMatch(/@keyframes\s+match-page-shift/);
+    // The wrapper rule itself must carry no animation shorthand either — a
+    // stationary board is the contract, not merely an unretriggered one.
+    const wrapRule = css.match(/\.match-boardwrap\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(wrapRule).not.toMatch(/animation/);
   });
 });

@@ -143,8 +143,6 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
   const [heroFx, setHeroFx] = useState<[HeroFX, HeroFX]>([HERO_FX_ZERO, HERO_FX_ZERO]);
   const [manaPulse, setManaPulse] = useState(0);
   const fxIdRef = useRef(0);
-  /** Task 8 register page-shift re-trigger target (.match-boardwrap). */
-  const boardwrapRef = useRef<HTMLDivElement | null>(null);
 
   // ---- Task 8: simultaneous combat / death strikes ----
   // One combatStarted event carries BOTH combatant ids; the queue handler
@@ -634,11 +632,11 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
         );
         break;
       case 'turnStart':
-        // Turn banner page-drop (Task 8) + register page shift. The shift is
-        // a CSS animation re-triggered by class toggle + reflow (framer's
-        // keyframe path would not run y/scale keyframes on this wrapper in
-        // Chromium — the x shake runs, y/scale stay inert; the CSS route
-        // re-triggers reliably and honors --anim-scale / reduced motion).
+        // Turn banner page-drop (Task 8). The deliberate register page shift
+        // is GONE (Task 5A): the user-reported "layout shift at end of turn"
+        // was this animation (plan finding 12, corrected on review) — the
+        // board wrapper now stays stationary across turn boundaries. Damage
+        // feedback keeps its own framer x-shake below.
         setBanners((prev) => [
           ...prev,
           {
@@ -648,14 +646,6 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
             mine: e.player === viewer,
           },
         ]);
-        {
-          const el = boardwrapRef.current;
-          if (el) {
-            el.classList.remove('match-shift');
-            void el.offsetWidth; // force reflow so the animation re-runs
-            el.classList.add('match-shift');
-          }
-        }
         break;
       case 'turnEnd':
         // Dim-out veil as the turn hands over (Task 40).
@@ -1024,7 +1014,6 @@ export default function Match({ setup }: { setup: MatchScreenSetup }) {
       </div>
 
       <motion.div
-        ref={boardwrapRef}
         className="match-boardwrap"
         animate={{ x: shakeX }}
         transition={{ duration: 0.32 * effectiveScale, ease: 'linear' }}

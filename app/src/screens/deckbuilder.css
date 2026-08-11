@@ -86,9 +86,13 @@ select.deckbuilder-input {
 
 .deckbuilder-grid {
   display: grid;
-  /* Tracks are sized to the rendered card (240px x 0.74, below) so a card
-     fills its cell instead of spilling into its neighbour. */
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  /* Tracks are sized to the RENDERED card — --card-w (240px, card.css :root)
+     × the browsing zoom below — so a card fills its cell instead of spilling
+     into its neighbour. The 0.74 browsing size is an independent literal
+     (smaller than a hand card, still large enough to read rules text); the
+     track derives from the token so a card-width change never silently
+     re-introduces spilling. */
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--card-w) * 0.74), 1fr));
   gap: 12px;
   justify-items: center;
 }

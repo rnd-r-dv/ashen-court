@@ -11,18 +11,35 @@
    expressed by hairlines and tincture, never by shadow.
    ============================================================ */
 
-.card {
-  /* ---- fixed card box (UI pass 2026-08-07) --------------------
-     Every card is exactly --card-w x --card-h regardless of type,
-     keyword count or flavor length. Before this the frame was a
-     content-sized flex column wrapped around a 250x350 art block,
-     so cards ran ~600px tall and no two were the same height:
-     creatures gained a stats row, spells didn't, and a long flavor
-     line pushed the whole card down. The art panel is now a fixed
-     landscape slot and all variable copy lives in one clipped
-     well (.card__body), which makes the box invariant.            */
+/* ---- design-space card box + context scales (Task 5A) ----
+   The card box tokens live at :root so ONE source serves every consumer:
+   --card-h is DERIVED from --card-w × --card-ratio (240 × 1.4 = 336, the
+   5:7 TCG proportion) — never an independent literal, so one side of the
+   ratio cannot drift silently. Hand and board contexts consume their own
+   scale variables; Hand.tsx reads the computed --hand-card-scale for the
+   fan math, so CSS owns every number (no ResizeObserver, no JS
+   breakpoints). The height tiers below are the plan's exact 983/1060
+   boundaries — content (cardH × scale + 8px pad + scale × 12px lift) fits
+   the 27vh hand row at every supported height (900: 237.68 < 243, 1000:
+   265.52 < 270, 1080: 286.4 < 291.6). */
+:root {
   --card-w: 240px;
-  --card-h: 336px;   /* 5:7, the standard TCG proportion */
+  --card-ratio: 1.4;
+  --card-h: calc(var(--card-w) * var(--card-ratio));
+  --card-hover: 12px; /* hand hover lift — the row reserve uses the same token */
+  --hand-card-scale: 0.8;
+  --board-card-scale: 0.5;
+}
+
+.card {
+  /* ---- fixed card box (UI pass 2026-08-07, tokens at :root since Task 5A) -
+     Every card is exactly --card-w x --card-h regardless of type, keyword
+     count or flavor length. Before this the frame was a content-sized flex
+     column wrapped around a 250x350 art block, so cards ran ~600px tall and
+     no two were the same height: creatures gained a stats row, spells
+     didn't, and a long flavor line pushed the whole card down. The art
+     panel is now a fixed landscape slot and all variable copy lives in one
+     clipped well (.card__body), which makes the box invariant.            */
   --card-pad: 8px;
   --card-top-h: 32px;
   /* ---- art panel geometry -------------------------------------
@@ -75,35 +92,47 @@
 /* ---- sizes --------------------------------------------------
    `zoom` scales the box AND the type together, so one base geometry
    serves every context; it also shrinks the layout box (unlike
-   transform), which is what keeps the fan and board rows honest.   */
+   transform), which is what keeps the fan and board rows honest.
+   Hand and board read their scale VARIABLES (:root) — one authority;
+   the responsive tiers below override only the hand variable on :root
+   (height) or zoom the hand card directly (width, below the 1280
+   floor). `zoom` is not affected by media queries on the element
+   itself, so the variable-based tiers live in @media blocks that set
+   the variable (Hand.tsx reads the same computed value). */
 .card--preview { zoom: 1; }
-.card--hand    { zoom: 1; }
-.card--board   { zoom: 0.5; }
+.card--hand    { zoom: var(--hand-card-scale); }
+.card--board   { zoom: var(--board-card-scale); }
 
-/* Responsive tiers. Hand cards now start at full size — the base card is
-   small enough that shrinking it further is what made rules text unreadable
-   — and step down only when the viewport genuinely cannot seat them.
-   `zoom` is not affected by media queries on the element itself, so tiers
-   live in viewport @media blocks (Hand.tsx's fanSpread mirrors these). */
+/* Height tiers (Task 5A): the hand scale is height-owned. Below 1061px
+   (wide windows) cards step to 0.74, below 984px to 0.66 — the plan's
+   exact boundaries, so a one-pixel viewport gap can never reintroduce
+   hand overflow (content 265.52 < 270 at 984, 237.68 < 243 at 983).
+   Setting the VARIABLE (not the zoom rule) is what lets Hand.tsx read
+   the same number the CSS renders. Guarded by min-width 1201 so narrow
+   windows stay on the width tier below instead. */
+@media (max-height: 1060px) and (min-width: 1201px) {
+  :root { --hand-card-scale: 0.74; }
+}
+@media (max-height: 983px) and (min-width: 1201px) {
+  :root { --hand-card-scale: 0.66; }
+}
+
+/* Width tiers — narrow windows only (below the 1280 floor). Task 5A
+   retunes them so they never ENLARGE the 0.8 base, and pins them at the
+   containment floor: 348 × 0.66 + 8 = 237.68 < 243, the same bound the
+   900px row imposes — so a short AND narrow window can never reproduce
+   the reported hand-overflow either. The old hand-only height tiers
+   (max-height 800/680) are gone: they would be a second authority
+   competing with the :root variable. Board width tiers stay under
+   --board-card-scale (0.5). */
 @media (max-width: 1200px) {
-  .card--hand  { zoom: 0.88; }
+  .card--hand  { zoom: 0.66; }
 }
 @media (max-width: 900px) {
-  .card--hand  { zoom: 0.76; }
   .card--board { zoom: 0.44; }
 }
 @media (max-width: 700px) {
-  .card--hand  { zoom: 0.66; }
   .card--board { zoom: 0.4; }
-}
-/* Short windows: the board needs the vertical room more than the hand does.
-   Guarded by min-width so these never *enlarge* a card the width tiers above
-   already shrank (equal specificity — the later rule would otherwise win). */
-@media (max-height: 800px) and (min-width: 1201px) {
-  .card--hand { zoom: 0.86; }
-}
-@media (max-height: 680px) and (min-width: 901px) {
-  .card--hand { zoom: 0.74; }
 }
 
 /* ---- base frame -------------------------------------------- */
@@ -409,9 +438,11 @@
 }
 
 /* ---- interaction states ---------------------------------------- */
-/* hand: hover lift */
+/* hand: hover lift — the 12px lift is the --card-hover token (:root), so the
+   hand-row height reserve (match.css) uses the SAME number; zoom scales the
+   rendered lift, which is why the reserve multiplies it by the scale. */
 .card--hand:hover {
-  transform: translateY(-12px);
+  transform: translateY(calc(-1 * var(--card-hover)));
 }
 
 /* board: compact tap-to-select */

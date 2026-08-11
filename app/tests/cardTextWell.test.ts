@@ -58,13 +58,66 @@ describe('card text well', () => {
     expect(css).not.toMatch(/line-clamp/);
   });
 
-  it('keeps the card box fixed', () => {
-    // The invariant box (card.css:10-18) is what stops cards running ~600px
-    // tall and disagreeing with each other. Redistributing space inside the
-    // well must not relax it.
+  it('keeps the card box a derived 5:7 ratio — no independent height literal', () => {
+    // The invariant box (Task 5A): design-space tokens live at :root so every
+    // consumer (hand scale, board scale, deck-builder tracks, fan math) reads
+    // ONE source. --card-h is DERIVED from --card-w × --card-ratio (240 × 1.4
+    // = 336, the 5:7 TCG proportion) — a literal height would let one side of
+    // the ratio drift silently, which is exactly the failure this plan audits.
+    const root = block(':root');
+    expect(root).toMatch(/--card-w:\s*240px/);
+    expect(root).toMatch(/--card-ratio:\s*1\.4/);
+    expect(root).toMatch(/--card-h:\s*calc\(var\(--card-w\)\s*\*\s*var\(--card-ratio\)\)/);
+    // The plate consumes the derived tokens; it declares nothing of its own.
     const card = block('.card');
-    expect(card).toMatch(/--card-w:\s*240px/);
-    expect(card).toMatch(/--card-h:\s*336px/);
+    expect(card).toMatch(/width:\s*var\(--card-w\)/);
+    expect(card).toMatch(/height:\s*var\(--card-h\)/);
+    expect(card).not.toMatch(/--card-h:\s*\d+px/);
+  });
+
+  it('gives the hand context ONE scale authority — a CSS variable', () => {
+    // .card--hand reads --hand-card-scale; a numeric zoom in the base rule
+    // would create a second authority the media tiers could silently split.
+    // Board minis read --board-card-scale the same way.
+    expect(block('.card--hand')).toMatch(/zoom:\s*var\(--hand-card-scale\)/);
+    expect(block('.card--board')).toMatch(/zoom:\s*var\(--board-card-scale\)/);
+    // Base values: 0.8 hand / 0.5 board — the plan's constants.
+    const root = block(':root');
+    expect(root).toMatch(/--hand-card-scale:\s*0\.8/);
+    expect(root).toMatch(/--board-card-scale:\s*0\.5/);
+  });
+
+  it('declares the height tiers on :root, guarded to wide windows', () => {
+    // The responsive hand scale is height-owned: below 1061px height (wide
+    // windows) 0.74, below 984px 0.66. Setting the VARIABLE (not the rule) is
+    // what lets Hand.tsx read the same number the CSS renders. min-width
+    // 1201 keeps narrow windows on the width tiers instead.
+    const tier1060 =
+      css.match(
+        /@media \(max-height:\s*1060px\) and \(min-width:\s*1201px\)\s*\{\s*:root\s*\{([^}]*)\}/,
+      )?.[1] ?? '';
+    expect(tier1060).toMatch(/--hand-card-scale:\s*0\.74/);
+    const tier983 =
+      css.match(
+        /@media \(max-height:\s*983px\) and \(min-width:\s*1201px\)\s*\{\s*:root\s*\{([^}]*)\}/,
+      )?.[1] ?? '';
+    expect(tier983).toMatch(/--hand-card-scale:\s*0\.66/);
+  });
+
+  it('keeps numeric zooms below the bases and removes the old hand-only height tiers', () => {
+    // Width tiers (narrow windows) may only shrink relative to the 0.8 hand
+    // base — a tier above 0.8 would ENLARGE hand cards on narrower screens.
+    // Board width tiers stay under --board-card-scale (0.5). The old hand
+    // height tiers at max-height 800/680 are gone: they would be a second
+    // authority competing with the :root variable.
+    for (const [, z] of css.matchAll(/\.card--hand\s*\{[^}]*zoom:\s*([\d.]+)/g)) {
+      expect(Number(z), `hand zoom ${z}`).toBeLessThanOrEqual(0.8);
+    }
+    for (const [, z] of css.matchAll(/\.card--board\s*\{[^}]*zoom:\s*([\d.]+)/g)) {
+      expect(Number(z), `board zoom ${z}`).toBeLessThanOrEqual(0.5);
+    }
+    expect(css).not.toMatch(/max-height:\s*800px\) and \(min-width:\s*1201px\)/);
+    expect(css).not.toMatch(/max-height:\s*680px\) and \(min-width:\s*901px\)/);
   });
 
   it('leaves the full-bleed well able to shrink', () => {

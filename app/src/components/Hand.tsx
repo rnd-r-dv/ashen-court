@@ -105,18 +105,29 @@ function useStableHandKeys(hand: string[]): string[] {
   return keys;
 }
 
-/** Track the viewport width so the fan can fit on-screen (resize-aware). */
-function useViewportWidth(): number {
-  const [vw, setVw] = useState(() => window.innerWidth);
+/** Read the CSS-owned hand scale (:root --hand-card-scale, media-resolved) with
+ *  a validated 0.8 fallback. jsdom (and any environment that cannot cascade
+ *  stylesheet custom properties) returns an empty string → parse fails → 0.8,
+ *  the plan's base scale; a garbage value (NaN/0/negative) is equally rejected. */
+function readHandScale(): number {
+  const raw = window.getComputedStyle(document.documentElement).getPropertyValue('--hand-card-scale');
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0.8;
+}
+
+/** Track viewport width + the computed CSS hand scale in one resize-aware update. */
+function useViewportGeometry(): { vw: number; scale: number } {
+  const [viewport, setViewport] = useState(() => ({ vw: window.innerWidth, scale: readHandScale() }));
   useEffect(() => {
-    const onResize = () => setVw(window.innerWidth);
+    const onResize = () => setViewport({ vw: window.innerWidth, scale: readHandScale() });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-  return vw;
+  return viewport;
 }
 
-/** Rendered hand-card width at zoom 1 — card.css `--card-w`. */
+/** Design-space card width — card.css `--card-w` at :root (the ONLY number
+ *  Hand.tsx owns; the rendered width is HAND_CARD_WIDTH × the CSS scale). */
 const HAND_CARD_WIDTH = 240;
 
 /** Gap between cards when the whole row fits without overlapping. */
@@ -132,28 +143,30 @@ const MAX_OVERLAP_FRACTION = 0.66;
 
 /**
  * Horizontal step between adjacent cards, as a MARGIN: positive values are a
- * real gap, negative values an overlap. Mirrors the card.css zoom tiers
- * (1 / 0.88 / 0.76 / 0.66 at 1200/900/700px) and the hand.css side padding.
+ * real gap, negative values an overlap. Task 5A: pure in the rendered card
+ * WIDTH, not viewport breakpoints — the caller passes HAND_CARD_WIDTH × the
+ * computed CSS --hand-card-scale, so CSS owns every scale number and this
+ * function's only viewport input is the side padding (hand.css clamp).
  *
  * Cards are only pulled together once the row genuinely cannot fit, and never
  * past MAX_OVERLAP_FRACTION. Previously the hand overlapped unconditionally
  * (≤96px, and more when tight) even with three cards on a wide screen.
  */
-export function handStep(n: number, vw: number): number {
+export function handStep(n: number, vw: number, renderedCardWidth: number): number {
   if (n <= 1) return 0;
-  const zoom = vw <= 700 ? 0.66 : vw <= 900 ? 0.76 : vw <= 1200 ? 0.88 : 1;
-  const cardW = HAND_CARD_WIDTH * zoom;
   const pad = Math.max(24, Math.min(48, vw * 0.05)); // hand.css clamp(24px, 5vw, 48px)
   const usable = Math.max(280, vw - 2 * pad);
-  if (cardW * n + HAND_GAP * (n - 1) <= usable) return HAND_GAP;
-  const overlap = (cardW * n - usable) / (n - 1); // tightest fit that still fits
-  return -Math.min(overlap, cardW * MAX_OVERLAP_FRACTION);
+  if (renderedCardWidth * n + HAND_GAP * (n - 1) <= usable) return HAND_GAP;
+  const overlap = (renderedCardWidth * n - usable) / (n - 1); // tightest fit that still fits
+  return -Math.min(overlap, renderedCardWidth * MAX_OVERLAP_FRACTION);
 }
 
 export default function Hand({ hand, getCard, playable, interactive, targeting, onCardClick, animScale = 1 }: HandProps) {
-  const vw = useViewportWidth();
+  const { vw, scale } = useViewportGeometry();
   const n = hand.length;
-  const step = handStep(n, vw);
+  // Rendered width = design-space width × the CSS-resolved scale — the same
+  // number zoom renders, so the fan math is truthful to the pixels.
+  const step = handStep(n, vw, HAND_CARD_WIDTH * scale);
   // Stable slot keys: distinct cards keep their key across a play from the
   // middle (no remount → no handEnter replay); fresh draws get new keys.
   const slotKeys = useStableHandKeys(hand);

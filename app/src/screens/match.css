@@ -50,19 +50,31 @@
   /* Task 41: board + hand scale with the window (clamp) instead of fixed
      heights. The hand row keeps itself clear of the bottom edge via
      hand.css's padding-bottom — cards are upright now, so there are no
-     rotated corners to reserve extra room for. */
-  min-height: clamp(190px, 27vh, 300px);
+     rotated corners to reserve extra room for.
+
+     Task 5A: the min-height is max(vh clamp, DERIVED content) — rendered
+     card height (--card-h × --hand-card-scale) + top padding (--space-2)
+     + the scaled 12px hover lift (--card-hover × scale) — so the row can
+     never be smaller than what it must contain at ANY scale the media
+     queries resolve. At the plan tiers this never changes the clamp
+     (237.68 < 243, 265.52 < 270, 286.4 < 291.6, 286.4 < 300); it only
+     guards a future tier from silently overflowing the row. */
+  min-height: max(
+    clamp(190px, 27vh, 300px),
+    calc(var(--card-h) * var(--hand-card-scale) + var(--space-2) + var(--card-hover) * var(--hand-card-scale))
+  );
   margin: 0 calc(var(--space-5) * -1);
   padding-top: var(--space-2);
   /* Task 9: the old mostly-transparent gradient backdrop is gone — the hand
      row now sits on a flat ground-rise field, so the battlefield never
      bleeds through the hand and the washed-out look is impossible. */
   background: var(--ground-rise);
-  /* Task 41: the container never eats clicks — only the hand cards
-     themselves are interactive (.hand-slot re-enables pointer events), so
-     board controls (End Turn, mana tray) stay clickable even when the board
-     briefly underlaps the hand area on short viewports. */
-  pointer-events: none;
+  /* Task 5A: the old pointer-events:none click-through workaround is gone —
+     it existed so board controls (End Turn, mana tray) stayed clickable
+     when the board briefly underlapped the hand on short viewports. With
+     the containment reserve above, the board no longer underlaps the hand,
+     so the row is genuinely the hand's territory and must not be
+     click-through. The hidden hand (below) keeps pointer-inert explicitly. */
 }
 
 /* Short windows: shrink the hand area so the board keeps room. */
@@ -78,14 +90,25 @@
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  min-height: clamp(190px, 27vh, 300px);
+  /* Same containment reserve as the live row: the face-down cards render at
+     the same hand scale. */
+  min-height: max(
+    clamp(190px, 27vh, 300px),
+    calc(var(--card-h) * var(--hand-card-scale) + var(--space-2) + var(--card-hover) * var(--hand-card-scale))
+  );
   padding: 0 clamp(24px, 5vw, 48px);
+  /* Task 5A: a display-only mirror of the incoming player's hand — no click
+     handlers anywhere in it, so the surface itself is pointer-inert (the
+     PassDevice overlay above it owns all interaction). */
+  pointer-events: none;
 }
 
 .match-hand-hidden .cardview {
-  /* Overlap like the live hand. Retuned for the narrower card box (240px,
-     was 264) so a full 10-card hand of backs still seats on one screen. */
-  margin-right: -120px;
+  /* Overlap like the live hand. Task 5A: derived from the SAME tokens the
+     live fan uses — half the RENDERED card width (--card-w × the CSS
+     hand scale) — so a full 10-card hand of backs seats on one screen at
+     every scale tier, not just the old zoom-1 240px box. */
+  margin-right: calc(var(--card-w) * var(--hand-card-scale) / 2);
 }
 
 .match-hand-hidden .cardview:last-child {

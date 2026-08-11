@@ -9,36 +9,16 @@
    0.5 in fast mode, 0 under reduced motion, 1 normally). */
 
 /* Wrap for the board: lets the framer-driven board shake translate the whole
-   battlefield without moving the fx overlay / topbar. Task 8: the register
-   page shift is a CSS animation re-triggered from Match's turnStart handler
-   (class toggle + reflow) — flat, one long beat, linear. */
+   battlefield without moving the fx overlay / topbar. Task 5A: the deliberate
+   turn-start page shift (match-shift retrigger + match-page-shift keyframe) is
+   REMOVED — it was the reported "layout shift at end of turn" (plan finding
+   12). The wrapper now stays stationary across turn boundaries; the only
+   translate it may take is the framer x-shake on damage. */
 .match-boardwrap {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-/* Turn-start register page shift (Task 8): the board registers shift like a
-   page being laid — a short vertical step and back on one long beat, linear.
-   Re-triggered per turnStart by Match (remove class → reflow → add class).
-   No fill mode: the 100% pose is translateY(0), so the board always ends at
-   rest and never freezes mid-step when the class is toggled off. Reduced
-   motion zeroes --anim-scale (instant, still ends at rest). */
-.match-boardwrap.match-shift {
-  animation: match-page-shift calc(var(--beat-long) * var(--anim-scale, 1)) linear;
-}
-
-@keyframes match-page-shift {
-  0% {
-    transform: translateY(0);
-  }
-  45% {
-    transform: translateY(7px);
-  }
-  100% {
-    transform: translateY(0);
-  }
 }
 
 /* Absolute overlay over the battlefield for transient fx (popups, ripples).
@@ -51,13 +31,17 @@
 }
 
 /* ---- slam ripple (cardPlayed / creatureSummoned, Task 8): one hard landing
-   stamp — a flat cream hairline ring expanding in steps over one long beat. */
+   stamp — a flat cream hairline ring expanding in steps over one long beat.
+   The ring is a decorative fixture in fx-space, sized from the design-space
+   card width token (--card-w at :root) rather than a copied 240 literal — it
+   deliberately does not track the board-mini zoom (a ring slightly larger
+   than the landed plate is the stamp's shape). */
 .slam-ripple {
   position: absolute;
   left: 50%;
-  width: 240px;
-  height: 240px;
-  margin-left: -120px;
+  width: var(--card-w);
+  height: var(--card-w);
+  margin-left: calc(var(--card-w) / -2);
   border: 1px solid var(--line-dim);
   border-radius: 50%;
   pointer-events: none;

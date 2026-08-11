@@ -74,7 +74,12 @@
   position: fixed;
   z-index: 60;
   transform: translateX(-50%);
-  max-width: 240px;
+  /* Task 5A: the popover's max width is capped at the design-space card
+     width token (--card-w, card.css :root) — the widest plate it ever
+     annotates — instead of a copied 240 literal. It deliberately does not
+     track the hand scale: the popover is a floating read surface, not a
+     plate in the fan. */
+  max-width: var(--card-w);
   padding: 8px 10px;
   border: 1px solid var(--line-dim);
   border-radius: 3px;

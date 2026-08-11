@@ -13,13 +13,17 @@
      Cards used to sit flush against it (and the outer fan cards dipped past
      it), so the bottom of every card was clipped by the window. */
   padding-bottom: clamp(14px, 2.2vh, 28px);
-  pointer-events: none; /* slots re-enable it so empty gaps don't eat clicks */
+  /* Task 5A: the pointer-events:none here (and on .hand-slot-anim) existed
+     so empty gaps between cards did not eat clicks — a workaround that only
+     mattered while the hand row could underlap the board. The row is
+     contained now, so gaps are genuinely the hand's territory; the slot
+     stays the explicit interactive leaf. */
 }
 
-/* framer animation wrapper (Task 39): fade-and-lift on mount; pointer events
-   stay off here — the slot inside re-enables them so gaps don't eat clicks. */
+/* framer animation wrapper (Task 39): fade-and-lift on mount. Task 5A: no
+   pointer-events:none — the slot inside is the interactive leaf, and the
+   hovered card's z-index lift still needs its own stacking context. */
 .hand-slot-anim {
-  pointer-events: none;
   /* Ascending stack order (Hand.tsx sets --z from the hand index) so an
      overlapped row still reads left-to-right. */
   z-index: var(--z, 0);

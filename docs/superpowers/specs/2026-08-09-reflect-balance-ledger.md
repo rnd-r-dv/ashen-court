@@ -384,7 +384,7 @@ Every row is within its ceiling (`statBudget(cost) + 4`); the script verifies al
 | token-treant | 0 | 3 | 2 | 1 | 1/1 taunt token; paid by roots-awaken / roots-heart. |
 | token-phoenixash | 0 | 4 | 2 | 2 | 2/2 token; paid by ember-phoenix's deathrattle. |
 
-No curated creature exceeds its vanilla budget under this proposal; several sit near the ceiling with room to spare (max: star-archon 25 vs ceiling 28).
+No curated creature exceeds its weighted ceiling under this proposal; several sit near it with room to spare (max: star-archon 25 vs ceiling 30).
 
 **Textless floor note.** `pool-balance.test.ts` requires creatures with no effect text (including keyword-only bodies — `cardText` reflects triggers only) to stay within 2 of their stat budget. Ten aggressive keyword creatures were authored at that floor rather than at a deeper negative lean, so the existing suite stays green with no test edits: ember-flamewhelp, ember-ashwing, ember-magmasoul, dragon-tyrant, dance-nyx, vigil-crusader, vigil-avenger, storm-rider, storm-zephyra, neutral-swift. Each row's rationale records the floor. The five textless non-keyword creatures (bone-scrapper, bone-marauder, pact-imp, coven-familiar, coven-bog) all remain at or above `statBudget - 2`.
 

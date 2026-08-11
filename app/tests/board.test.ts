@@ -189,6 +189,7 @@ function creature(id: string, token: boolean, owner: PlayerIndex = 0): CreatureS
     cardId: 'warden',
     owner,
     attack: 3,
+    reflect: 3,
     health: 3,
     maxHealth: 3,
     keywords: [],

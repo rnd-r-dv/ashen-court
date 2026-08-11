@@ -48,7 +48,7 @@ const def = (): CardSpec => ({
   version: 1,
 });
 
-/** Live creature: 7/2, exhausted, frozen, 2 shields, keyword stealth —
+/** Live creature: 7/5/2 (Attack/Reflect/Health), exhausted, frozen, 2 shields, keyword stealth —
  *  deliberately different from the def (3/3, taunt) so any assertion that
  *  reads the DEF instead of the creature fails loudly. */
 function creature(overrides: Partial<CreatureState> = {}): CreatureState {
@@ -57,6 +57,7 @@ function creature(overrides: Partial<CreatureState> = {}): CreatureState {
     cardId: 'warden',
     owner: 0,
     attack: 7,
+    reflect: 5,
     health: 2,
     maxHealth: 2,
     keywords: ['stealth'],
